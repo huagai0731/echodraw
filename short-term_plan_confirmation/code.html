@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>EchoDraw - Confirm Your Plan</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200;300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<style>
+        .font-sans-ultrathin {
+            font-family: 'Manrope', sans-serif;
+            font-weight: 300;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+        }
+        .frosted-glass {
+            background-color: rgba(239, 234, 231, 0.05); /* Tinted with #EFEAE7 at 5% opacity */
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .background-gradient {
+            background-color: #221B1B;
+            position: relative;
+            overflow: hidden;
+        }
+        .background-gradient::before, .background-gradient::after {
+            content: '';
+            position: absolute;
+            border-radius: 9999px;
+            filter: blur(100px);
+            opacity: 0.2;
+            pointer-events: none;
+        }
+        .background-gradient::before {
+            width: 300px;
+            height: 300px;
+            background-color: #98DBC6;
+            top: 10%;
+            left: -50px;
+        }
+        .background-gradient::after {
+            width: 250px;
+            height: 250px;
+            background-color: #4A3F3A;
+            bottom: 5%;
+            right: -80px;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-sans-ultrathin">
+<div class="relative flex h-auto min-h-screen w-full flex-col text-white group/design-root overflow-x-hidden background-gradient" style="font-family: 'Manrope', sans-serif;">
+<!-- Top App Bar -->
+<div class="flex items-center p-4 pb-2 justify-between z-10">
+<div class="flex size-12 shrink-0 items-center text-white" data-size="24px" data-weight="regular">
+<span class="material-symbols-outlined text-3xl">arrow_back</span>
+</div>
+<h2 class="flex-1 text-lg font-medium leading-tight tracking-[-0.015em] text-center text-[#FFFFFF]">Confirm Your Plan</h2>
+<div class="size-12"></div> <!-- Spacer to balance the title -->
+</div>
+<div class="flex-grow flex flex-col p-4 z-10">
+<!-- Main Content Card -->
+<div class="flex flex-col items-stretch justify-start rounded-xl frosted-glass">
+<div class="flex w-full flex-col items-stretch justify-center gap-1 p-6">
+<p class="text-[#FFFFFF] text-2xl font-medium leading-tight tracking-[-0.015em]">7-Day Plan</p>
+<p class="text-[#C5E1E2] text-base font-normal leading-normal">Review your customized ritual and details below before proceeding.</p>
+</div>
+<!-- Divider -->
+<div class="px-6">
+<hr class="border-t border-white/10"/>
+</div>
+<!-- Task List -->
+<div class="flex flex-col py-2">
+<!-- List Item 1 -->
+<div class="flex items-center gap-4 px-6 min-h-[72px] py-3">
+<div class="text-[#98DBC6] flex items-center justify-center rounded-lg bg-[#4A3F3A]/50 shrink-0 size-12">
+<span class="material-symbols-outlined text-3xl">draw</span>
+</div>
+<div class="flex flex-col justify-center">
+<p class="text-[#FFFFFF] text-base font-normal leading-normal line-clamp-1">Morning Canvas</p>
+<p class="text-[#C5E1E2] text-sm font-light leading-normal line-clamp-2">Dedicate 45 minutes to a new sketch each sunrise.</p>
+</div>
+</div>
+<!-- List Item 2 -->
+<div class="flex items-center gap-4 px-6 min-h-[72px] py-3">
+<div class="text-[#98DBC6] flex items-center justify-center rounded-lg bg-[#4A3F3A]/50 shrink-0 size-12">
+<span class="material-symbols-outlined text-3xl">sentiment_satisfied</span>
+</div>
+<div class="flex flex-col justify-center">
+<p class="text-[#FFFFFF] text-base font-normal leading-normal line-clamp-1">Palette Logging</p>
+<p class="text-[#C5E1E2] text-sm font-light leading-normal line-clamp-2">Log your creative mood &amp; color palette after each session.</p>
+</div>
+</div>
+<!-- List Item 3 -->
+<div class="flex items-center gap-4 px-6 min-h-[72px] py-3">
+<div class="text-[#98DBC6] flex items-center justify-center rounded-lg bg-[#4A3F3A]/50 shrink-0 size-12">
+<span class="material-symbols-outlined text-3xl">track_changes</span>
+</div>
+<div class="flex flex-col justify-center">
+<p class="text-[#FFFFFF] text-base font-normal leading-normal line-clamp-1">Artistic Intent</p>
+<p class="text-[#C5E1E2] text-sm font-light leading-normal line-clamp-2">Set and review one weekly artistic goal on Sunday.</p>
+</div>
+</div>
+</div>
+<!-- Divider -->
+<div class="px-6">
+<hr class="border-t border-white/10"/>
+</div>
+<!-- Summary/Total Section -->
+<div class="flex items-center justify-between p-6">
+<p class="text-[#C5E1E2] text-base font-normal leading-normal">Total Cost</p>
+<p class="text-[#FFFFFF] text-lg font-medium leading-tight">$15.00</p>
+</div>
+</div>
+</div>
+<!-- Footer with CTA -->
+<div class="sticky bottom-0 w-full p-4 pt-2 bg-[#221B1B]/80 backdrop-blur-sm z-10">
+<div class="flex flex-col items-center gap-3">
+<button class="w-full rounded-full bg-[#98DBC6] px-6 py-4 text-center text-base font-medium text-[#221B1B]">Confirm &amp; Pay</button>
+<button class="w-full rounded-full px-6 py-2 text-center text-base font-normal text-[#C5E1E2]">Edit Plan</button>
+</div>
+</div>
+</div>
+</body></html>

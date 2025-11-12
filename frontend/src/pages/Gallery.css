@@ -1,0 +1,189 @@
+.gallery-screen {
+  position: relative;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  background: #221b1b;
+  color: #efeae7;
+  font-family: "Manrope", "Segoe UI", system-ui, -apple-system, sans-serif;
+  overflow-x: hidden;
+}
+
+.gallery-screen__background {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.gallery-screen__glow {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(120px);
+}
+
+.gallery-screen__glow--primary {
+  top: -20%;
+  left: -25%;
+  width: 65%;
+  height: 55%;
+  background: rgba(152, 219, 198, 0.15);
+}
+
+.gallery-screen__glow--secondary {
+  bottom: -15%;
+  right: -30%;
+  width: 85%;
+  height: 70%;
+  background: rgba(152, 219, 198, 0.12);
+}
+
+.gallery-screen__content {
+  position: relative;
+  z-index: 5;
+  flex: 1;
+  padding: calc(var(--top-nav-height, 64px) + 1.5rem) 0.5rem 2.5rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.gallery-screen__masonry {
+  width: 100%;
+  column-count: 2;
+  column-gap: 0.3rem;
+  box-sizing: border-box;
+}
+
+.gallery-screen__empty {
+  margin: 2.5rem auto;
+  max-width: 18rem;
+  text-align: center;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: rgba(239, 234, 231, 0.6);
+}
+
+.gallery-item {
+  position: relative;
+  display: block;
+  margin: 0.1rem 0 0.4rem;
+  border-radius: 0.6rem;
+  overflow: hidden;
+  background: none;
+  break-inside: avoid;
+}
+
+.gallery-item__trigger {
+  position: relative;
+  display: block;
+  padding: 0;
+  border: none;
+  border-radius: inherit;
+  overflow: hidden;
+  background: transparent;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+}
+
+.gallery-item__image {
+  width: 100%;
+  display: block;
+  height: auto;
+  border-radius: inherit;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.gallery-item__trigger:hover .gallery-item__image,
+.gallery-item__trigger:focus-visible .gallery-item__image {
+  transform: scale(1.02);
+}
+
+.gallery-item__info {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0) 10%, rgba(0, 0, 0, 0.7) 90%);
+  color: #efeae7;
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  border-radius: inherit;
+  overflow: hidden;
+}
+
+.gallery-item__info--hidden {
+  opacity: 0;
+  transform: translateY(10%);
+  pointer-events: none;
+}
+
+.gallery-item__trigger:focus-visible .gallery-item__info {
+  outline: none;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.gallery-item__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.gallery-item__date {
+  margin: 0.25rem 0 0;
+  font-size: 0.75rem;
+  color: rgba(239, 234, 231, 0.7);
+  letter-spacing: 0.05em;
+}
+
+.gallery-item__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.gallery-item__tag {
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(197, 225, 226, 0.18);
+  color: #c5e1e2;
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.gallery-screen__fab {
+  position: fixed;
+  right: 1.5rem;
+  bottom: calc(var(--bottom-nav-safe-area) + 1.25rem);
+  width: 4rem;
+  height: 4rem;
+  border-radius: 50%;
+  border: none;
+  background: #98dbc6;
+  color: #221b1b;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 20px 45px rgba(152, 219, 198, 0.3);
+  cursor: pointer;
+  z-index: 40;
+}
+
+.gallery-screen__fab-icon {
+  font-size: 2.25rem;
+  font-variation-settings: "wght" 400;
+}
+
+@media (min-width: 768px) {
+  .gallery-screen__fab {
+    right: 2rem;
+  }
+}
+

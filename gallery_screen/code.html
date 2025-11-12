@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>EchoDraw Gallery</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200;300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+    }
+    .material-symbols-outlined.fill {
+      font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+    .masonry-grid {
+      column-count: 2;
+      column-gap: 1rem;
+    }
+    .masonry-item {
+      break-inside: avoid;
+      margin-bottom: 1rem;
+      display: inline-block;
+      width: 100%;
+    }
+  </style>
+<script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "primary": "#98DBC6",
+            "background-light": "#221B1B",
+            "background-dark": "#221B1B",
+            "coffee-brown": "#221B1B",
+            "mint-accent": "#98DBC6",
+            "brand-white": "#FFFFFF",
+            "brown-secondary": "#4A3F4A",
+            "light-blue": "#C5E1E2",
+            "milky-white": "#EFEAE7",
+          },
+          fontFamily: {
+            "display": ["Manrope", "sans-serif"]
+          },
+          borderRadius: {
+            "DEFAULT": "0.5rem",
+            "lg": "0.75rem",
+            "xl": "1rem",
+            "full": "9999px"
+          },
+        },
+      },
+    }
+  </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+    #info-toggle:checked ~ main .artwork-info {
+        opacity: 0;
+    }
+    #filter-toggle:checked ~ #filter-overlay {
+        opacity: 1;
+        pointer-events: auto;
+    }
+    #filter-toggle:checked ~ #filter-overlay > div {
+        transform: translateY(0);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-dark font-display">
+<div class="relative flex h-auto min-h-screen w-full flex-col bg-coffee-brown">
+<div class="fixed inset-0 z-0 overflow-hidden">
+<div class="absolute -left-1/4 -top-1/4 h-1/2 w-1/2 rounded-full bg-mint-accent/5 blur-[120px]"></div>
+<div class="absolute -right-1/4 bottom-0 h-1/2 w-3/4 rounded-full bg-mint-accent/10 blur-[150px]"></div>
+</div>
+<input class="hidden" id="filter-toggle" type="checkbox"/>
+<div class="relative z-10 flex flex-col min-h-screen">
+<header class="sticky top-0 z-20 bg-coffee-brown/80 backdrop-blur-lg">
+<div class="flex items-center p-4 pb-3 justify-between">
+<div class="flex w-12 shrink-0 items-center">
+<input class="hidden peer" id="info-toggle" type="checkbox"/>
+<label class="flex max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 w-10 text-brand-white/80 transition-colors hover:bg-brown-secondary/50 hover:text-brand-white" for="info-toggle">
+<span class="material-symbols-outlined text-2xl peer-checked:hidden">visibility</span>
+<span class="material-symbols-outlined text-2xl hidden peer-checked:inline">visibility_off</span>
+</label>
+</div>
+<h1 class="text-brand-white text-lg font-medium tracking-wide flex-1 text-center">My Gallery</h1>
+<div class="flex w-12 items-center justify-end">
+<label class="flex max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 w-10 text-brand-white/80 transition-colors hover:bg-brown-secondary/50 hover:text-brand-white" for="filter-toggle">
+<span class="material-symbols-outlined text-2xl">tune</span>
+</label>
+</div>
+</div>
+</header>
+<main class="flex-grow px-4 pt-4 pb-28">
+<div class="masonry-grid">
+<div class="masonry-item group relative overflow-hidden rounded-lg">
+<img class="w-full h-auto object-cover transition-transform duration-300 group-hover:scale-105" data-alt="Abstract swirling colors in vibrant orange and blue" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBwmaICXJSvKkZh_c5ajojAvMWIC0TFROt7xWfOL50OvXLr0G4GsJVv20cWUbq173wUUoD31bmgh7MHmurJ34pzeZTY6yWBmW6UAwjqTCnuOk-ytzFWpz2bee-0c6NDavBTktlEg0tIoCNe_blUndFJTyEgS2v1c7vmVSPnhsgdX7wCnDFER4eVwlnCMxL0r9BEPDfT5KwEV1RGnwcKygeKhR0oY597OjdAj5ozEmxnDY-9snrwB8FYXqfBK8m4cAx1WJUEffRcTbFo"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/40 to-transparent artwork-info transition-opacity duration-300"></div>
+<div class="absolute bottom-0 left-0 w-full p-4 text-brand-white artwork-info transition-opacity duration-300">
+<h3 class="text-base font-semibold tracking-wide">Cosmic Flow</h3>
+<p class="text-xs font-light text-brand-white/80 mt-1 mb-2">28 JUN 2024</p>
+<div class="flex flex-wrap gap-1.5">
+<span class="text-xs font-medium bg-light-blue/20 text-light-blue py-1 px-2.5 rounded-full backdrop-blur-sm">Color</span>
+<span class="text-xs font-medium bg-light-blue/20 text-light-blue py-1 px-2.5 rounded-full backdrop-blur-sm">Mood</span>
+</div>
+</div>
+</div>
+<div class="masonry-item group relative overflow-hidden rounded-lg">
+<img class="w-full h-auto object-cover transition-transform duration-300 group-hover:scale-105" data-alt="A person painting with colorful powders on a street" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDbvj6o6QGaPYYh35zvOMAaDjVd4EHeWIn3iX-opqXUWqorHvMg0CSS96LF0FkU-Eia_pVyZ2YeoGoRZrETjmlLHf9SnE9APfOsG7Uz40R0Cq44q0vB2EcRdrmM0AjvJpyYlC8IpxOmIYFafWGGEghv04n9FUYn7M7pS0fjdFpyKHMdli4O7f93VmcAxgj5Opk7T1K2De6XwB5c3SGELQGqKOz_0ubXfuKfUHZspyys5dhL6-CY3oh0HFnf7ZoBUJSDzC9R0eEA7CXN"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/40 to-transparent artwork-info transition-opacity duration-300"></div>
+<div class="absolute bottom-0 left-0 w-full p-4 text-brand-white artwork-info transition-opacity duration-300">
+<h3 class="text-base font-semibold tracking-wide">Street Canvas</h3>
+<p class="text-xs font-light text-brand-white/80 mt-1 mb-2">26 JUN 2024</p>
+<div class="flex flex-wrap gap-1.5">
+<span class="text-xs font-medium bg-light-blue/20 text-light-blue py-1 px-2.5 rounded-full backdrop-blur-sm">Plein Air</span>
+</div>
+</div>
+</div>
+<div class="masonry-item group relative overflow-hidden rounded-lg">
+<img class="w-full h-auto object-cover transition-transform duration-300 group-hover:scale-105" data-alt="A detailed digital painting of a galaxy with swirling stars" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAO7CrMvJUECRf63CnTluS4_YEPA0eHW_94dXi_dzslCczviiQpUw2knh-1ROoNzM6aDqz-ZvJltvPXMqvFWqaNqGfiAEfMcrMpR3RR_B18Q_B4XgkpnDEICLTXIbXO9tRb8pXDGXum_hJrLhX_eeWMvNa5SF_Z5ai2R7VmuL-nGP81FBSTs8bYKg06bZMrc6nL9vM_xzOzrbSFL8L13IVgf4S30aTPG1qCyVIrsxQ7XmwCIA_4l4i6EWcntsrP6PpKQwMbFkLvQt9P"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/40 to-transparent artwork-info transition-opacity duration-300"></div>
+<div class="absolute bottom-0 left-0 w-full p-4 text-brand-white artwork-info transition-opacity duration-300">
+<h3 class="text-base font-semibold tracking-wide">Nebula Dreams</h3>
+<p class="text-xs font-light text-brand-white/80 mt-1 mb-2">25 JUN 2024</p>
+<div class="flex flex-wrap gap-1.5">
+<span class="text-xs font-medium bg-light-blue/20 text-light-blue py-1 px-2.5 rounded-full backdrop-blur-sm">Digital</span>
+<span class="text-xs font-medium bg-light-blue/20 text-light-blue py-1 px-2.5 rounded-full backdrop-blur-sm">Color</span>
+</div>
+</div>
+</div>
+<div class="masonry-item group relative overflow-hidden rounded-lg">
+<img class="w-full h-auto object-cover transition-transform duration-300 group-hover:scale-105" data-alt="Charcoal sketch of a face with expressive lines" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDOrq52TjZN6DS0bf6xk1KPMvvvDbJHogPslZi14Fb_qguyjeHfjZL0ESHiRzzWYBrk89IXB8CHNCLp1BA_sRirbfxHw5p7Euhvc6n6clfPEI22QK0D0RS_JTpK540G7Hmt_kdpLYnC8teGTNjdPZXGZ9xU3UvKdc3CAtF7hHzPB4uYPKCvyvwhno9LbEFIP3eceBSbDXXt5TdrbYGe_wgb4gqn8YZNTR2wynbcY8J4MV2kUSGA2hCvR7RCQs8eXZ055Nl4ChdwNpjq"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/40 to-transparent artwork-info transition-opacity duration-300"></div>
+<div class="absolute bottom-0 left-0 w-full p-4 text-brand-white artwork-info transition-opacity duration-300">
+<h3 class="text-base font-semibold tracking-wide">Fragmented Self</h3>
+<p class="text-xs font-light text-brand-white/80 mt-1 mb-2">24 JUN 2024</p>
+<div class="flex flex-wrap gap-1.5">
+<span class="text-xs font-medium bg-light-blue/20 text-light-blue py-1 px-2.5 rounded-full backdrop-blur-sm">Sketch</span>
+<span class="text-xs font-medium bg-light-blue/20 text-light-blue py-1 px-2.5 rounded-full backdrop-blur-sm">Portrait</span>
+</div>
+</div>
+</div>
+<div class="masonry-item group relative overflow-hidden rounded-lg">
+<img class="w-full h-auto object-cover transition-transform duration-300 group-hover:scale-105" data-alt="Vibrant painting of flowers in a vase, impressionist style" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBT2bQmHfQAjmWG_L_Obphvn0BLKdnmIOe3BDOFOtwedbPK66TU1HDExYYRuG8M38_RBoXNJeln_cp0TEN7GnXOZ6ocoRwHLv0j6GcacX6LpA-edVtU0HFXN32eTEgYwHc2Jw0MVEBEzMv5168pPsHXqzY1-q5Emo__6wrSzTrLsh9XVxl5ZA6riGadf38720QuJfVXW6exKucfiBhLTIvCot9dbye9WS6KsLOYYXu1pFpptKao5a-t23XThqG2cmHx8QtVTv5ZZbVd"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/40 to-transparent artwork-info transition-opacity duration-300"></div>
+<div class="absolute bottom-0 left-0 w-full p-4 text-brand-white artwork-info transition-opacity duration-300">
+<h3 class="text-base font-semibold tracking-wide">Still Life Bloom</h3>
+<p class="text-xs font-light text-brand-white/80 mt-1 mb-2">22 JUN 2024</p>
+<div class="flex flex-wrap gap-1.5">
+<span class="text-xs font-medium bg-light-blue/20 text-light-blue py-1 px-2.5 rounded-full backdrop-blur-sm">Painting</span>
+</div>
+</div>
+</div>
+<div class="masonry-item group relative overflow-hidden rounded-lg">
+<img class="w-full h-auto object-cover transition-transform duration-300 group-hover:scale-105" data-alt="Minimalist line art of a woman's profile" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDVvhu0ZPm7kGUQ5Ms3qc8bjc6CyahwI5u6C7xPUDkzvPMtB-NY9pYL59P-fHcUGGlU1wpq_rC_pTe-aL9uu045SBGt6XBCg56vspB0qqEqMVeb8ZNdz5LTct7cGrjY8YQmXMVSRT2rNu5QnbICcHdp-FQreH7J7PQMJWOjmJzkHrOZCmdJhMhwvla-CnePhFLQS_LeCoryNHmCuiwGNp0Hu-iYdmxWiS9tKJ8-Eyn_lKo5YmJ3JWJLe0cUySaaZ8VxYENAiwJkApTR"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/40 to-transparent artwork-info transition-opacity duration-300"></div>
+<div class="absolute bottom-0 left-0 w-full p-4 text-brand-white artwork-info transition-opacity duration-300">
+<h3 class="text-base font-semibold tracking-wide">Contour Study</h3>
+<p class="text-xs font-light text-brand-white/80 mt-1 mb-2">20 JUN 2024</p>
+<div class="flex flex-wrap gap-1.5">
+<span class="text-xs font-medium bg-light-blue/20 text-light-blue py-1 px-2.5 rounded-full backdrop-blur-sm">Line Art</span>
+<span class="text-xs font-medium bg-light-blue/20 text-light-blue py-1 px-2.5 rounded-full backdrop-blur-sm">Sketch</span>
+</div>
+</div>
+</div>
+</div>
+</main>
+<div class="fixed bottom-24 right-6 z-20">
+<button class="flex items-center justify-center w-16 h-16 bg-mint-accent text-coffee-brown rounded-full shadow-lg shadow-mint-accent/20 transition-transform hover:scale-105">
+<span class="material-symbols-outlined text-4xl" style="font-variation-settings: 'wght' 400;">add</span>
+</button>
+</div>
+</div>
+<footer class="fixed bottom-0 left-0 right-0 z-20">
+<div class="bg-coffee-brown/80 backdrop-blur-lg border-t border-brown-secondary/50 px-4 pb-3 pt-2">
+<div class="flex">
+<a class="flex flex-1 flex-col items-center justify-end gap-1 text-mint-accent" href="#">
+<div class="flex h-8 items-center justify-center">
+<span class="material-symbols-outlined fill text-2xl">photo_library</span>
+</div>
+<p class="text-xs font-medium tracking-wide">Gallery</p>
+</a>
+<a class="flex flex-1 flex-col items-center justify-end gap-1 text-brand-white/60" href="#">
+<div class="flex h-8 items-center justify-center">
+<span class="material-symbols-outlined text-2xl">emoji_events</span>
+</div>
+<p class="text-xs font-medium tracking-wide">Goals</p>
+</a>
+<a class="flex flex-1 flex-col items-center justify-end gap-1 text-brand-white/60" href="#">
+<div class="flex h-8 items-center justify-center">
+<span class="material-symbols-outlined text-2xl">timer</span>
+</div>
+<p class="text-xs font-medium tracking-wide">Timer</p>
+</a>
+<a class="flex flex-1 flex-col items-center justify-end gap-1 text-brand-white/60" href="#">
+<div class="flex h-8 items-center justify-center">
+<span class="material-symbols-outlined text-2xl">person</span>
+</div>
+<p class="text-xs font-medium tracking-wide">Profile</p>
+</a>
+</div>
+</div>
+</footer>
+<div class="fixed inset-0 z-30 flex flex-col justify-start bg-black/50 opacity-0 pointer-events-none transition-opacity duration-300" id="filter-overlay">
+<label class="absolute inset-0 cursor-pointer" for="filter-toggle"></label>
+<div class="relative bg-brown-secondary/70 backdrop-blur-2xl border-b border-mint-accent/20 rounded-b-xl p-4 transition-transform duration-300 -translate-y-full">
+<div class="flex justify-between items-center mb-6">
+<h2 class="text-lg font-medium text-brand-white">Filter &amp; Sort</h2>
+<label class="flex items-center justify-center h-8 w-8 rounded-full bg-brand-white/10 text-brand-white/70 cursor-pointer" for="filter-toggle">
+<span class="material-symbols-outlined text-xl">close</span>
+</label>
+</div>
+<div class="space-y-6">
+<div>
+<h3 class="text-sm font-light text-mint-accent mb-3">Time</h3>
+<div class="flex gap-2">
+<button class="flex-1 bg-mint-accent/20 text-mint-accent py-2.5 px-4 rounded-full text-sm font-medium">Last 7 days</button>
+<button class="flex-1 bg-brand-white/10 text-brand-white py-2.5 px-4 rounded-full text-sm font-medium">Last 30 days</button>
+<button class="flex-1 bg-brand-white/10 text-brand-white py-2.5 px-4 rounded-full text-sm font-medium">Custom</button>
+</div>
+</div>
+<div>
+<h3 class="text-sm font-light text-mint-accent mb-3">Tags</h3>
+<div class="flex flex-wrap gap-2">
+<button class="bg-brand-white/10 text-brand-white py-2 px-4 rounded-full text-sm font-medium">Sketch</button>
+<button class="bg-mint-accent/20 text-mint-accent py-2 px-4 rounded-full text-sm font-medium">Color</button>
+<button class="bg-brand-white/10 text-brand-white py-2 px-4 rounded-full text-sm font-medium">Mood</button>
+<button class="bg-brand-white/10 text-brand-white py-2 px-4 rounded-full text-sm font-medium">Digital</button>
+<button class="bg-brand-white/10 text-brand-white py-2 px-4 rounded-full text-sm font-medium">Line Art</button>
+</div>
+</div>
+<div>
+<h3 class="text-sm font-light text-mint-accent mb-3">Sort By</h3>
+<div class="flex gap-2">
+<button class="flex-1 bg-mint-accent text-coffee-brown py-2.5 px-4 rounded-full text-sm font-semibold">Newest</button>
+<button class="flex-1 bg-brand-white/10 text-brand-white py-2.5 px-4 rounded-full text-sm font-medium">Oldest</button>
+<button class="flex-1 bg-brand-white/10 text-brand-white py-2.5 px-4 rounded-full text-sm font-medium">Most Liked</button>
+</div>
+</div>
+</div>
+<div class="mt-8 pt-4 border-t border-brand-white/10 flex gap-3">
+<button class="flex-1 bg-brand-white/10 text-brand-white/90 py-3 rounded-lg text-base font-medium">Reset</button>
+<button class="flex-1 bg-mint-accent text-coffee-brown py-3 rounded-lg text-base font-semibold">Apply</button>
+</div>
+</div>
+</div>
+</div>
+
+</body></html>

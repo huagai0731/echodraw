@@ -1,0 +1,17 @@
+#root {
+  min-height: 100svh;
+}
+
+.app-shell {
+  position: relative;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-shell > :first-child {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: calc(var(--bottom-nav-safe-area) + 1.5rem);
+}

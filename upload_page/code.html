@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Upload New Work</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200;300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#98DBC6",
+                        "background-light": "#EFEAE7",
+                        "background-dark": "#221B1B",
+                        "text-light": "#221B1B",
+                        "text-dark": "#FFFFFF",
+                        "coffee": "#4A3F4A",
+                        "light-blue": "#C5E1E2"
+                    },
+                    fontFamily: {
+                        "display": ["Manrope", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "0.75rem",
+                        "xl": "1rem",
+                        "full": "9999px"
+                    },
+                    boxShadow: {
+                        'primary-glow': '0 0 15px 3px rgba(152, 219, 198, 0.4)',
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0,
+            'wght' 200,
+            'GRAD' 0,
+            'opsz' 24
+        }
+        .form-input-custom,
+        .form-textarea-custom {
+            background-color: transparent;
+            border: none;
+            border-bottom: 1px solid theme('colors.text.dark / 0.3');
+            border-radius: 0;
+            padding-left: 0;
+            padding-right: 0;
+            color: theme('colors.text.dark');
+            font-weight: 300;
+            transition: border-color 0.2s ease-in-out;
+        }
+        .form-input-custom:focus,
+        .form-textarea-custom:focus {
+            outline: none;
+            box-shadow: none;
+            border-bottom: 1px solid theme('colors.primary');
+        }
+        .form-input-custom::placeholder,
+        .form-textarea-custom::placeholder {
+            color: theme('colors.text.dark / 0.5');
+            font-weight: 300;
+        }
+        .form-checkbox-custom {
+            background-color: transparent;
+            border-color: theme('colors.text.dark / 0.5');
+            border-radius: 0.25rem;
+        }
+        .form-checkbox-custom:checked {
+            background-color: theme('colors.primary');
+            border-color: theme('colors.primary');
+        }
+        .form-checkbox-custom:focus {
+            outline: none;
+            box-shadow: none;
+        }
+        body {
+            min-height: max(884px, 100dvh);
+        }
+        .custom-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(to right, #98DBC6 70%, rgba(255, 255, 255, 0.2) 70%);
+            outline: none;
+            border-radius: 9999px;
+            padding: 0;
+            margin: 0;
+        }
+        .custom-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #FFFFFF;
+            cursor: pointer;
+            border-radius: 50%;
+            border: 3px solid #98DBC6;
+            box-shadow: 0 0 5px rgba(152, 219, 198, 0.5);
+        }
+        .custom-slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: #FFFFFF;
+            cursor: pointer;
+            border-radius: 50%;
+            border: 3px solid #98DBC6;
+            box-shadow: 0 0 5px rgba(152, 219, 198, 0.5);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-display bg-background-light dark:bg-background-dark text-text-light dark:text-text-dark">
+<div class="relative flex h-auto min-h-screen w-full flex-col group/design-root overflow-x-hidden">
+<div class="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+<div class="absolute top-[10%] left-[5%] w-48 h-48 bg-primary/10 rounded-full blur-3xl"></div>
+<div class="absolute bottom-[5%] right-[5%] w-64 h-64 bg-coffee/20 rounded-full blur-3xl"></div>
+<div class="absolute top-[30%] right-[-10%] w-56 h-32 bg-primary/15 rounded-xl blur-3xl transform rotate-45"></div>
+</div>
+<div class="relative z-10 flex flex-col min-h-screen">
+<div class="flex items-center p-4 pb-2 justify-between">
+<div class="flex size-12 shrink-0 items-center justify-center">
+<span class="material-symbols-outlined text-text-dark text-3xl">arrow_back</span>
+</div>
+<h2 class="text-text-dark text-xl font-normal leading-tight flex-1 text-center pr-12">Upload New Work</h2>
+</div>
+<div class="flex-grow p-4 space-y-8">
+<div class="flex flex-col">
+<div class="flex flex-col items-center gap-6 rounded-lg border-2 border-dashed border-text-dark/20 px-6 py-14">
+<span class="material-symbols-outlined text-text-dark/50 text-4xl">add_photo_alternate</span>
+<div class="flex max-w-[480px] flex-col items-center gap-1">
+<p class="text-text-dark text-base font-light leading-tight text-center">Tap to add your artwork</p>
+<p class="text-text-dark/50 text-sm font-light leading-normal text-center">Upload an image of your creation</p>
+</div>
+</div>
+</div>
+<div>
+<h3 class="text-text-dark/80 text-base font-normal leading-tight pb-3">Tags</h3>
+<div class="flex gap-3 flex-wrap">
+<div class="flex h-8 cursor-pointer shrink-0 items-center justify-center gap-x-2 rounded-full bg-primary pl-4 pr-4">
+<p class="text-background-dark text-sm font-medium leading-normal">Sketch</p>
+</div>
+<div class="flex h-8 cursor-pointer shrink-0 items-center justify-center gap-x-2 rounded-full border border-text-dark/30 pl-4 pr-4">
+<p class="text-text-dark text-sm font-light leading-normal">Digital</p>
+</div>
+<div class="flex h-8 cursor-pointer shrink-0 items-center justify-center gap-x-2 rounded-full border border-text-dark/30 pl-4 pr-4">
+<p class="text-text-dark text-sm font-light leading-normal">Oil Painting</p>
+</div>
+<div class="flex h-8 cursor-pointer shrink-0 items-center justify-center gap-x-2 rounded-full border border-text-dark/30 pl-4 pr-4">
+<p class="text-text-dark text-sm font-light leading-normal">WIP</p>
+</div>
+<div class="flex h-8 cursor-pointer shrink-0 items-center justify-center gap-x-2 rounded-full bg-primary pl-4 pr-4">
+<p class="text-background-dark text-sm font-medium leading-normal">Abstract</p>
+</div>
+<div class="flex h-8 cursor-pointer shrink-0 items-center justify-center gap-x-2 rounded-full border border-text-dark/30 pl-4 pr-4">
+<p class="text-text-dark text-sm font-light leading-normal">Concept</p>
+</div>
+<div class="flex h-8 cursor-pointer shrink-0 items-center justify-center gap-x-2 rounded-full border border-dashed border-primary/60 pl-4 pr-4 text-primary/80">
+<span class="material-symbols-outlined text-lg">add</span>
+<p class="text-sm font-light leading-normal">Add Tag</p>
+</div>
+</div>
+</div>
+<div class="space-y-3">
+<h3 class="text-text-dark/80 text-base font-normal leading-tight">Mood during creation</h3>
+<div class="relative aspect-square">
+<div class="absolute inset-0 grid grid-cols-4 grid-rows-4 gap-2.5">
+<div class="flex items-center justify-center rounded-lg bg-text-dark/10 h-full text-center text-sm font-light text-text-dark/80 transition-all">心如止水</div>
+<div class="flex items-center justify-center rounded-lg bg-text-dark/10 h-full text-center text-sm font-light text-text-dark/80 transition-all">兴高采烈</div>
+<div class="flex items-center justify-center rounded-lg h-full text-center text-sm font-medium transition-all text-background-dark bg-primary shadow-primary-glow">心旷神怡</div>
+<div class="flex items-center justify-center rounded-lg bg-text-dark/10 h-full text-center text-sm font-light text-text-dark/80 transition-all">百无聊赖</div>
+<div class="flex items-center justify-center rounded-lg bg-text-dark/10 h-full text-center text-sm font-light text-text-dark/80 transition-all">怒火中烧</div>
+<div class="flex items-center justify-center rounded-lg bg-text-dark/10 h-full text-center text-sm font-light text-text-dark/80 transition-all">全神贯注</div>
+<div class="flex items-center justify-center rounded-lg bg-text-dark/10 h-full text-center text-sm font-light text-text-dark/80 transition-all">筋疲力尽</div>
+<div class="flex items-center justify-center rounded-lg bg-text-dark/10 h-full text-center text-sm font-light text-text-dark/80 transition-all">灵感迸发</div>
+<div class="flex items-center justify-center rounded-lg bg-text-dark/10 h-full text-center text-sm font-light text-text-dark/80 transition-all">忧心忡忡</div>
+<div class="flex items-center justify-center rounded-lg bg-text-dark/10 h-full text-center text-sm font-light text-text-dark/80 transition-all">踌躇满志</div>
+<div class="flex items-center justify-center rounded-lg bg-text-dark/10 h-full text-center text-sm font-light text-text-dark/80 transition-all">浮想联翩</div>
+<div class="flex items-center justify-center rounded-lg bg-text-dark/10 h-full text-center text-sm font-light text-text-dark/80 transition-all">心满意足</div>
+<div class="flex items-center justify-center rounded-lg bg-text-dark/10 h-full text-center text-sm font-light text-text-dark/80 transition-all">垂头丧气</div>
+<div class="flex items-center justify-center rounded-lg bg-text-dark/10 h-full text-center text-sm font-light text-text-dark/80 transition-all">满怀希望</div>
+<div class="flex items-center justify-center rounded-lg bg-text-dark/10 h-full text-center text-sm font-light text-text-dark/80 transition-all">若有所思</div>
+<div class="flex items-center justify-center rounded-lg bg-text-dark/10 h-full text-center text-sm font-light text-text-dark/80 transition-all">思绪万千</div>
+</div>
+<div class="absolute top-1/2 left-0 w-full h-px bg-white/10 -translate-y-1/2 pointer-events-none"></div>
+<div class="absolute left-1/2 top-0 h-full w-px bg-white/10 -translate-x-1/2 pointer-events-none"></div>
+</div>
+</div>
+<div class="space-y-4">
+<div class="flex justify-between items-center">
+<h3 class="text-text-dark/80 text-base font-normal leading-tight">Self-Rating</h3>
+<span class="text-primary text-base font-medium">7</span>
+</div>
+<input class="custom-slider" max="10" min="0" type="range" value="7"/>
+</div>
+<div class="flex flex-col gap-2">
+<h3 class="text-text-dark/80 text-sm font-normal leading-tight">标题 Title</h3>
+<input class="form-input-custom w-full" placeholder="e.g., Sunset Sketch, Abstract Forms" value=""/>
+</div>
+<div class="flex flex-col gap-2">
+<h3 class="text-text-dark/80 text-sm font-normal leading-tight">简介 Description</h3>
+<textarea class="form-textarea-custom w-full" placeholder="Add a description or some notes..." rows="3"></textarea>
+</div>
+<div class="space-y-4">
+<div class="flex items-center gap-3">
+<input checked="" class="form-checkbox-custom h-5 w-5 text-primary focus:ring-primary/50" id="associate-artwork" type="checkbox"/>
+<label class="text-text-dark font-light text-base" for="associate-artwork">Associate with other artwork</label>
+</div>
+<button class="flex w-full items-center justify-center rounded-lg border border-text-dark/30 h-12 px-4 text-text-dark/80 text-base font-light leading-normal">
+<span>Select Artwork...</span>
+</button>
+</div>
+</div>
+<div class="sticky bottom-0 p-4 bg-gradient-to-t from-background-dark to-transparent">
+<button class="flex w-full min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-xl h-14 px-4 bg-primary text-background-dark text-lg font-medium leading-normal tracking-wide">
+<span class="truncate">Save</span>
+</button>
+</div>
+</div>
+</div>
+</body></html>

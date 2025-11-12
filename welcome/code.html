@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>EchoDraw - Welcome</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200;300;400;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "primary": "#98DBC6", // mint blue-green
+            "background-light": "#EFEAE7", // milky white (for potential light mode)
+            "background-dark": "#221B1B", // deep coffee brown
+            "accent-brown": "#4A3F4A",
+            "accent-light-blue": "#C5E1E2",
+          },
+          fontFamily: {
+            "display": ["Manrope", "sans-serif"]
+          },
+          borderRadius: {
+            "DEFAULT": "0.5rem",
+            "lg": "0.75rem",
+            "xl": "1rem",
+            "full": "9999px"
+          },
+        },
+      },
+    }
+  </script>
+<style>
+    body {
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-display bg-background-dark">
+<div class="relative flex h-[100dvh] w-full flex-col items-center justify-between overflow-hidden p-8 text-white">
+<!-- Animated Background Elements -->
+<div class="absolute inset-0 z-0 overflow-hidden">
+<div class="absolute -left-1/4 -top-1/4 h-3/4 w-3/4 rounded-full bg-primary/10 blur-3xl"></div>
+<div class="absolute -bottom-1/4 -right-1/4 h-3/4 w-3/4 rounded-full bg-accent-light-blue/5 blur-3xl"></div>
+<div class="absolute left-1/2 top-1/2 h-48 w-48 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/5 blur-2xl"></div>
+</div>
+<!-- Main Content -->
+<div class="relative z-10 flex h-full w-full max-w-sm flex-col items-center justify-center text-center">
+<!-- Header -->
+<header class="flex-grow pt-16">
+<h1 class="text-4xl font-light leading-tight tracking-wider text-white">EchoDraw</h1>
+</header>
+<!-- Feature List -->
+<main class="flex flex-col items-center justify-center gap-4 py-12">
+<p class="text-base font-extralight leading-relaxed text-white/90">Record your creative process.</p>
+<p class="text-base font-extralight leading-relaxed text-white/90">Set artistic goals and milestones.</p>
+<p class="text-base font-extralight leading-relaxed text-white/90">Track your time and creative mood.</p>
+<p class="text-base font-extralight leading-relaxed text-white/90">Generate ritualistic progress reports.</p>
+</main>
+<!-- Action Buttons -->
+<footer class="w-full flex-shrink-0 pb-8">
+<div class="flex w-full flex-col gap-4">
+<a class="flex h-14 w-full items-center justify-center rounded-lg bg-primary text-background-dark transition-colors duration-300 hover:bg-primary/90" href="#">
+<span class="text-lg font-normal">Register</span>
+</a>
+<a class="flex h-14 w-full items-center justify-center rounded-lg border border-primary text-primary transition-colors duration-300 hover:bg-primary/10" href="#">
+<span class="text-lg font-normal">Login</span>
+</a>
+</div>
+</footer>
+</div>
+</div>
+</body></html>

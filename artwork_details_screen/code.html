@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>EchoDraw - Artwork Details</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200;300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<style>
+      body {
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+      .font-extralight { font-weight: 200; }
+      .material-symbols-outlined {
+        font-variation-settings:
+        'FILL' 0,
+        'wght' 300,
+        'GRAD' 0,
+        'opsz' 24
+      }
+      .icon-filled {
+        font-variation-settings: 'FILL' 1;
+      }
+  </style>
+<script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#98DBC6","background-light": "#221B1B","background-dark": "#221B1B","accent-brown": "#4A3F3A",
+              "accent-light-blue": "#C5E1E2",
+              "accent-milky-white": "#EFEAE7",
+              "text-white": "#FFFFFF",
+            },
+            fontFamily: {
+              "display": ["Manrope", "sans-serif"]
+            },
+            borderRadius: {"DEFAULT": "0.5rem", "lg": "0.75rem", "xl": "1rem", "full": "9999px"},
+          },
+        },
+      }
+  </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-dark font-display text-text-white">
+<div class="relative flex h-full min-h-screen w-full flex-col bg-background-dark overflow-x-hidden">
+<div class="absolute top-0 left-0 size-[400px] rounded-full bg-primary/5 blur-3xl" style="animation: subtle-breath 15s ease-in-out infinite alternate;"></div>
+<div class="absolute bottom-0 right-0 size-[350px] rounded-full bg-accent-light-blue/5 blur-3xl" style="animation: subtle-breath-2 20s ease-in-out infinite alternate-reverse;"></div>
+<style>
+            @keyframes subtle-breath {
+                from { transform: scale(0.9) translate(0, 50px); opacity: 0.8; }
+                to { transform: scale(1.1) translate(50px, -50px); opacity: 1; }
+            }
+            @keyframes subtle-breath-2 {
+                from { transform: scale(1.1) translate(0, 0); opacity: 1; }
+                to { transform: scale(0.95) translate(-50px, 30px); opacity: 0.8; }
+            }
+  </style>
+<div class="relative z-10 flex h-full grow flex-col justify-between p-6 pt-12 sm:p-8">
+<div class="flex flex-col">
+<div class="mx-auto mb-6 w-full max-w-sm">
+<div class="w-full overflow-hidden rounded-xl shadow-2xl shadow-black/40 aspect-[3/4] bg-center bg-no-repeat bg-cover" data-alt="Abstract watercolor painting with flowing blues, pinks, and yellows on a textured paper" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBglMYDuAaIfwIDwqsqzDL1LjsTgsTlnvi9hUi8c0Xm2EL61sG_F9QNPcCFB8ytEqWhffL3GacUcstphBPGKKYUSGOpeUOvs6NlHbqteGbqadNok4fDmKut2RW4yftVGcFk24MB7ohTtqyAQH0PpuS6knaHLd92sFWKNmw3jcl6TJ2-YPgJS-Mbbday47V3vQXNXZpMWw1W8XdSNGVUdfufF2tPk-kbSbxNHs3VesVRjUolmqcs8VUBj3otWOgcwdYstNd5U6EntlTe");'></div>
+</div>
+<div class="flex flex-col items-center text-center space-y-5">
+<div>
+<h1 class="text-text-white tracking-tight text-3xl font-medium leading-tight">Abstract Thoughts</h1>
+<p class="text-primary/80 text-sm font-light leading-normal pt-1">June 15, 2024</p>
+</div>
+<p class="text-text-white/80 text-base font-extralight leading-relaxed max-w-md">
+          A piece exploring the chaotic yet serene nature of the subconscious, using watercolor to capture fleeting ideas and emotions.
+        </p>
+<div class="flex items-center justify-center gap-4 text-text-white/80 w-full pt-1 pb-1">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-lg" style="font-weight: 200;">schedule</span>
+<span class="text-sm font-light">2h 45m</span>
+</div>
+<div class="h-4 w-px bg-white/20"></div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-lg" style="font-weight: 200;">sentiment_calm</span>
+<span class="text-sm font-light">Calm</span>
+</div>
+<div class="h-4 w-px bg-white/20"></div>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-primary text-base icon-filled">star</span>
+<span class="text-sm font-light">4/5</span>
+</div>
+</div>
+<div class="flex flex-wrap justify-center gap-2 max-w-md">
+<span class="inline-block rounded-full border border-white/20 bg-white/5 px-3 py-1 text-xs font-extralight text-text-white/90">#watercolor</span>
+<span class="inline-block rounded-full border border-white/20 bg-white/5 px-3 py-1 text-xs font-extralight text-text-white/90">#experimental</span>
+<span class="inline-block rounded-full border border-white/20 bg-white/5 px-3 py-1 text-xs font-extralight text-text-white/90">#abstract</span>
+</div>
+</div>
+</div>
+<footer class="w-full pt-8 pb-4">
+<button class="flex w-full items-center justify-center gap-2 rounded-full bg-primary/10 py-3.5 px-6 text-primary transition-colors hover:bg-primary/20 backdrop-blur-sm border border-primary/20">
+<span class="material-symbols-outlined text-xl" style="font-weight: 300;">ios_share</span>
+<span class="text-base font-normal">Export</span>
+</button>
+</footer>
+</div>
+</div>
+
+</body></html>
