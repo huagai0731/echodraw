@@ -24,7 +24,18 @@
    pip install -r requirements.txt
    ```
 
-3. 配置环境变量：复制 `backend/.env.example` 到 `.env`，根据需要调整 `DJANGO_SECRET_KEY`、`DJANGO_ALLOWED_HOSTS` 等。
+3. 配置环境变量：复制 `backend/.env.example` 到 `.env`，根据需要调整 `DJANGO_SECRET_KEY`、`DJANGO_ALLOWED_HOSTS` 等。若要启用火山云 TOS 对象存储，请额外设置：
+   ```env
+   DJANGO_USE_TOS_STORAGE=true
+   TOS_ACCESS_KEY_ID=your-access-key-id
+   TOS_SECRET_ACCESS_KEY=your-secret-access-key
+   TOS_REGION_NAME=cn-shanghai
+   TOS_ENDPOINT_URL=https://tos-s3-cn-shanghai.volces.com
+   TOS_BUCKET=echobucket
+   TOS_MEDIA_LOCATION=uploads
+   TOS_CUSTOM_DOMAIN=echobucket.tos-cn-shanghai.volces.com  # 有自定义 CDN 域名时使用
+   ```
+   未启用 TOS 时，可省略上述变量，媒体文件将继续保存在本地 `backend/media/`。
 
 4. 运行迁移并启动开发服务器：
 

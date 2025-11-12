@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "storages",
     "corsheaders",
     "rest_framework",
     "core",
@@ -138,6 +139,35 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+
+# Object storage (TOS) configuration
+USE_TOS_STORAGE = os.getenv("DJANGO_USE_TOS_STORAGE", "false").lower() == "true"
+TOS_ACCESS_KEY_ID = os.getenv("TOS_ACCESS_KEY_ID")
+TOS_SECRET_ACCESS_KEY = os.getenv("TOS_SECRET_ACCESS_KEY")
+TOS_REGION_NAME = os.getenv("TOS_REGION_NAME", "cn-beijing")
+TOS_ENDPOINT_URL = os.getenv("TOS_ENDPOINT_URL")
+TOS_BUCKET = os.getenv("TOS_BUCKET")
+TOS_MEDIA_LOCATION = os.getenv("TOS_MEDIA_LOCATION", "uploads")
+TOS_CUSTOM_DOMAIN = os.getenv("TOS_CUSTOM_DOMAIN", "")
+
+if USE_TOS_STORAGE:
+    DEFAULT_FILE_STORAGE = "config.storage.TOSMediaStorage"
+    AWS_ACCESS_KEY_ID = TOS_ACCESS_KEY_ID
+    AWS_SECRET_ACCESS_KEY = TOS_SECRET_ACCESS_KEY
+    AWS_S3_REGION_NAME = TOS_REGION_NAME
+    AWS_S3_ENDPOINT_URL = TOS_ENDPOINT_URL
+    AWS_S3_SIGNATURE_VERSION = "s3v4"
+    AWS_S3_ADDRESSING_STYLE = "virtual"
+
+    _media_prefix = f"{TOS_MEDIA_LOCATION.strip('/')}/" if TOS_MEDIA_LOCATION else ""
+    if _media_prefix == "/":
+        _media_prefix = ""
+
+    if TOS_CUSTOM_DOMAIN:
+        MEDIA_URL = f"https://{TOS_CUSTOM_DOMAIN.rstrip('/')}/{_media_prefix}"
+    elif TOS_BUCKET and TOS_ENDPOINT_URL:
+        endpoint_host = TOS_ENDPOINT_URL.replace("https://", "").replace("http://", "").rstrip("/")
+        MEDIA_URL = f"https://{TOS_BUCKET}.{endpoint_host}/{_media_prefix}"
 
 _cors_origins = os.getenv("DJANGO_CORS_ALLOWED_ORIGINS", "")
 CORS_ALLOWED_ORIGINS = [origin.strip() for origin in _cors_origins.split(",") if origin.strip()]
