@@ -158,7 +158,6 @@ function CheckpointCard({
   onSelectShowcase,
   onEditCompletionNote,
 }: CheckpointCardProps) {
-  const reachedHours = checkpoint.reachedMinutes ? checkpoint.reachedMinutes / 60 : null;
   const thresholdHours = checkpoint.thresholdMinutes / 60;
   const progressPercent =
     checkpoint.status === "current" && checkpoint.thresholdMinutes > 0

@@ -433,15 +433,15 @@ function NewChallengeWizard({ onClose, onSaved }: NewChallengeWizardProps) {
     let removed = false;
     setSelectedTasks((prev) => {
       const next: Record<number, SelectedTask[]> = {};
-      (Object.keys(prev) as Array<keyof typeof prev>).forEach((key) => {
+      Object.entries(prev).forEach(([key, list]) => {
         const dayIndex = Number(key);
-        const list = prev[dayIndex] ?? [];
-        const filtered = list.filter((item) => item.instanceId !== instanceId);
-        if (filtered.length !== list.length) {
+        const source = list ?? [];
+        const filtered = source.filter((item) => item.instanceId !== instanceId);
+        if (filtered.length !== source.length) {
           removed = true;
           next[dayIndex] = filtered;
         } else {
-          next[dayIndex] = list;
+          next[dayIndex] = source;
         }
       });
       return removed ? next : prev;
@@ -487,10 +487,10 @@ function NewChallengeWizard({ onClose, onSaved }: NewChallengeWizardProps) {
     const normalizedSubtitle = payload.subtitle.trim();
     setSelectedTasks((prev) => {
       const next: Record<number, SelectedTask[]> = {};
-      (Object.keys(prev) as Array<keyof typeof prev>).forEach((key) => {
+      Object.entries(prev).forEach(([key, list]) => {
         const dayIndex = Number(key);
-        const list = prev[dayIndex] ?? [];
-        const mapped = list.map((task) => {
+        const source = list ?? [];
+        const mapped = source.map((task) => {
           if (task.instanceId !== instanceId) {
             return task;
           }
@@ -1416,7 +1416,7 @@ function ConfirmStep({ duration, planName, planType, tasks, dayLabels }: Confirm
                   {item.tasks.length > 0 ? (
                     <ul>
                       {item.tasks.map((task) => (
-                        <li key={task.id}>{task.title}</li>
+                        <li key={task.instanceId}>{task.title}</li>
                       ))}
                     </ul>
                   ) : (

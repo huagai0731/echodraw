@@ -119,8 +119,9 @@ export function normalizePreferences(input?: Partial<TagPreferences> | TagPrefer
 
   const hiddenPresetTagIds = Array.isArray(input.hiddenPresetTagIds)
     ? input.hiddenPresetTagIds
-        .map((value) => (typeof value === "string" ? value : null))
-        .filter((value): value is string => Boolean(value) && !!findPresetById(value))
+        .filter((value): value is string => typeof value === "string")
+        .map((value) => value.trim())
+        .filter((value): value is string => value.length > 0 && !!findPresetById(value))
     : [];
 
   const customTags = Array.isArray(input.customTags)
@@ -134,13 +135,14 @@ export function normalizePreferences(input?: Partial<TagPreferences> | TagPrefer
           if (!id || !name) {
             return null;
           }
-          const hidden =
+          const hiddenValue =
             typeof (item as { hidden?: unknown }).hidden === "boolean"
-              ? ((item as { hidden?: boolean }).hidden ?? false)
+              ? Boolean((item as { hidden?: boolean }).hidden)
               : false;
-          return { id, name, hidden };
+          const normalized: CustomTag = { id, name, hidden: hiddenValue };
+          return normalized;
         })
-        .filter((item): item is CustomTag => Boolean(item))
+        .filter((item): item is CustomTag => item !== null)
     : [];
 
   return {

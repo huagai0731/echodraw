@@ -383,7 +383,7 @@ function Goals() {
     const top = clamp((point.y / MONTHLY_CHART_HEIGHT) * 100, 0, 100);
     const valueHours = point.minutes / 60;
     return {
-      dateLabel: formatMonthDayLabel(monthlySeries.year, monthlySeries.monthIndex, point.day),
+      dateLabel: formatMonthDayLabel(monthlySeries.monthIndex, point.day),
       valueLabel: `${valueHours.toFixed(1)} 小时`,
       left,
       top,
@@ -1169,7 +1169,7 @@ function formatDateLabel(iso: string): string {
   });
 }
 
-function formatMonthDayLabel(year: number, monthIndex: number, day: number): string {
+function formatMonthDayLabel(monthIndex: number, day: number): string {
   const month = monthIndex + 1;
   return `${month} 月 ${day} 日`;
 }

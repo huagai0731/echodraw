@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { CSSProperties, Dispatch, SetStateAction } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import clsx from "clsx";
 
 import MaterialIcon from "@/components/MaterialIcon";
