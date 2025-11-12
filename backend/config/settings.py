@@ -159,6 +159,15 @@ if USE_TOS_STORAGE:
     AWS_S3_SIGNATURE_VERSION = "s3v4"
     AWS_S3_ADDRESSING_STYLE = "virtual"
 
+    STORAGES = {
+        "default": {
+            "BACKEND": "config.storage.TOSMediaStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    }
+
     _media_prefix = f"{TOS_MEDIA_LOCATION.strip('/')}/" if TOS_MEDIA_LOCATION else ""
     if _media_prefix == "/":
         _media_prefix = ""
