@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>EchoDraw Creative Identity</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200;300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+    }
+    .material-symbols-outlined.fill {
+      font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+    .bg-pattern {
+      position: relative;
+      overflow: hidden;
+    }
+    .bg-pattern::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-image:
+        radial-gradient(circle at 10% 15%, #98DBC622, transparent 35%),
+        radial-gradient(circle at 85% 60%, #98DBC618, transparent 45%),
+        radial-gradient(circle at 40% 90%, #C5E1E208, transparent 50%);
+      background-repeat: no-repeat;
+      z-index: 0;
+      animation: breathe 8s ease-in-out infinite;
+    }
+    @keyframes breathe {
+      0%, 100% {
+        transform: scale(1) rotate(0deg);
+        opacity: 0.6;
+      }
+      50% {
+        transform: scale(1.1) rotate(3deg);
+        opacity: 0.9;
+      }
+    }
+    .content-wrapper {
+      position: relative;
+      z-index: 1;
+    }
+    .thin-frame {
+        border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+    .corner-decoration {
+        content: '';
+        position: absolute;
+        width: 12px;
+        height: 12px;
+        border-color: #98DBC6;
+    }
+    .top-left {
+        top: -1px;
+        left: -1px;
+        border-top-width: 1px;
+        border-left-width: 1px;
+    }
+    .top-right {
+        top: -1px;
+        right: -1px;
+        border-top-width: 1px;
+        border-right-width: 1px;
+    }
+    .bottom-left {
+        bottom: -1px;
+        left: -1px;
+        border-bottom-width: 1px;
+        border-left-width: 1px;
+    }
+    .bottom-right {
+        bottom: -1px;
+        right: -1px;
+        border-bottom-width: 1px;
+        border-right-width: 1px;
+    }
+    </style>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "primary": "#98DBC6",
+            "background-light": "#EFEAE7",
+            "background-dark": "#221B1B",
+            "brown": "#4A3F3A",
+            "light-blue": "#C5E1E2",
+            "milky-white": "#EFEAE7",
+            "deep-coffee": "#221B1B"
+          },
+          fontFamily: {
+            "display": ["Manrope", "sans-serif"]
+          },
+          borderRadius: {
+            "DEFAULT": "0.5rem",
+            "lg": "0.75rem",
+            "xl": "1rem",
+            "full": "9999px"
+          },
+        },
+      },
+    }
+  </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark">
+<div class="relative flex h-auto min-h-screen w-full flex-col font-display group/design-root overflow-x-hidden bg-pattern">
+<div class="content-wrapper flex flex-col flex-grow">
+<div class="flex items-center p-4 pb-2 bg-background-dark/0 backdrop-blur-sm sticky top-0 z-10">
+<div class="flex size-12 shrink-0 items-center justify-start">
+<span class="material-symbols-outlined text-[#FFFFFF] dark:text-white text-2xl">arrow_back</span>
+</div>
+<h1 class="text-deep-coffee dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] flex-1 text-center">My Artistic DNA</h1>
+<div class="flex w-12 items-center justify-end">
+<button class="flex max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 bg-transparent text-[#FFFFFF] dark:text-white gap-2 text-base font-bold leading-normal tracking-[0.015em] min-w-0 p-0">
+<span class="material-symbols-outlined text-2xl">ios_share</span>
+</button>
+</div>
+</div>
+<div class="flex-grow px-6 py-4 flex flex-col justify-between">
+<div class="text-center">
+<img alt="User Profile" class="w-20 h-20 rounded-full mx-auto border-2 border-primary shadow-lg" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCjnrigv_bOzFoous7cCppaG_GlA6XDgXaDFloxJVsKibAiDS-abeVyFnoxZ2H3NrlIyJ5FKow-BtoGnFnHVgS-YxUU0TaPQ6a5ShoKzQwLxGa09TlIUFdtJOlKTj8dlkXfJN_xuzq10zxfLssGhuVpZWY19jcZ0znw1uNwKJL-5pqNy7LZVmxxQuiGRN0rmkqRA_izLYhhyPhzKvGZEFgl1nLgFMD-zEDl3ncCD3XhkZZZB72yeCFG8pZeIimb8SdoEPRtTziwT7aR"/>
+<h2 class="text-white text-2xl font-light mt-4 tracking-wider">Aria</h2>
+<p class="text-primary text-sm font-medium tracking-[0.1em] uppercase mt-1">THE LUMINOUS DREAMER</p>
+</div>
+<div class="relative thin-frame rounded-xl p-5 bg-milky-white/5 backdrop-blur-lg">
+<div class="corner-decoration top-left"></div>
+<div class="corner-decoration top-right"></div>
+<div class="corner-decoration bottom-left"></div>
+<div class="corner-decoration bottom-right"></div>
+<p class="text-white/60 text-xs tracking-[0.2em] uppercase text-center mb-1">Painting MBTI</p>
+<p class="text-white text-3xl font-bold text-center tracking-widest">ISFP-A</p>
+<p class="text-white/80 font-light text-center mt-2 text-sm leading-relaxed">The Adventurous Composer</p>
+</div>
+<div class="space-y-4">
+<p class="text-white/60 text-xs tracking-[0.2em] uppercase text-center">Special Achievements</p>
+<div class="grid grid-cols-3 gap-4 text-center">
+<div class="flex flex-col items-center gap-2">
+<div class="w-16 h-16 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-3xl">local_fire_department</span>
+</div>
+<p class="text-white/90 text-xs font-light leading-tight">100-Day Streak</p>
+</div>
+<div class="flex flex-col items-center gap-2">
+<div class="w-16 h-16 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-3xl">nights_stay</span>
+</div>
+<p class="text-white/90 text-xs font-light leading-tight">Night Owl Artist</p>
+</div>
+<div class="flex flex-col items-center gap-2">
+<div class="w-16 h-16 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-3xl">flare</span>
+</div>
+<p class="text-white/90 text-xs font-light leading-tight">First Bloom</p>
+</div>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-4 text-center">
+<div class="thin-frame rounded-lg p-3 bg-milky-white/5 backdrop-blur-lg">
+<p class="text-white/60 text-[11px] font-normal tracking-wider">Total Time</p>
+<p class="text-white text-xl font-medium tracking-wide mt-1">328 <span class="text-sm font-light">hrs</span></p>
+</div>
+<div class="thin-frame rounded-lg p-3 bg-milky-white/5 backdrop-blur-lg">
+<p class="text-white/60 text-[11px] font-normal tracking-wider">Creations</p>
+<p class="text-white text-xl font-medium tracking-wide mt-1">74</p>
+</div>
+</div>
+<div class="text-center pt-2 pb-4">
+<p class="text-white/50 text-xs font-light tracking-widest">Generated by EchoDraw</p>
+</div>
+</div>
+</div>
+</div>
+
+</body></html>

@@ -122,6 +122,73 @@
   display: none;
 }
 
+.reports-screen__demo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.2rem;
+  padding: 1.15rem 1.35rem;
+  border-radius: 1.2rem;
+  border: 1px solid rgba(239, 234, 231, 0.16);
+  background: linear-gradient(135deg, rgba(152, 219, 198, 0.16), rgba(34, 27, 27, 0.82));
+  backdrop-filter: blur(24px);
+  box-shadow: 0 20px 46px rgba(0, 0, 0, 0.32);
+}
+
+.reports-screen__demo-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.reports-screen__demo-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: rgba(239, 234, 231, 0.92);
+}
+
+.reports-screen__demo-subtitle {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: rgba(239, 234, 231, 0.62);
+}
+
+.reports-screen__demo-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.75rem 1.25rem;
+  border-radius: 999px;
+  border: 1px solid rgba(152, 219, 198, 0.6);
+  background: rgba(152, 219, 198, 0.16);
+  color: #ffffff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.reports-screen__demo-button:hover {
+  background: rgba(152, 219, 198, 0.22);
+  border-color: rgba(152, 219, 198, 0.75);
+  transform: translateY(-1px);
+}
+
+.reports-screen__demo-button:active {
+  background: rgba(152, 219, 198, 0.3);
+  transform: translateY(0);
+}
+
+.reports-screen__demo-button:focus-visible {
+  outline: 2px solid rgba(152, 219, 198, 0.85);
+  outline-offset: 3px;
+}
+
 .reports-filter {
   flex: none;
   padding: 0 1.25rem;
@@ -313,6 +380,16 @@
 @media (max-width: 420px) {
   .reports-screen__header {
     padding-inline: 1rem;
+  }
+
+  .reports-screen__demo {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.85rem;
+  }
+
+  .reports-screen__demo-button {
+    width: 100%;
   }
 
   .reports-screen__segment {

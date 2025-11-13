@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 import os
+import warnings
 from pathlib import Path
 
 from dotenv import load_dotenv  # type: ignore
@@ -40,6 +41,11 @@ ALLOWED_HOSTS = [host.strip() for host in _allowed_hosts.split(",") if host.stri
 
 if DEBUG and not ALLOWED_HOSTS:
     ALLOWED_HOSTS = ["*"]
+
+_loopback_hosts = {"127.0.0.1", "localhost"}
+for _host in _loopback_hosts:
+    if _host not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(_host)
 
 
 # Application definition
@@ -149,6 +155,22 @@ TOS_ENDPOINT_URL = os.getenv("TOS_ENDPOINT_URL")
 TOS_BUCKET = os.getenv("TOS_BUCKET")
 TOS_MEDIA_LOCATION = os.getenv("TOS_MEDIA_LOCATION", "uploads")
 TOS_CUSTOM_DOMAIN = os.getenv("TOS_CUSTOM_DOMAIN", "")
+
+_required_tos_settings = {
+    "TOS_ACCESS_KEY_ID": TOS_ACCESS_KEY_ID,
+    "TOS_SECRET_ACCESS_KEY": TOS_SECRET_ACCESS_KEY,
+    "TOS_BUCKET": TOS_BUCKET,
+    "TOS_ENDPOINT_URL": TOS_ENDPOINT_URL,
+}
+
+if USE_TOS_STORAGE and any(value in {None, ""} for value in _required_tos_settings.values()):
+    missing_keys = [key for key, value in _required_tos_settings.items() if value in {None, ""}]
+    warnings.warn(
+        "TOS 存储配置不完整，已自动回退到本地媒体存储。缺失的配置项："
+        + ", ".join(missing_keys),
+        RuntimeWarning,
+    )
+    USE_TOS_STORAGE = False
 
 if USE_TOS_STORAGE:
     DEFAULT_FILE_STORAGE = "config.storage.TOSMediaStorage"

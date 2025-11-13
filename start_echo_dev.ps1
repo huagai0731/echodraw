@@ -44,13 +44,13 @@ function Stop-PortListener {
     }
 
     $pids = $connections | Select-Object -ExpandProperty OwningProcess -Unique
-    foreach ($pid in $pids) {
+    foreach ($processId in $pids) {
         try {
-            $process = Get-Process -Id $pid -ErrorAction Stop
-            Write-Host ("终止使用端口 {0} 的进程: {1} ({2})" -f $Port, $process.ProcessName, $pid)
-            Stop-Process -Id $pid -Force -ErrorAction Stop
+            $process = Get-Process -Id $processId -ErrorAction Stop
+            Write-Host ("终止使用端口 {0} 的进程: {1} ({2})" -f $Port, $process.ProcessName, $processId)
+            Stop-Process -Id $processId -Force -ErrorAction Stop
         } catch {
-            Write-Host ("无法终止端口 {0} 上的进程 {1}: {2}" -f $Port, $pid, $_.Exception.Message) -ForegroundColor Yellow
+            Write-Host ("无法终止端口 {0} 上的进程 {1}: {2}" -f $Port, $processId, $_.Exception.Message) -ForegroundColor Yellow
         }
     }
 }
@@ -204,7 +204,7 @@ Write-Host ("已设置 VITE_ASSET_BASE_URL={0}" -f $assetBaseUrl)
 $frontendCommand = @"
 Set-Item Env:VITE_ASSET_BASE_URL `"$assetBaseUrl`"
 Set-Location `"$frontendDir`"
-npm run dev -- --host 0.0.0.0 --port 5173
+npm run dev
 "@
 $frontendProcess = Start-Process -FilePath $powershellExe -ArgumentList "-NoExit", "-Command", $frontendCommand -PassThru
 Write-Host ("前端进程 PID: {0}" -f $frontendProcess.Id)

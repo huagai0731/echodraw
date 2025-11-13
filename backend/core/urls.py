@@ -4,6 +4,7 @@ from rest_framework.routers import DefaultRouter
 from core import views
 from core.admin_views import (
     AchievementAdminViewSet,
+    AchievementGroupAdminViewSet,
     DailyHistoryMessageAdminViewSet,
     EncouragementMessageAdminViewSet,
     LongTermPlanCopyAdminViewSet,
@@ -38,6 +39,11 @@ router.register(
     basename="admin-achievements",
 )
 router.register(
+    r"admin/achievement-groups",
+    AchievementGroupAdminViewSet,
+    basename="admin-achievement-groups",
+)
+router.register(
     r"admin/goals/short-term-presets",
     ShortTermTaskPresetAdminViewSet,
     basename="admin-short-term-presets",
@@ -65,8 +71,14 @@ urlpatterns = [
         views.ProfilePreferenceView.as_view(),
         name="profile-preferences",
     ),
+    path(
+        "profile/achievements/",
+        views.profile_achievements,
+        name="profile-achievements",
+    ),
     path("uploads/", views.UserUploadListCreateView.as_view(), name="user-uploads"),
     path("uploads/<int:pk>/", views.UserUploadDetailView.as_view(), name="user-upload-detail"),
+    path("uploads/<int:pk>/image/", views.UserUploadImageView.as_view(), name="user-upload-image"),
     path("homepage/messages/", views.homepage_messages, name="homepage-messages"),
     path("goals/calendar/", views.goals_calendar, name="goals-calendar"),
     path("goals/check-in/", views.check_in, name="goals-check-in"),

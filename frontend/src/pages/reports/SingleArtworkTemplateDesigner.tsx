@@ -14,23 +14,26 @@ type SingleArtworkTemplateDesignerProps = {
 };
 
 type TemplateViewModel = {
-  dateLabel: string;
-  mood: string;
-  tags: string[];
-  durationLabel: string;
-  username: string;
   title: string;
+  subtitle: string;
+  tags: string[];
+  timestampLabel: string;
+  username: string;
 };
 
 type ImageStatus = "idle" | "loading" | "ready" | "error";
 
 const CANVAS_SIZE = 1080;
 const DEFAULT_USERNAME = "@EchoUser";
+const MAX_TAG_COUNT = 6;
 
 function SingleArtworkTemplateDesigner({ open, artworks, onClose }: SingleArtworkTemplateDesignerProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [username, setUsername] = useState<string>(DEFAULT_USERNAME);
+  const [title, setTitle] = useState<string>("自定义标题名");
+  const [subtitle, setSubtitle] = useState<string>("自定义文案");
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [imageStatus, setImageStatus] = useState<ImageStatus>("idle");
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -119,6 +122,40 @@ function SingleArtworkTemplateDesigner({ open, artworks, onClose }: SingleArtwor
     return current ?? artworks[0] ?? null;
   }, [artworks, hasArtworks, selectedId]);
 
+  const availableTags = useMemo(() => {
+    if (!selectedArtwork) {
+      return [];
+    }
+    return Array.from(
+      new Set(
+        (selectedArtwork.tags ?? [])
+          .map((tag) => tag.trim())
+          .filter((tag) => tag.length > 0),
+      ),
+    );
+  }, [selectedArtwork]);
+
+  useEffect(() => {
+    if (!selectedArtwork) {
+      setTitle("自定义标题名");
+      setSubtitle("自定义文案");
+      setSelectedTags([]);
+      return;
+    }
+
+    setTitle(selectedArtwork.title?.trim() || "自定义标题名");
+    setSubtitle(selectedArtwork.description?.trim() || "自定义文案");
+
+    const defaults = Array.from(
+      new Set(
+        (selectedArtwork.tags ?? [])
+          .map((tag) => tag.trim())
+          .filter((tag) => tag.length > 0),
+      ),
+    ).slice(0, MAX_TAG_COUNT);
+    setSelectedTags(defaults);
+  }, [selectedArtwork?.id, selectedArtwork]);
+
   useEffect(() => {
     if (!open || !selectedArtwork) {
       return;
@@ -148,21 +185,42 @@ function SingleArtworkTemplateDesigner({ open, artworks, onClose }: SingleArtwor
       return null;
     }
 
-    const dateLabel = buildDateLabel(selectedArtwork);
-    const moodLabel = selectedArtwork.mood?.trim() || "未知心情";
-    const tags = buildTags(selectedArtwork.tags);
-    const durationLabel = buildDurationLabel(selectedArtwork);
-    const normalizedUsername = normalizeUsername(username);
+    const preparedTags = Array.from(
+      new Set(
+        selectedTags
+          .map((tag) => tag.trim())
+          .filter((tag) => tag.length > 0),
+      ),
+    ).slice(0, MAX_TAG_COUNT);
 
     return {
-      dateLabel,
-      mood: moodLabel,
-      tags,
-      durationLabel,
-      username: normalizedUsername,
-      title: selectedArtwork.title,
+      title: title.trim() || "自定义标题名",
+      subtitle: subtitle.trim(),
+      tags: preparedTags,
+      timestampLabel: buildTimestampLabel(selectedArtwork),
+      username: normalizeUsername(username),
     };
-  }, [selectedArtwork, username]);
+  }, [selectedArtwork, selectedTags, subtitle, title, username]);
+
+  const timestampLabel = templateData?.timestampLabel ?? "日期未知";
+
+  const handleToggleTag = (tag: string) => {
+    if (!availableTags.includes(tag)) {
+      return;
+    }
+    setSelectedTags((previous) => {
+      const cleanedPrevious = previous.filter((item) => availableTags.includes(item));
+      const exists = cleanedPrevious.includes(tag);
+      if (exists) {
+        return cleanedPrevious.filter((item) => item !== tag);
+      }
+      if (cleanedPrevious.length >= MAX_TAG_COUNT) {
+        return cleanedPrevious;
+      }
+      const tentative = [...cleanedPrevious, tag];
+      return availableTags.filter((item) => tentative.includes(item));
+    });
+  };
 
   useEffect(() => {
     if (!open) {
@@ -256,6 +314,88 @@ function SingleArtworkTemplateDesigner({ open, artworks, onClose }: SingleArtwor
                   </button>
                 </div>
 
+                <div className="single-template-designer__group">
+                  <h3>模版文案</h3>
+                  <label className="single-template-designer__field">
+                    <span>标题</span>
+                    <input
+                      type="text"
+                      value={title}
+                      maxLength={40}
+                      onChange={(event) => setTitle(event.target.value)}
+                      placeholder="请输入模版主标题"
+                    />
+                  </label>
+                  <label className="single-template-designer__field">
+                    <span>文案</span>
+                    <textarea
+                      rows={3}
+                      value={subtitle}
+                      maxLength={120}
+                      onChange={(event) => setSubtitle(event.target.value)}
+                      placeholder="为作品写一句说明（可选）"
+                    />
+                  </label>
+                  <p className="single-template-designer__hint">标题与文案会显示在画面左上角，可随时修改。</p>
+                </div>
+
+                <div className="single-template-designer__group">
+                  <h3>展示标签</h3>
+                  <p className="single-template-designer__hint">
+                    至多选择 {MAX_TAG_COUNT} 个标签，顺序按照上传时的原始排序展示。未选择时右上角不会显示标签。
+                  </p>
+                  <div className="single-template-designer__tag-list" role="listbox" aria-label="可展示的标签">
+                    {availableTags.length === 0 ? (
+                      <span className="single-template-designer__hint single-template-designer__hint--muted">
+                        该作品尚未设置标签。
+                      </span>
+                    ) : (
+                      availableTags.map((tag) => {
+                        const active = selectedTags.includes(tag);
+                        return (
+                          <button
+                            key={tag}
+                            type="button"
+                            role="option"
+                            aria-selected={active}
+                            className={`single-template-designer__tag-option${active ? " single-template-designer__tag-option--active" : ""}`}
+                            onClick={() => handleToggleTag(tag)}
+                          >
+                            <span>{tag}</span>
+                            {active ? <MaterialIcon name="check" /> : null}
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                  {selectedTags.length > 0 ? (
+                    <button
+                      type="button"
+                      className="single-template-designer__tag-reset"
+                      onClick={() => setSelectedTags([])}
+                    >
+                      清空已选标签
+                    </button>
+                  ) : null}
+                </div>
+
+                <div className="single-template-designer__group">
+                  <h3>署名信息</h3>
+                  <label className="single-template-designer__field">
+                    <span>显示昵称</span>
+                    <input
+                      type="text"
+                      value={username}
+                      maxLength={32}
+                      onChange={(event) => setUsername(event.target.value)}
+                      placeholder="将展示在模板右下角"
+                    />
+                  </label>
+                  <p className="single-template-designer__meta">
+                    上传时间 <strong>{timestampLabel}</strong>
+                  </p>
+                </div>
+
                 <div className="single-template-designer__actions">
                   <button
                     type="button"
@@ -330,22 +470,6 @@ function SingleArtworkTemplateDesigner({ open, artworks, onClose }: SingleArtwor
 
 export default SingleArtworkTemplateDesigner;
 
-function buildTags(tags: string[]): string[] {
-  const sanitized = Array.from(
-    new Set(
-      tags
-        .map((tag) => tag.trim())
-        .filter((tag) => tag.length > 0)
-        .slice(0, 5),
-    ),
-  );
-  const placeholders = ["Echo", "Mood", "Diary", "Creation", "Flow"];
-  while (sanitized.length < 5) {
-    sanitized.push(placeholders[sanitized.length % placeholders.length]);
-  }
-  return sanitized.slice(0, 5);
-}
-
 function normalizeUsername(input: string): string {
   const trimmed = input.trim();
   if (!trimmed) {
@@ -387,27 +511,67 @@ function formatNameFromEmail(email: string): string {
   return localPart.slice(0, 1).toUpperCase() + localPart.slice(1);
 }
 
-function buildDateLabel(artwork: Artwork): string {
+function buildTimestampLabel(artwork: Artwork): string {
   const candidates = [artwork.uploadedAt, artwork.uploadedDate, artwork.date];
   for (const source of candidates) {
-    const parsed = parseDate(source);
+    const parsed = parseDateTime(source);
     if (parsed) {
-      const year = parsed.getFullYear();
-      const month = String(parsed.getMonth() + 1).padStart(2, "0");
-      const day = String(parsed.getDate()).padStart(2, "0");
-      return `${year}.${month}.${day}`;
+      return formatTimestamp(parsed);
     }
   }
   return "日期未知";
 }
 
-function parseDate(source: string | null | undefined): Date | null {
+function parseDateTime(source: string | null | undefined): Date | null {
   if (!source) {
     return null;
   }
-  const direct = Date.parse(source);
+  const trimmed = source.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const direct = Date.parse(trimmed);
   if (!Number.isNaN(direct)) {
     return new Date(direct);
+  }
+
+  const normalized = trimmed
+    .replace(/[年月]/g, "-")
+    .replace(/[日号]/g, "")
+    .replace(/[点：]/g, ":")
+    .replace(/[时hH]/g, ":")
+    .replace(/[分mM]/g, ":")
+    .replace(/[秒sS]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const [datePart, timePart] = normalized.split(" ");
+  const date = parseDate(datePart ?? "");
+  if (!date) {
+    return null;
+  }
+
+  if (timePart) {
+    const timeMatch = timePart.match(/(\d{1,2})(?::(\d{1,2}))?/);
+    if (timeMatch) {
+      const hours = Number.parseInt(timeMatch[1], 10);
+      const minutes = timeMatch[2] ? Number.parseInt(timeMatch[2], 10) : 0;
+      if (!Number.isNaN(hours)) {
+        date.setHours(Math.max(0, Math.min(23, hours)));
+      }
+      if (!Number.isNaN(minutes)) {
+        date.setMinutes(Math.max(0, Math.min(59, minutes)));
+      }
+      date.setSeconds(0, 0);
+    }
+  }
+
+  return date;
+}
+
+function parseDate(source: string | null | undefined): Date | null {
+  if (!source) {
+    return null;
   }
   const normalized = source
     .replace(/[年月.\-/]/g, (match) => (match === "年" || match === "." || match === "/" || match === "-" ? "-" : ""))
@@ -427,41 +591,13 @@ function parseDate(source: string | null | undefined): Date | null {
   return new Date(year, month - 1, day);
 }
 
-function buildDurationLabel(artwork: Artwork): string {
-  if (typeof artwork.durationMinutes === "number" && Number.isFinite(artwork.durationMinutes)) {
-    return formatDurationMinutes(Math.max(artwork.durationMinutes, 0));
-  }
-
-  const parsed = parseDurationString(artwork.duration);
-  if (parsed !== null) {
-    return formatDurationMinutes(parsed);
-  }
-
-  return "01H00M";
-}
-
-function parseDurationString(source: string | undefined): number | null {
-  if (!source) {
-    return null;
-  }
-  const match = source.match(/(?:(\d+)\s*(?:小时|h|H))?\s*(?:(\d+)\s*(?:分钟|分|m|M))?/);
-  if (!match) {
-    return null;
-  }
-  const hours = match[1] ? Number.parseInt(match[1], 10) : 0;
-  const minutes = match[2] ? Number.parseInt(match[2], 10) : 0;
-  if (Number.isNaN(hours) || Number.isNaN(minutes)) {
-    return null;
-  }
-  return hours * 60 + minutes;
-}
-
-function formatDurationMinutes(totalMinutes: number): string {
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  const hourLabel = `${String(Math.min(hours, 99)).padStart(2, "0")}H`;
-  const minuteLabel = `${String(minutes).padStart(2, "0")}M`;
-  return `${hourLabel}${minuteLabel}`;
+function formatTimestamp(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day} ${hours}H${minutes}M`;
 }
 
 function drawTemplate(
@@ -473,182 +609,250 @@ function drawTemplate(
   context.save();
   context.clearRect(0, 0, size, size);
 
-  drawBackground(context, size);
-  drawDecorations(context, size);
-  drawImageFrame(context, size, image);
-  drawTopLeftTitle(context, size);
-  drawTopRightTags(context, size, data.tags);
-  drawLeftVerticalCaption(context, size, data.dateLabel, data.mood);
-  drawRightBottomInfo(context, size, data.durationLabel, data.username);
+  const layout = createTemplateLayout(size);
+
+  drawCanvasBackground(context, size);
+  drawPaper(context, layout);
+  drawArtworkFrame(context, layout, image);
+  drawTopLeftCopy(context, size, data.title, data.subtitle);
+  drawTagGrid(context, size, data.tags);
+  drawFooterInfo(context, size, data.timestampLabel, data.username);
 
   context.restore();
 }
 
-function drawBackground(context: CanvasRenderingContext2D, size: number) {
-  context.fillStyle = "#2f1f1b";
+type TemplateLayout = {
+  paperX: number;
+  paperY: number;
+  paperSize: number;
+  paperRadius: number;
+  frameX: number;
+  frameY: number;
+  frameSize: number;
+  frameRadius: number;
+};
+
+function createTemplateLayout(size: number): TemplateLayout {
+  const paperSize = size * 0.84;
+  const paperX = (size - paperSize) / 2;
+  const paperY = size * 0.11;
+  const paperRadius = paperSize * 0.06;
+  const frameInset = paperSize * 0.045;
+  const frameSize = paperSize - frameInset * 2;
+  const frameX = paperX + frameInset;
+  const frameY = paperY + frameInset;
+  const frameRadius = paperSize * 0.05;
+  return { paperX, paperY, paperSize, paperRadius, frameX, frameY, frameSize, frameRadius };
+}
+
+function drawCanvasBackground(context: CanvasRenderingContext2D, size: number) {
+  context.fillStyle = "#2f2521";
   context.fillRect(0, 0, size, size);
 
-  const gradientOne = context.createRadialGradient(size * 0.22, size * 0.28, size * 0.1, size * 0.22, size * 0.28, size * 0.68);
-  gradientOne.addColorStop(0, "rgba(152, 219, 198, 0.32)");
-  gradientOne.addColorStop(1, "rgba(152, 219, 198, 0)");
-  context.fillStyle = gradientOne;
-  context.fillRect(0, 0, size, size);
-
-  const gradientTwo = context.createRadialGradient(size * 0.82, size * 0.74, size * 0.08, size * 0.82, size * 0.74, size * 0.55);
-  gradientTwo.addColorStop(0, "rgba(104, 189, 165, 0.28)");
-  gradientTwo.addColorStop(1, "rgba(104, 189, 165, 0)");
-  context.fillStyle = gradientTwo;
+  const overlay = context.createLinearGradient(0, 0, size, size);
+  overlay.addColorStop(0, "rgba(146, 215, 193, 0.2)");
+  overlay.addColorStop(1, "rgba(146, 215, 193, 0)");
+  context.fillStyle = overlay;
   context.fillRect(0, 0, size, size);
 }
 
-function drawDecorations(context: CanvasRenderingContext2D, size: number) {
-  const stripeWidth = size * 0.005;
-  const maxY = size;
-  const spacing = size * 0.032;
+function drawPaper(context: CanvasRenderingContext2D, layout: TemplateLayout) {
   context.save();
-  context.globalAlpha = 0.08;
-  context.fillStyle = "#efeae7";
-  for (let x = size * 0.12; x < size; x += spacing) {
-    context.fillRect(x, size * 0.05, stripeWidth, maxY - size * 0.1);
-  }
-  context.restore();
-}
-
-function drawImageFrame(context: CanvasRenderingContext2D, size: number, image: HTMLImageElement | null) {
-  const frameSize = size * 0.72;
-  const frameX = size * 0.24;
-  const frameY = size * 0.15;
-  const radius = size * 0.04;
-
-  context.save();
-  context.shadowColor = "rgba(0, 0, 0, 0.42)";
-  context.shadowBlur = size * 0.06;
-  context.shadowOffsetX = size * 0.03;
-  context.shadowOffsetY = size * 0.04;
-  drawRoundedRectPath(context, frameX + size * 0.01, frameY + size * 0.01, frameSize, frameSize, radius);
-  context.fillStyle = "rgba(0, 0, 0, 0.4)";
+  context.shadowColor = "rgba(0, 0, 0, 0.32)";
+  context.shadowBlur = layout.paperSize * 0.06;
+  context.shadowOffsetX = layout.paperSize * 0.03;
+  context.shadowOffsetY = layout.paperSize * 0.035;
+  drawRoundedRectPath(
+    context,
+    layout.paperX + layout.paperSize * 0.012,
+    layout.paperY + layout.paperSize * 0.012,
+    layout.paperSize,
+    layout.paperSize,
+    layout.paperRadius,
+  );
+  context.fillStyle = "rgba(0, 0, 0, 0.28)";
   context.fill();
   context.restore();
 
   context.save();
-  drawRoundedRectPath(context, frameX, frameY, frameSize, frameSize, radius);
-  context.clip();
-
-  if (image && image.width > 0 && image.height > 0) {
-    const scale = Math.max(frameSize / image.width, frameSize / image.height);
-    const drawWidth = image.width * scale;
-    const drawHeight = image.height * scale;
-    const dx = frameX + (frameSize - drawWidth) / 2;
-    const dy = frameY + (frameSize - drawHeight) / 2;
-    context.drawImage(image, dx, dy, drawWidth, drawHeight);
-  } else {
-    const placeholderGradient = context.createLinearGradient(frameX, frameY, frameX + frameSize, frameY + frameSize);
-    placeholderGradient.addColorStop(0, "rgba(152, 219, 198, 0.16)");
-    placeholderGradient.addColorStop(1, "rgba(152, 219, 198, 0.04)");
-    context.fillStyle = placeholderGradient;
-    context.fillRect(frameX, frameY, frameSize, frameSize);
-
-    context.fillStyle = "rgba(239, 234, 231, 0.72)";
-    context.font = `600 ${Math.round(size * 0.045)}px "Manrope", "Segoe UI", sans-serif`;
-    context.textAlign = "center";
-    context.textBaseline = "middle";
-    context.fillText("加载中", frameX + frameSize / 2, frameY + frameSize / 2);
-  }
-  context.restore();
-
-  context.save();
-  drawRoundedRectPath(context, frameX, frameY, frameSize, frameSize, radius);
-  context.lineWidth = size * 0.009;
-  context.strokeStyle = "rgba(239, 234, 231, 0.22)";
-  context.globalAlpha = 0.9;
+  drawRoundedRectPath(context, layout.paperX, layout.paperY, layout.paperSize, layout.paperSize, layout.paperRadius);
+  const paperGradient = context.createLinearGradient(layout.paperX, layout.paperY, layout.paperX + layout.paperSize, layout.paperY + layout.paperSize);
+  paperGradient.addColorStop(0, "#f7f2c9");
+  paperGradient.addColorStop(1, "#f1e5a9");
+  context.fillStyle = paperGradient;
+  context.fill();
+  context.lineWidth = layout.paperSize * 0.008;
+  context.strokeStyle = "rgba(34, 26, 22, 0.12)";
   context.stroke();
   context.restore();
 }
 
-function drawTopLeftTitle(context: CanvasRenderingContext2D, size: number) {
-  const margin = size * 0.12;
+function drawArtworkFrame(context: CanvasRenderingContext2D, layout: TemplateLayout, image: HTMLImageElement | null) {
   context.save();
-  context.textAlign = "left";
-  context.textBaseline = "top";
-  context.fillStyle = "rgba(239, 234, 231, 0.92)";
-  context.font = `700 ${Math.round(size * 0.075)}px "Manrope", "Segoe UI", sans-serif`;
-  context.fillText("EchoDraw", margin, margin);
+  context.shadowColor = "rgba(0, 0, 0, 0.22)";
+  context.shadowBlur = layout.paperSize * 0.05;
+  context.shadowOffsetX = layout.paperSize * 0.02;
+  context.shadowOffsetY = layout.paperSize * 0.03;
+  drawRoundedRectPath(
+    context,
+    layout.frameX + layout.paperSize * 0.009,
+    layout.frameY + layout.paperSize * 0.009,
+    layout.frameSize,
+    layout.frameSize,
+    layout.frameRadius,
+  );
+  context.fillStyle = "rgba(0, 0, 0, 0.28)";
+  context.fill();
+  context.restore();
+
+  context.save();
+  drawRoundedRectPath(context, layout.frameX, layout.frameY, layout.frameSize, layout.frameSize, layout.frameRadius);
+  context.clip();
+  if (image && image.width > 0 && image.height > 0) {
+    const scale = Math.max(layout.frameSize / image.width, layout.frameSize / image.height);
+    const drawWidth = image.width * scale;
+    const drawHeight = image.height * scale;
+    const dx = layout.frameX + (layout.frameSize - drawWidth) / 2;
+    const dy = layout.frameY + (layout.frameSize - drawHeight) / 2;
+    context.drawImage(image, dx, dy, drawWidth, drawHeight);
+  } else {
+    const placeholder = context.createLinearGradient(
+      layout.frameX,
+      layout.frameY,
+      layout.frameX + layout.frameSize,
+      layout.frameY + layout.frameSize,
+    );
+    placeholder.addColorStop(0, "rgba(251, 245, 210, 0.9)");
+    placeholder.addColorStop(1, "rgba(240, 230, 190, 0.85)");
+    context.fillStyle = placeholder;
+    context.fillRect(layout.frameX, layout.frameY, layout.frameSize, layout.frameSize);
+
+    context.fillStyle = "rgba(47, 37, 34, 0.6)";
+    context.font = `600 ${Math.round(layout.paperSize * 0.05)}px "Manrope", "Segoe UI", sans-serif`;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText("加载中", layout.frameX + layout.frameSize / 2, layout.frameY + layout.frameSize / 2);
+  }
+  context.restore();
+
+  context.save();
+  drawRoundedRectPath(context, layout.frameX, layout.frameY, layout.frameSize, layout.frameSize, layout.frameRadius);
+  context.lineWidth = layout.paperSize * 0.0085;
+  context.strokeStyle = "rgba(34, 26, 22, 0.16)";
+  context.stroke();
   context.restore();
 }
 
-function drawTopRightTags(context: CanvasRenderingContext2D, size: number, tags: string[]) {
-  const margin = size * 0.12;
-  const rows = [tags.slice(0, 3), tags.slice(3, 5)];
-  const tagFontSize = Math.round(size * 0.028);
-  const tagHeight = tagFontSize + size * 0.028;
-  const gap = size * 0.018;
+function drawTopLeftCopy(context: CanvasRenderingContext2D, size: number, title: string, subtitle: string) {
+  const margin = size * 0.08;
+  context.save();
+  context.textAlign = "left";
+  context.textBaseline = "top";
+  context.fillStyle = "#9edac4";
+  context.font = `700 ${Math.round(size * 0.06)}px "Manrope", "Segoe UI", sans-serif`;
+  context.fillText(title, margin, margin);
+
+  const trimmedSubtitle = subtitle.trim();
+  if (trimmedSubtitle) {
+    const maxWidth = size * 0.42;
+    const subtitleTop = margin + Math.round(size * 0.07);
+    const lineHeight = Math.round(size * 0.045);
+    context.font = `400 ${Math.round(size * 0.035)}px "Manrope", "Segoe UI", sans-serif`;
+    const lines = wrapText(context, trimmedSubtitle, maxWidth);
+    lines.forEach((line, index) => {
+      context.fillText(line, margin, subtitleTop + index * lineHeight);
+    });
+  }
+
+  context.restore();
+}
+
+function drawTagGrid(context: CanvasRenderingContext2D, size: number, tags: string[]) {
+  if (tags.length === 0) {
+    return;
+  }
+
+  const columns = 2;
+  const boxWidth = size * 0.16;
+  const boxHeight = size * 0.055;
+  const columnGap = size * 0.02;
+  const rowGap = size * 0.02;
+  const margin = size * 0.08;
+  const startX = size - margin - columns * boxWidth - (columns - 1) * columnGap;
+  const startY = margin;
 
   context.save();
-  context.textBaseline = "top";
-  context.font = `500 ${tagFontSize}px "Manrope", "Segoe UI", sans-serif`;
+  context.textAlign = "left";
+  context.textBaseline = "middle";
+  context.font = `600 ${Math.round(size * 0.027)}px "Manrope", "Segoe UI", sans-serif`;
 
-  rows.forEach((row, rowIndex) => {
-    if (row.length === 0) {
+  tags.forEach((rawTag, index) => {
+    const row = Math.floor(index / columns);
+    const column = index % columns;
+    const x = startX + column * (boxWidth + columnGap);
+    const y = startY + row * (boxHeight + rowGap);
+    const text = rawTag.trim().toUpperCase();
+
+    drawRoundedRectPath(context, x, y, boxWidth, boxHeight, size * 0.012);
+    context.fillStyle = "rgba(34, 26, 22, 0.72)";
+    context.fill();
+    context.strokeStyle = "rgba(146, 215, 193, 0.55)";
+    context.lineWidth = size * 0.0022;
+    context.stroke();
+
+    context.fillStyle = "#9edac4";
+    context.fillText(text, x + size * 0.02, y + boxHeight / 2);
+  });
+
+  context.restore();
+}
+
+function drawFooterInfo(context: CanvasRenderingContext2D, size: number, timestampLabel: string, username: string) {
+  const margin = size * 0.08;
+
+  context.save();
+  context.fillStyle = "#93d4bc";
+  context.textBaseline = "alphabetic";
+
+  context.textAlign = "center";
+  context.font = `600 ${Math.round(size * 0.034)}px "Manrope", "Segoe UI", sans-serif`;
+  context.fillText(timestampLabel, size / 2, size - margin);
+
+  context.textAlign = "right";
+  context.font = `600 ${Math.round(size * 0.038)}px "Manrope", "Segoe UI", sans-serif`;
+  context.fillText(username, size - margin, size - margin * 0.35);
+
+  context.restore();
+}
+
+function wrapText(context: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const lines: string[] = [];
+  const paragraphs = text.replace(/\r\n/g, "\n").split("\n");
+
+  paragraphs.forEach((paragraph, paragraphIndex) => {
+    if (!paragraph) {
+      lines.push("");
       return;
     }
-    const boxes = row.map((label) => {
-      const text = label.toUpperCase();
-      const width = context.measureText(text).width + size * 0.05;
-      return { text, width };
-    });
-    const totalWidth = boxes.reduce((acc, box) => acc + box.width, 0) + gap * (boxes.length - 1);
-    let x = size - margin - totalWidth;
-    const y = margin + rowIndex * (tagHeight + size * 0.015);
-
-    boxes.forEach(({ text, width }) => {
-      drawRoundedRectPath(context, x, y, width, tagHeight, size * 0.012);
-      context.fillStyle = "rgba(34, 26, 22, 0.75)";
-      context.fill();
-      context.strokeStyle = "rgba(239, 234, 231, 0.16)";
-      context.lineWidth = size * 0.0022;
-      context.stroke();
-
-      context.fillStyle = "rgba(239, 234, 231, 0.85)";
-      context.fillText(text, x + size * 0.024, y + size * 0.012);
-      x += width + gap;
-    });
+    let current = "";
+    for (const char of paragraph) {
+      const tentative = current + char;
+      if (context.measureText(tentative).width > maxWidth && current) {
+        lines.push(current);
+        current = char.trim().length > 0 ? char : "";
+      } else {
+        current = tentative;
+      }
+    }
+    if (current) {
+      lines.push(current);
+    }
+    if (paragraphIndex < paragraphs.length - 1) {
+      lines.push("");
+    }
   });
-  context.restore();
-}
 
-function drawLeftVerticalCaption(context: CanvasRenderingContext2D, size: number, dateLabel: string, mood: string) {
-  const caption = `${dateLabel} · ${mood}`;
-  const offsetX = size * 0.08;
-  const offsetY = size * 0.86;
-
-  context.save();
-  context.translate(offsetX, offsetY);
-  context.rotate(-Math.PI / 2);
-  context.textAlign = "left";
-  context.textBaseline = "top";
-  context.fillStyle = "rgba(239, 234, 231, 0.78)";
-  context.font = `500 ${Math.round(size * 0.034)}px "Manrope", "Segoe UI", sans-serif`;
-  context.fillText(caption, 0, 0);
-  context.restore();
-}
-
-function drawRightBottomInfo(context: CanvasRenderingContext2D, size: number, durationLabel: string, username: string) {
-  const margin = size * 0.12;
-  const durationFont = Math.round(size * 0.09);
-  const usernameFont = Math.round(size * 0.032);
-
-  context.save();
-  context.textAlign = "right";
-  context.fillStyle = "rgba(239, 234, 231, 0.92)";
-
-  context.font = `700 ${durationFont}px "Manrope", "Segoe UI", sans-serif`;
-  context.textBaseline = "bottom";
-  context.fillText(durationLabel, size - margin, size - margin * 1.05);
-
-  context.font = `500 ${usernameFont}px "Manrope", "Segoe UI", sans-serif`;
-  context.textBaseline = "alphabetic";
-  context.fillText(username, size - margin, size - margin * 0.4);
-  context.restore();
+  return lines.filter((line, index, arr) => !(line === "" && (index === 0 || arr[index - 1] === "")));
 }
 
 function drawRoundedRectPath(

@@ -3,6 +3,8 @@ from __future__ import annotations
 import random
 import secrets
 import calendar
+import mimetypes
+import os
 from datetime import date, timedelta
 
 from django.conf import settings
@@ -11,15 +13,18 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.mail import send_mail
 from django.core.validators import validate_email
 from django.db import transaction
+from django.http import FileResponse, Http404
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import generics, status
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.views import APIView
 
 from core.models import (
+    Achievement,
     AuthToken,
     DailyHistoryMessage,
     DailyCheckIn,
@@ -89,6 +94,7 @@ def health_check(_request):
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@authentication_classes([])
 def send_verification_code(request):
     email = request.data.get("email", "")
     purpose = request.data.get("purpose", EmailVerification.PURPOSE_REGISTER)
@@ -197,6 +203,7 @@ def send_verification_code(request):
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@authentication_classes([])
 def register(request):
     raw_email = request.data.get("email", "")
     password = request.data.get("password", "")
@@ -284,6 +291,7 @@ def register(request):
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@authentication_classes([])
 def reset_password(request):
     raw_email = request.data.get("email", "")
     password = request.data.get("password", "")
@@ -369,6 +377,7 @@ def reset_password(request):
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@authentication_classes([])
 def login(request):
     email = _normalize_email(request.data.get("email", ""))
     password = request.data.get("password", "")
@@ -454,6 +463,87 @@ class ProfilePreferenceView(APIView):
         return local_part[:1].upper() + local_part[1:]
 
 
+def _build_achievement_payload(achievement: Achievement, *, unlocked_at=None) -> dict:
+    metadata = achievement.metadata or {}
+    condition = achievement.condition or {}
+    return {
+        "id": achievement.id,
+        "slug": achievement.slug,
+        "name": achievement.name,
+        "description": achievement.description,
+        "category": achievement.category,
+        "icon": achievement.icon,
+        "level": achievement.level,
+        "metadata": metadata.copy() if isinstance(metadata, dict) else {},
+        "condition": condition.copy() if isinstance(condition, dict) else {},
+        "unlocked_at": unlocked_at,
+    }
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def profile_achievements(request):
+    """
+    返回当前用户的成就概览。
+
+    目前尚未实现成就判定逻辑，因此所有配置成就默认视为“未解锁”。
+    后续可在此处根据用户数据计算已解锁等级并补充 unlocked_at 字段。
+    """
+
+    achievements = (
+        Achievement.objects.filter(is_active=True)
+        .select_related("group")
+        .order_by(
+            "group__display_order",
+            "group__id",
+            "display_order",
+            "level",
+            "slug",
+        )
+    )
+
+    group_map: dict[int, dict] = {}
+    standalone: list[dict] = []
+
+    for achievement in achievements:
+        payload = _build_achievement_payload(achievement)
+        if achievement.group_id:
+            group = achievement.group
+            group_payload = group_map.get(group.id)
+            if not group_payload:
+                group_payload = {
+                    "id": group.id,
+                    "slug": group.slug,
+                    "name": group.name,
+                    "description": group.description,
+                    "category": group.category,
+                    "icon": group.icon,
+                    "display_order": group.display_order,
+                    "metadata": group.metadata if isinstance(group.metadata, dict) else {},
+                    "levels": [],
+                    "summary": {
+                        "level_count": 0,
+                        "highest_unlocked_level": 0,
+                        "unlocked_levels": [],
+                    },
+                }
+                group_map[group.id] = group_payload
+            group_payload["levels"].append(payload)
+            group_payload["summary"]["level_count"] += 1
+        else:
+            standalone.append(payload)
+
+    groups = list(group_map.values())
+
+    summary = {
+        "group_count": len(groups),
+        "standalone_count": len(standalone),
+        "achievement_count": len(achievements),
+    }
+
+    return Response({"summary": summary, "groups": groups, "standalone": standalone})
+
+
 class UserUploadListCreateView(generics.ListCreateAPIView):
     serializer_class = UserUploadSerializer
     permission_classes = [IsAuthenticated]
@@ -473,6 +563,34 @@ class UserUploadDetailView(generics.RetrieveDestroyAPIView):
 
     def get_queryset(self):
         return UserUpload.objects.filter(user=self.request.user).order_by("-uploaded_at")
+
+
+class UserUploadImageView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk: int):
+        upload = get_object_or_404(UserUpload, pk=pk, user=request.user)
+        if not upload.image:
+            raise Http404("图片不存在")
+
+        try:
+            file_handle = upload.image.open("rb")
+        except FileNotFoundError as exc:
+            raise Http404("图片文件已丢失") from exc
+
+        content_type, _ = mimetypes.guess_type(upload.image.name)
+        response = FileResponse(file_handle, content_type=content_type or "application/octet-stream")
+        filename = os.path.basename(upload.image.name)
+        response["Content-Disposition"] = f'inline; filename="{filename}"'
+        response["Cache-Control"] = "public, max-age=86400"
+        origin = request.headers.get("Origin")
+        if origin:
+            response["Access-Control-Allow-Origin"] = origin
+        else:
+            response["Access-Control-Allow-Origin"] = request.build_absolute_uri("/").rstrip("/")
+        response["Vary"] = "Origin"
+        response["Cross-Origin-Resource-Policy"] = "same-site"
+        return response
 
 
 class ShortTermGoalListCreateView(generics.ListCreateAPIView):

@@ -1,17 +1,24 @@
 @echo off
 setlocal
 
-set SCRIPT_DIR=%~dp0
-set POWERSHELL_EXE=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe
-
+set "SCRIPT_DIR=%~dp0"
 if not exist "%SCRIPT_DIR%start_echo_dev.ps1" (
-    echo 未找到 start_echo_dev.ps1，請確認 bat 與 ps1 文件位於同一目錄。
+    echo Could not find start_echo_dev.ps1. Make sure the .bat and .ps1 files are in the same folder.
+    pause
     exit /b 1
 )
 
-"%POWERSHELL_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%start_echo_dev.ps1" %*
+powershell -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%start_echo_dev.ps1" %*
+set "EXIT_CODE=%ERRORLEVEL%"
 
-endlocal
+if not "%EXIT_CODE%"=="0" (
+    echo.
+    echo start_echo_dev.ps1 failed with exit code %EXIT_CODE%.
+    echo Please review the PowerShell window for errors, fix them, and run this script again.
+    pause
+)
+
+endlocal & exit /b %EXIT_CODE%
 
 
 

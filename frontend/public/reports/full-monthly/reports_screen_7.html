@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>EchoDraw Report Templates</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200;300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined.fill {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .bg-pattern {
+            position: relative;
+            overflow: hidden;
+        }
+        .bg-pattern::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image:
+                radial-gradient(circle at 15% 20%, #98DBC620, transparent 40%),
+                radial-gradient(circle at 80% 70%, #98DBC615, transparent 50%),
+                radial-gradient(circle at 50% 50%, #C5E1E205, transparent 30%);
+            background-repeat: no-repeat;
+            z-index: 0;
+            opacity: 0.5;
+            animation: breathing-glow 10s ease-in-out infinite;
+        }
+        @keyframes breathing-glow {
+            0% { transform: scale(1); opacity: 0.5; }
+            50% { transform: scale(1.1); opacity: 0.7; }
+            100% { transform: scale(1); opacity: 0.5; }
+        }
+        .content-wrapper {
+            position: relative;
+            z-index: 1;
+        }.no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }.no-scrollbar {
+            -ms-overflow-style: none;scrollbar-width: none;}
+    </style>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#98DBC6",
+              "background-light": "#EFEAE7", 
+              "background-dark": "#221B1B",
+              "brown": "#4A3F3A",
+              "light-blue": "#C5E1E2",
+              "milky-white": "#EFEAE7",
+              "deep-coffee": "#221B1B"
+            },
+            fontFamily: {
+              "display": ["Manrope", "sans-serif"]
+            },
+            borderRadius: {"DEFAULT": "0.5rem", "lg": "0.75rem", "xl": "1rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+    body {
+      min-height: 100dvh;
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark">
+<div class="relative flex h-auto min-h-screen w-full flex-col font-display group/design-root overflow-x-hidden bg-pattern">
+<div class="content-wrapper flex flex-col flex-grow">
+<h1 class="text-deep-coffee dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] text-center px-4 pt-4 pb-2">Creative Reports</h1>
+<div class="flex px-4 py-3">
+<div class="flex h-11 flex-1 items-center justify-center rounded-lg bg-milky-white/10 dark:bg-[#4A3F4A] p-1">
+<label class="flex cursor-pointer h-full grow items-center justify-center overflow-hidden rounded-md px-2 text-milky-white/80 dark:text-milky-white/80 text-sm font-medium leading-normal transition-colors duration-300">
+<span class="truncate">报告</span>
+<input class="invisible w-0" name="report-type" type="radio" value="Reports"/>
+</label>
+<label class="flex cursor-pointer h-full grow items-center justify-center overflow-hidden rounded-md px-2 has-[:checked]:bg-primary has-[:checked]:text-deep-coffee text-milky-white/80 dark:text-milky-white/80 text-sm font-medium leading-normal transition-colors duration-300">
+<span class="truncate">模板</span>
+<input checked="" class="invisible w-0" name="report-type" type="radio" value="Templates"/>
+</label>
+</div>
+</div>
+<div class="flex flex-col gap-6 px-4 py-2 flex-grow">
+<div class="flex flex-col gap-3">
+<h2 class="text-white text-lg font-semibold tracking-wide px-1">创意挑战</h2>
+<div class="flex gap-3 overflow-x-auto no-scrollbar -mx-4 px-4 pb-2">
+<div class="flex-none w-32 h-44 bg-milky-white/5 rounded-xl border border-white/10 backdrop-blur-lg p-3 flex flex-col justify-between shadow-lg">
+<span class="material-symbols-outlined text-primary text-2xl">emoji_objects</span>
+<p class="text-white text-sm font-medium leading-snug">30天色彩挑战</p>
+</div>
+<div class="flex-none w-32 h-44 bg-milky-white/5 rounded-xl border border-white/10 backdrop-blur-lg p-3 flex flex-col justify-between shadow-lg">
+<span class="material-symbols-outlined text-primary text-2xl">brush</span>
+<p class="text-white text-sm font-medium leading-snug">每周一画</p>
+</div>
+<div class="flex-none w-32 h-44 bg-milky-white/5 rounded-xl border border-white/10 backdrop-blur-lg p-3 flex flex-col justify-between shadow-lg">
+<span class="material-symbols-outlined text-primary text-2xl">nature_people</span>
+<p class="text-white text-sm font-medium leading-snug">城市速写马拉松</p>
+</div>
+<div class="flex-none w-32 h-44 bg-milky-white/5 rounded-xl border border-white/10 backdrop-blur-lg p-3 flex flex-col justify-between shadow-lg">
+<span class="material-symbols-outlined text-primary text-2xl">palette</span>
+<p class="text-white text-sm font-medium leading-snug">单色调练习</p>
+</div>
+</div>
+</div>
+<div class="flex flex-col gap-3">
+<h2 class="text-white text-lg font-semibold tracking-wide px-1">技能提升</h2>
+<div class="flex gap-3 overflow-x-auto no-scrollbar -mx-4 px-4 pb-2">
+<div class="flex-none w-32 h-44 bg-milky-white/5 rounded-xl border border-white/10 backdrop-blur-lg p-3 flex flex-col justify-between shadow-lg">
+<span class="material-symbols-outlined text-primary text-2xl">architecture</span>
+<p class="text-white text-sm font-medium leading-snug">透视基础</p>
+</div>
+<div class="flex-none w-32 h-44 bg-milky-white/5 rounded-xl border border-white/10 backdrop-blur-lg p-3 flex flex-col justify-between shadow-lg">
+<span class="material-symbols-outlined text-primary text-2xl">colorize</span>
+<p class="text-white text-sm font-medium leading-snug">色彩理论应用</p>
+</div>
+<div class="flex-none w-32 h-44 bg-milky-white/5 rounded-xl border border-white/10 backdrop-blur-lg p-3 flex flex-col justify-between shadow-lg">
+<span class="material-symbols-outlined text-primary text-2xl">draw</span>
+<p class="text-white text-sm font-medium leading-snug">线条表现力</p>
+</div>
+<div class="flex-none w-32 h-44 bg-milky-white/5 rounded-xl border border-white/10 backdrop-blur-lg p-3 flex flex-col justify-between shadow-lg">
+<span class="material-symbols-outlined text-primary text-2xl">scatter_plot</span>
+<p class="text-white text-sm font-medium leading-snug">材质刻画</p>
+</div>
+</div>
+</div>
+<div class="flex flex-col gap-3">
+<h2 class="text-white text-lg font-semibold tracking-wide px-1">日常练习</h2>
+<div class="flex gap-3 overflow-x-auto no-scrollbar -mx-4 px-4 pb-2">
+<div class="flex-none w-32 h-44 bg-milky-white/5 rounded-xl border border-white/10 backdrop-blur-lg p-3 flex flex-col justify-between shadow-lg">
+<span class="material-symbols-outlined text-primary text-2xl">edit</span>
+<p class="text-white text-sm font-medium leading-snug">每日速写</p>
+</div>
+<div class="flex-none w-32 h-44 bg-milky-white/5 rounded-xl border border-white/10 backdrop-blur-lg p-3 flex flex-col justify-between shadow-lg">
+<span class="material-symbols-outlined text-primary text-2xl">timer</span>
+<p class="text-white text-sm font-medium leading-snug">15分钟灵感捕捉</p>
+</div>
+<div class="flex-none w-32 h-44 bg-milky-white/5 rounded-xl border border-white/10 backdrop-blur-lg p-3 flex flex-col justify-between shadow-lg">
+<span class="material-symbols-outlined text-primary text-2xl">waving_hand</span>
+<p class="text-white text-sm font-medium leading-snug">手部结构练习</p>
+</div>
+<div class="flex-none w-32 h-44 bg-milky-white/5 rounded-xl border border-white/10 backdrop-blur-lg p-3 flex flex-col justify-between shadow-lg">
+<span class="material-symbols-outlined text-primary text-2xl">square_foot</span>
+<p class="text-white text-sm font-medium leading-snug">构图练习</p>
+</div>
+</div>
+</div>
+<div class="flex flex-col gap-3">
+<h2 class="text-white text-lg font-semibold tracking-wide px-1">个人探索</h2>
+<div class="flex gap-3 overflow-x-auto no-scrollbar -mx-4 px-4 pb-2">
+<div class="flex-none w-32 h-44 bg-milky-white/5 rounded-xl border border-white/10 backdrop-blur-lg p-3 flex flex-col justify-between shadow-lg">
+<span class="material-symbols-outlined text-primary text-2xl">mood</span>
+<p class="text-white text-sm font-medium leading-snug">情绪日记</p>
+</div>
+<div class="flex-none w-32 h-44 bg-milky-white/5 rounded-xl border border-white/10 backdrop-blur-lg p-3 flex flex-col justify-between shadow-lg">
+<span class="material-symbols-outlined text-primary text-2xl">auto_stories</span>
+<p class="text-white text-sm font-medium leading-snug">梦境记录</p>
+</div>
+<div class="flex-none w-32 h-44 bg-milky-white/5 rounded-xl border border-white/10 backdrop-blur-lg p-3 flex flex-col justify-between shadow-lg">
+<span class="material-symbols-outlined text-primary text-2xl">psychology</span>
+<p class="text-white text-sm font-medium leading-snug">抽象表达</p>
+</div>
+<div class="flex-none w-32 h-44 bg-milky-white/5 rounded-xl border border-white/10 backdrop-blur-lg p-3 flex flex-col justify-between shadow-lg">
+<span class="material-symbols-outlined text-primary text-2xl">spa</span>
+<p class="text-white text-sm font-medium leading-snug">冥想绘画</p>
+</div>
+</div>
+</div>
+<div class="py-4 mt-2">
+<button class="w-full flex items-center justify-center gap-2 h-14 border-2 border-dashed border-primary/50 rounded-xl text-primary font-bold text-base hover:bg-primary/10 transition-colors">
+<span class="material-symbols-outlined">add</span>
+                    定制模板
+                </button>
+</div>
+</div>
+</div>
+</div>
+
+</body></html>

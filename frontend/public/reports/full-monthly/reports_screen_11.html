@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html class="dark" lang="zh"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>EchoDraw 趋势对比</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200;300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 200, 'GRAD' 0, 'opsz' 24;
+    }
+    .material-symbols-outlined.fill {
+      font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+    .bg-pattern {
+      position: relative;
+      overflow: hidden;
+    }
+    .bg-pattern::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-image:
+        radial-gradient(circle at 10% 15%, #98DBC61A, transparent 35%),
+        radial-gradient(circle at 90% 80%, #98DBC610, transparent 45%),
+        radial-gradient(circle at 50% 50%, #C5E1E208, transparent 30%);
+      background-repeat: no-repeat;
+      z-index: 0;
+      opacity: 0.6;
+      animation: breathing-glow 12s ease-in-out infinite;
+    }
+    @keyframes breathing-glow {
+      0%,
+      100% {
+        transform: scale(1);
+        opacity: 0.6;
+      }
+      50% {
+        transform: scale(1.1);
+        opacity: 0.8;
+      }
+    }
+    .content-wrapper {
+      position: relative;
+      z-index: 1;
+    }
+  </style>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "primary": "#98DBC6",
+            "background-light": "#EFEAE7",
+            "background-dark": "#221B1B",
+            "brown": "#4A3F4A",
+            "light-blue": "#C5E1E2",
+            "milky-white": "#EFEAE7",
+            "deep-coffee": "#221B1B"
+          },
+          fontFamily: {
+            "display": ["Manrope", "sans-serif"]
+          },
+          borderRadius: {
+            "DEFAULT": "0.5rem",
+            "lg": "0.75rem",
+            "xl": "1rem",
+            "full": "9999px"
+          },
+          fontWeight: {
+            'thin': '100',
+            'extralight': '200',
+            'light': '300',
+          }
+        },
+      },
+    }
+  </script>
+<style>
+    body {
+      min-height: 100dvh;
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark">
+<div class="relative flex h-auto min-h-screen w-full flex-col font-display group/design-root overflow-x-hidden bg-pattern">
+<div class="content-wrapper flex flex-col flex-grow">
+<div class="p-4 pt-10 flex-grow">
+<div class="px-2 space-y-10 pb-6">
+<div class="bg-white/[.04] border border-white/10 rounded-xl backdrop-blur-sm p-5 text-center">
+<p class="text-sm font-light text-milky-white/80 leading-relaxed">
+              相较于上月和过去三个月，你的创作时长稳定增长，上传数量虽有波动，但整体效率更高，更专注于长时创作。
+            </p>
+</div>
+<div class="space-y-8">
+<div class="bg-white/[.04] border border-white/10 rounded-xl backdrop-blur-sm p-5">
+<div class="flex items-center gap-4 mb-4">
+<div class="flex h-12 w-12 items-center justify-center rounded-lg bg-white/[.04] border border-white/10 shrink-0">
+<span class="material-symbols-outlined text-3xl text-primary font-light">upload</span>
+</div>
+<div class="flex-grow">
+<p class="text-lg font-light text-milky-white">上传数量</p>
+<p class="text-xs font-light text-white/50">本月 28</p>
+</div>
+</div>
+<div class="flex justify-around gap-4">
+<div class="flex flex-col items-center w-1/2">
+<p class="text-xs text-white/60 mb-2">对比上月</p>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-xl text-red-400/80 -rotate-45">arrow_right_alt</span>
+<p class="text-lg font-light text-red-400/80">-12%</p>
+</div>
+</div>
+<div class="w-px bg-white/10"></div>
+<div class="flex flex-col items-center w-1/2">
+<p class="text-xs text-white/60 mb-2">对比近三月</p>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-xl text-primary rotate-45">arrow_left_alt</span>
+<p class="text-lg font-light text-primary">+5%</p>
+</div>
+</div>
+</div>
+</div>
+<div class="bg-white/[.04] border border-white/10 rounded-xl backdrop-blur-sm p-5">
+<div class="flex items-center gap-4 mb-4">
+<div class="flex h-12 w-12 items-center justify-center rounded-lg bg-white/[.04] border border-white/10 shrink-0">
+<span class="material-symbols-outlined text-3xl text-primary font-light">timer</span>
+</div>
+<div class="flex-grow">
+<p class="text-lg font-light text-milky-white">总时长</p>
+<p class="text-xs font-light text-white/50">本月 45h 12m</p>
+</div>
+</div>
+<div class="flex justify-around gap-4">
+<div class="flex flex-col items-center w-1/2">
+<p class="text-xs text-white/60 mb-2">对比上月</p>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-xl text-primary rotate-45">arrow_left_alt</span>
+<p class="text-lg font-light text-primary">+8%</p>
+</div>
+</div>
+<div class="w-px bg-white/10"></div>
+<div class="flex flex-col items-center w-1/2">
+<p class="text-xs text-white/60 mb-2">对比近三月</p>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-xl text-primary rotate-45">arrow_left_alt</span>
+<p class="text-lg font-light text-primary">+15%</p>
+</div>
+</div>
+</div>
+</div>
+<div class="bg-white/[.04] border border-white/10 rounded-xl backdrop-blur-sm p-5">
+<div class="flex items-center gap-4 mb-4">
+<div class="flex h-12 w-12 items-center justify-center rounded-lg bg-white/[.04] border border-white/10 shrink-0">
+<span class="material-symbols-outlined text-3xl text-primary font-light">sentiment_satisfied</span>
+</div>
+<div class="flex-grow">
+<p class="text-lg font-light text-milky-white">平均自评分</p>
+<p class="text-xs font-light text-white/50">本月 4.1 ★</p>
+</div>
+</div>
+<div class="flex justify-around gap-4">
+<div class="flex flex-col items-center w-1/2">
+<p class="text-xs text-white/60 mb-2">对比上月</p>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-xl text-white/60">remove</span>
+<p class="text-lg font-light text-white/60">±0</p>
+</div>
+</div>
+<div class="w-px bg-white/10"></div>
+<div class="flex flex-col items-center w-1/2">
+<p class="text-xs text-white/60 mb-2">对比近三月</p>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-xl text-red-400/80 -rotate-45">arrow_right_alt</span>
+<p class="text-lg font-light text-red-400/80">-0.2</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body></html>

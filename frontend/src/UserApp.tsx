@@ -7,15 +7,20 @@ import Home from "@/pages/Home";
 import Reports from "@/pages/Reports";
 import Profile from "@/pages/Profile";
 import ProfileAchievements from "@/pages/ProfileAchievements";
-import { UNLOCKED_ACHIEVEMENTS } from "@/pages/achievementsData";
+import type { AchievementGroupDefinition, AchievementLevelDefinition } from "@/pages/achievementsData";
 import Upload, { type UploadResult } from "@/pages/Upload";
 import {
   API_BASE_URL,
+  AUTH_FORCED_LOGOUT_EVENT,
   EXPLICIT_API_BASE_URL,
   createUserUpload,
   deleteUserUpload,
+  fetchUserAchievements,
   fetchUserUploads,
   hasAuthToken,
+  type UserAchievementGroupRecord,
+  type UserAchievementLevelRecord,
+  type UserAchievementsSummary,
   type UserUploadRecord,
 } from "@/services/api";
 import {
@@ -174,10 +179,171 @@ function resolveAssetUrl(source?: string | null): string {
   return ASSET_BASE_URL ? `${ASSET_BASE_URL}/${trimmed}` : trimmed;
 }
 
+function hashString(value: string): number {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash << 5) - hash + value.charCodeAt(index);
+    hash |= 0;
+  }
+  return hash;
+}
+
+function buildGradientFromSlug(slug: string): string {
+  const fallback = "achievement";
+  const source = slug && slug.trim().length > 0 ? slug : fallback;
+  const base = Math.abs(hashString(source));
+  const hue1 = base % 360;
+  const hue2 = (hue1 + 48) % 360;
+  const saturation = 64;
+  const lightness1 = 58;
+  const lightness2 = 36;
+  return `linear-gradient(135deg, hsl(${hue1} ${saturation}% ${lightness1}%), hsl(${hue2} ${
+    saturation + 6
+  }% ${lightness2}%))`;
+}
+
+function ensureRecord(value: unknown): Record<string, unknown> {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return {};
+}
+
+function getStringField(source: Record<string, unknown>, key: string): string | null {
+  const raw = source[key];
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+  return null;
+}
+
+function getNumberField(source: Record<string, unknown>, key: string): number | null {
+  const raw = source[key];
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    return raw;
+  }
+  if (typeof raw === "string" && raw.trim().length > 0) {
+    const parsed = Number(raw);
+    if (!Number.isNaN(parsed) && Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return null;
+}
+
+function formatAchievementDate(iso?: string | null): { label: string; iso: string | null } {
+  if (!iso) {
+    return { label: "待解锁", iso: null };
+  }
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return { label: "待解锁", iso: null };
+  }
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return {
+    label: `${year}.${month}.${day}`,
+    iso: date.toISOString().slice(0, 10),
+  };
+}
+
+function mapAchievementLevel(raw: UserAchievementLevelRecord): AchievementLevelDefinition {
+  const metadata = ensureRecord(raw.metadata);
+  const condition = ensureRecord(raw.condition);
+  const conditionText = getStringField(metadata, "condition_text") || getStringField(condition, "text");
+  const description =
+    (raw.description && raw.description.trim()) || conditionText || "持续创作以解锁更多故事。";
+  const dateInfo = formatAchievementDate(raw.unlocked_at);
+  const unlockedLabel = raw.unlocked_at ? `解锁于 ${dateInfo.label}` : "待解锁";
+
+  return {
+    id: raw.slug || `ach-${raw.id}`,
+    slug: raw.slug || `ach-${raw.id}`,
+    level: typeof raw.level === "number" && Number.isFinite(raw.level) ? raw.level : 1,
+    name: raw.name || "未命名成就",
+    description,
+    displayOrder: undefined,
+    category: raw.category ?? null,
+    icon: raw.icon ?? null,
+    metadata,
+    condition,
+    conditionText,
+    unlockedAtLabel: unlockedLabel,
+    unlockedAtDate: dateInfo.iso,
+  };
+}
+
+function mapAchievementGroup(raw: UserAchievementGroupRecord): AchievementGroupDefinition {
+  const metadata = ensureRecord(raw.metadata);
+  const summaryRecord = raw.summary ?? {
+    level_count: Array.isArray(raw.levels) ? raw.levels.length : 0,
+    highest_unlocked_level: 0,
+    unlocked_levels: [],
+  };
+
+  const levels = Array.isArray(raw.levels) ? raw.levels.map(mapAchievementLevel) : [];
+  const unlockedLevels = Array.isArray(summaryRecord.unlocked_levels)
+    ? summaryRecord.unlocked_levels
+        .map((value) => Number(value))
+        .filter((value) => Number.isFinite(value) && value > 0)
+    : [];
+
+  return {
+    id: String(raw.id),
+    slug: raw.slug || `group-${raw.id}`,
+    name: raw.name || "未命名成就组",
+    description: raw.description || "",
+    displayOrder: raw.display_order ?? undefined,
+    category: raw.category ?? null,
+    icon: raw.icon ?? null,
+    metadata,
+    summary: {
+      levelCount: summaryRecord.level_count ?? levels.length,
+      highestUnlockedLevel: summaryRecord.highest_unlocked_level ?? 0,
+      unlockedLevels,
+    },
+    levels,
+  };
+}
+
+function isLevelUnlocked(level: AchievementLevelDefinition): boolean {
+  return Boolean(level.unlockedAtDate);
+}
+
+function getHighestUnlockedLevel(group: AchievementGroupDefinition): AchievementLevelDefinition | null {
+  if (!group.levels || group.levels.length === 0) {
+    return null;
+  }
+  const unlocked = group.levels
+    .filter(isLevelUnlocked)
+    .sort((a, b) => b.level - a.level);
+  return unlocked[0] ?? null;
+}
+
+function buildGroupPinnedId(group: AchievementGroupDefinition): string {
+  return `group:${group.slug}`;
+}
+
+function buildStandalonePinnedId(level: AchievementLevelDefinition): string {
+  return `standalone:${level.slug}`;
+}
+
+function resolvePinnedKind(id: string): "group" | "standalone" {
+  return id.startsWith("group:") ? "group" : "standalone";
+}
+
+function formatLevelSubtitle(level: AchievementLevelDefinition): string {
+  return level.conditionText || level.description || "持续创作以解锁更多故事。";
+}
+
+
 type PageId = NavId | "upload" | "profile-achievements";
 
 type PinnedAchievement = {
   id: string;
+  kind: "group" | "standalone";
   title: string;
   subtitle: string;
 };
@@ -193,13 +359,13 @@ function UserApp() {
   const [activeNav, setActiveNav] = useState<NavId>("home");
   const [activePage, setActivePage] = useState<PageId>("home");
   const [userArtworks, setUserArtworks] = useState<Artwork[]>([]);
-  const [pinnedAchievements, setPinnedAchievements] = useState<PinnedAchievement[]>(() =>
-    UNLOCKED_ACHIEVEMENTS.filter((item) => item.defaultPinned).map((item) => ({
-      id: item.id,
-      title: item.profileTitle,
-      subtitle: item.profileSubtitle,
-    })),
-  );
+  const [pinnedAchievements, setPinnedAchievements] = useState<PinnedAchievement[]>([]);
+  const [achievementGroups, setAchievementGroups] = useState<AchievementGroupDefinition[]>([]);
+  const [standaloneAchievements, setStandaloneAchievements] = useState<AchievementLevelDefinition[]>([]);
+  const [achievementSummary, setAchievementSummary] = useState<UserAchievementsSummary | null>(null);
+  const [achievementsLoading, setAchievementsLoading] = useState(false);
+  const [forcedLogoutVersion, setForcedLogoutVersion] = useState(0);
+  const [forcedLogoutVisible, setForcedLogoutVisible] = useState(false);
 
   const combinedArtworks = useMemo(
     () => [...userArtworks, ...INITIAL_ARTWORKS],
@@ -275,17 +441,106 @@ function UserApp() {
     }
   }, [mapUploadRecordToArtwork]);
 
+  const refreshUserAchievements = useCallback(async () => {
+    if (!hasAuthToken()) {
+      setAchievementGroups([]);
+      setStandaloneAchievements([]);
+      setAchievementSummary(null);
+      setAchievementsLoading(false);
+      return;
+    }
+
+    setAchievementsLoading(true);
+    try {
+      const response = await fetchUserAchievements();
+      const groups = Array.isArray(response.groups)
+        ? response.groups.map((item: UserAchievementGroupRecord) => mapAchievementGroup(item))
+        : [];
+      const standalone = Array.isArray(response.standalone)
+        ? response.standalone.map((item: UserAchievementLevelRecord) => mapAchievementLevel(item))
+        : [];
+      setAchievementGroups(groups);
+      setStandaloneAchievements(standalone);
+      setAchievementSummary(response.summary ?? null);
+    } catch (error) {
+      const status = (error as { response?: { status?: number } })?.response?.status;
+      if (status !== 401 && status !== 403) {
+        console.warn("[Echo] Failed to load achievements:", error);
+      }
+      setAchievementGroups([]);
+      setStandaloneAchievements([]);
+      setAchievementSummary(null);
+    } finally {
+      setAchievementsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (!hasAuthToken()) {
       const stored = loadStoredArtworks();
       setUserArtworks(stored);
+      setAchievementGroups([]);
+      setStandaloneAchievements([]);
+      setAchievementSummary(null);
       return;
     }
 
     refreshUserArtworks().catch(() => {
       /* 已在函数内部处理 */
     });
-  }, [refreshUserArtworks]);
+    refreshUserAchievements().catch(() => {
+      /* 已在函数内部处理 */
+    });
+  }, [refreshUserArtworks, refreshUserAchievements]);
+
+  useEffect(() => {
+    setPinnedAchievements((prev) => {
+      if (achievementGroups.length === 0 && standaloneAchievements.length === 0) {
+        return [];
+      }
+
+      const candidates: PinnedAchievement[] = [];
+      const availability = new Map<string, PinnedAchievement>();
+
+      for (const group of achievementGroups) {
+        const representative = getHighestUnlockedLevel(group);
+        if (!representative) {
+          continue;
+        }
+        const id = buildGroupPinnedId(group);
+        const entry: PinnedAchievement = {
+          id,
+          kind: "group",
+          title: group.name,
+          subtitle: formatLevelSubtitle(representative),
+        };
+        candidates.push(entry);
+        availability.set(id, entry);
+      }
+
+      for (const level of standaloneAchievements) {
+        if (!isLevelUnlocked(level)) {
+          continue;
+        }
+        const id = buildStandalonePinnedId(level);
+        const entry: PinnedAchievement = {
+          id,
+          kind: "standalone",
+          title: level.name,
+          subtitle: formatLevelSubtitle(level),
+        };
+        candidates.push(entry);
+        availability.set(id, entry);
+      }
+
+      const filtered = prev.filter((item) => availability.has(item.id));
+      if (filtered.length > 0) {
+        return filtered;
+      }
+
+      return candidates.slice(0, 3);
+    });
+  }, [achievementGroups, standaloneAchievements]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -315,6 +570,42 @@ function UserApp() {
     };
   }, [refreshUserArtworks]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const handleForcedLogout = (event: Event) => {
+      setUserArtworks([]);
+      persistStoredArtworks([]);
+      setAchievementGroups([]);
+      setStandaloneAchievements([]);
+      setAchievementSummary(null);
+      setPinnedAchievements([]);
+      setForcedLogoutVersion((prev) => prev + 1);
+      setActiveNav("profile");
+      setActivePage("profile");
+      setForcedLogoutVisible(true);
+
+      if ("detail" in event) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const detail = (event as any).detail as { reason?: string; timestamp?: number } | undefined;
+        if (detail?.timestamp) {
+          console.info(
+            "[Echo] Forced logout triggered",
+            new Date(detail.timestamp).toISOString(),
+            detail.reason ?? "unknown",
+          );
+        }
+      }
+    };
+
+    window.addEventListener(AUTH_FORCED_LOGOUT_EVENT, handleForcedLogout);
+    return () => {
+      window.removeEventListener(AUTH_FORCED_LOGOUT_EVENT, handleForcedLogout);
+    };
+  }, []);
+
   const handleOpenUpload = useCallback(() => {
     setActivePage("upload");
   }, []);
@@ -330,12 +621,13 @@ function UserApp() {
 
   const handleTogglePinnedAchievement = useCallback(
     ({ id, title, subtitle, nextPinned }: { id: string; title: string; subtitle: string; nextPinned: boolean }) => {
+      const kind = resolvePinnedKind(id);
       setPinnedAchievements((prev) => {
         if (nextPinned) {
           if (prev.some((item) => item.id === id)) {
             return prev;
           }
-          return [...prev, { id, title, subtitle }];
+          return [...prev, { id, kind, title, subtitle }];
         }
         return prev.filter((item) => item.id !== id);
       });
@@ -348,22 +640,57 @@ function UserApp() {
     [pinnedAchievements],
   );
 
-  const recentAchievements = useMemo<RecentAchievement[]>(
-    () =>
-      [...UNLOCKED_ACHIEVEMENTS]
-        .sort(
-          (a, b) =>
-            new Date(b.unlockedAtDate).getTime() - new Date(a.unlockedAtDate).getTime(),
-        )
-        .slice(0, 3)
-        .map((item) => ({
-          id: item.id,
-          title: item.profileTitle,
-          subtitle: item.profileSubtitle,
-          dateLabel: item.profileDateLabel,
-        })),
-    [],
-  );
+  const recentAchievements = useMemo<RecentAchievement[]>(() => {
+    const entries: Array<{
+      id: string;
+      title: string;
+      subtitle: string;
+      dateIso: string | null;
+      dateLabel: string;
+    }> = [];
+
+    for (const group of achievementGroups) {
+      const representative = getHighestUnlockedLevel(group);
+      if (!representative) {
+        continue;
+      }
+      entries.push({
+        id: buildGroupPinnedId(group),
+        title: group.name,
+        subtitle: formatLevelSubtitle(representative),
+        dateIso: representative.unlockedAtDate,
+        dateLabel: representative.unlockedAtLabel,
+      });
+    }
+
+    for (const level of standaloneAchievements) {
+      if (!isLevelUnlocked(level)) {
+        continue;
+      }
+      entries.push({
+        id: buildStandalonePinnedId(level),
+        title: level.name,
+        subtitle: formatLevelSubtitle(level),
+        dateIso: level.unlockedAtDate,
+        dateLabel: level.unlockedAtLabel,
+      });
+    }
+
+    entries.sort((a, b) => {
+      const timeA = a.dateIso ? new Date(a.dateIso).getTime() : 0;
+      const timeB = b.dateIso ? new Date(b.dateIso).getTime() : 0;
+      const safeA = Number.isFinite(timeA) ? timeA : 0;
+      const safeB = Number.isFinite(timeB) ? timeB : 0;
+      return safeB - safeA;
+    });
+
+    return entries.slice(0, 3).map((item) => ({
+      id: item.id,
+      title: item.title,
+      subtitle: item.subtitle,
+      dateLabel: item.dateLabel,
+    }));
+  }, [achievementGroups, standaloneAchievements]);
 
   const handleUploadSave = useCallback(
     async (result: UploadResult) => {
@@ -426,6 +753,11 @@ function UserApp() {
         });
         setActivePage(activeNav);
       } catch (error) {
+        const status = (error as { response?: { status?: number } })?.response?.status;
+        if (status === 401 || status === 403) {
+          setForcedLogoutVisible(true);
+          return;
+        }
         console.warn("[Echo] Failed to upload artwork to server:", error);
         if (result.previewDataUrl) {
           finalizeLocal(result.previewDataUrl);
@@ -504,6 +836,10 @@ function UserApp() {
           onBack={() => setActivePage("profile")}
           pinnedAchievementIds={pinnedAchievementIds}
           onTogglePinned={handleTogglePinnedAchievement}
+          groups={achievementGroups}
+          standalone={standaloneAchievements}
+          summary={achievementSummary}
+          loading={achievementsLoading}
         />
       ) : activeNav === "home" ? (
         <Home onOpenUpload={handleOpenUpload} />
@@ -520,6 +856,7 @@ function UserApp() {
         <Reports artworks={userArtworks} />
       ) : (
         <Profile
+          forcedLogoutVersion={forcedLogoutVersion}
           onOpenAchievements={handleOpenProfileAchievements}
           pinnedAchievements={pinnedAchievements}
           recentAchievements={recentAchievements}
@@ -532,6 +869,24 @@ function UserApp() {
           setActivePage(id);
         }}
       />
+      {forcedLogoutVisible ? (
+        <div className="forced-logout-overlay">
+          <div className="forced-logout-dialog">
+            <h2>登录状态已失效</h2>
+            <p>检测到该账号已在其他设备登录，本设备会自动退出，请重新登录后继续使用。</p>
+            <button
+              type="button"
+              onClick={() => {
+                setForcedLogoutVisible(false);
+                setActiveNav("profile");
+                setActivePage("profile");
+              }}
+            >
+              去登录
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

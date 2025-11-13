@@ -116,6 +116,7 @@ function getInitialAuth(): AuthPayload | null {
 
 type PinnedAchievement = {
   id: string;
+  kind?: string;
   title: string;
   subtitle: string;
 };
@@ -131,12 +132,14 @@ type ProfileProps = {
   onOpenAchievements?: () => void;
   pinnedAchievements?: PinnedAchievement[];
   recentAchievements?: RecentAchievement[];
+  forcedLogoutVersion?: number;
 };
 
 function Profile({
   onOpenAchievements,
   pinnedAchievements = [],
   recentAchievements = [],
+  forcedLogoutVersion = 0,
 }: ProfileProps) {
   const initialAuth = useMemo(getInitialAuth, []);
   const [auth, setAuth] = useState<AuthPayload | null>(initialAuth);
@@ -158,6 +161,7 @@ function Profile({
     const stored = loadStoredPreferences(email);
     return stored?.signature ?? DEFAULT_SIGNATURE;
   });
+  const [handledForcedLogoutVersion, setHandledForcedLogoutVersion] = useState(0);
 
   useEffect(() => {
     if (auth) {
@@ -168,6 +172,25 @@ function Profile({
       window.localStorage.removeItem(STORAGE_KEY);
     }
   }, [auth]);
+
+  useEffect(() => {
+    if (
+      forcedLogoutVersion === 0 ||
+      forcedLogoutVersion === handledForcedLogoutVersion
+    ) {
+      return;
+    }
+
+    if (auth?.user.email) {
+      setCachedEmail(auth.user.email);
+    }
+    setAuth(null);
+    setView("login");
+    setDisplayName("");
+    setSignature(DEFAULT_SIGNATURE);
+    clearStoredPreferences();
+    setHandledForcedLogoutVersion(forcedLogoutVersion);
+  }, [forcedLogoutVersion, handledForcedLogoutVersion, auth]);
 
   const handleAuthSuccess = useCallback((payload: AuthPayload) => {
     setAuth(payload);

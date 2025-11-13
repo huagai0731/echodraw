@@ -7,7 +7,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from core.models import AuthToken, DailyHistoryMessage, TestAccountProfile, Achievement
+from core.models import AuthToken, DailyHistoryMessage, TestAccountProfile, Achievement, AchievementGroup
 
 
 class AdminApiTests(APITestCase):
@@ -89,3 +89,61 @@ class AdminApiTests(APITestCase):
         response = self.client.post(url, payload, format="json", **self.staff_headers)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
         self.assertEqual(Achievement.objects.count(), 1)
+
+    def test_profile_achievements_requires_auth(self):
+        url = reverse("profile-achievements")
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_profile_achievements_returns_data(self):
+        Achievement.objects.all().delete()
+        group = AchievementGroup.objects.create(
+            slug="world-trace",
+            name="世界留痕",
+            category="累计类",
+        )
+        Achievement.objects.create(
+            slug="world-trace-1",
+            name="世界留痕 1",
+            description="每个旅程都从一笔开始",
+            category="累计类",
+            group=group,
+            level=1,
+            condition={"metric": "total_uploads", "operator": ">=", "threshold": 1},
+            metadata={"condition_text": "上传第1幅作品"},
+        )
+        Achievement.objects.create(
+            slug="world-trace-2",
+            name="世界留痕 2",
+            description="线条开始有了方向。",
+            category="累计类",
+            group=group,
+            level=2,
+            condition={"metric": "total_uploads", "operator": ">=", "threshold": 10},
+            metadata={"condition_text": "上传第10幅作品"},
+        )
+
+        url = reverse("profile-achievements")
+        response = self.client.get(url, **self.normal_headers)
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+
+        payload = response.json()
+        summary = payload.get("summary")
+        groups = payload.get("groups")
+        standalone = payload.get("standalone")
+
+        self.assertIsInstance(summary, dict)
+        self.assertEqual(summary.get("group_count"), 1)
+        self.assertEqual(summary.get("standalone_count"), 0)
+        self.assertEqual(summary.get("achievement_count"), 2)
+        self.assertIsInstance(groups, list)
+        self.assertEqual(len(groups), 1)
+        self.assertIsInstance(standalone, list)
+        self.assertEqual(len(standalone), 0)
+
+        group_payload = groups[0]
+        self.assertEqual(group_payload["slug"], "world-trace")
+        levels = group_payload.get("levels")
+        self.assertEqual(len(levels), 2)
+        self.assertEqual({level["slug"] for level in levels}, {"world-trace-1", "world-trace-2"})
+        self.assertEqual(group_payload.get("summary", {}).get("level_count"), 2)

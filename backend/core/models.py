@@ -547,6 +547,45 @@ class DailyCheckIn(models.Model):
         return f"{self.user} @ {self.date:%Y-%m-%d}"
 
 
+class AchievementGroup(models.Model):
+    slug = models.SlugField(
+        max_length=64,
+        unique=True,
+        help_text="成就组唯一标识，建议使用英文短标签。",
+    )
+    name = models.CharField(max_length=128, help_text="成就组名称。")
+    description = models.TextField(blank=True, help_text="成就组描述或引导文案。")
+    category = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text="可选分类标签，便于分组展示。",
+    )
+    icon = models.CharField(
+        max_length=256,
+        blank=True,
+        help_text="成就组图标（URL 或资源标识）。",
+    )
+    display_order = models.PositiveIntegerField(
+        default=100,
+        help_text="用于排序，数值越小越靠前。",
+    )
+    metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="附加元数据，例如分组逻辑、展示配置等。",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["display_order", "slug"]
+        verbose_name = "成就组"
+        verbose_name_plural = "成就组"
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class Achievement(models.Model):
     """
     后台配置的成就信息，供业务系统判定和展示。
@@ -559,6 +598,18 @@ class Achievement(models.Model):
     }
     """
 
+    group = models.ForeignKey(
+        AchievementGroup,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="achievements",
+        help_text="所属成就组，可为空表示独立成就。",
+    )
+    level = models.PositiveSmallIntegerField(
+        default=1,
+        help_text="在成就组内的层级，1 表示第一层。",
+    )
     slug = models.SlugField(
         max_length=64,
         unique=True,
@@ -596,6 +647,16 @@ class Achievement(models.Model):
 
     class Meta:
         ordering = ["display_order", "slug"]
+        indexes = [
+            models.Index(fields=["group", "level"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["group", "level"],
+                name="core_achievement_unique_group_level",
+                condition=models.Q(group__isnull=False),
+            )
+        ]
 
     def __str__(self) -> str:
         return self.name

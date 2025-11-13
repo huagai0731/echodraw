@@ -1,7 +1,9 @@
 from django.contrib import admin
+from django.db import models
 
 from core.models import (
     Achievement,
+    AchievementGroup,
     DailyHistoryMessage,
     EncouragementMessage,
     UserProfile,
@@ -9,6 +11,42 @@ from core.models import (
     UploadConditionalMessage,
     UserUpload,
 )
+
+
+class AchievementInline(admin.StackedInline):
+    model = Achievement
+    extra = 0
+    show_change_link = False
+    ordering = ("level", "display_order", "slug")
+    fieldsets = (
+        (
+            "基础信息",
+            {
+                "fields": (
+                    "name",
+                    "slug",
+                    "level",
+                    "category",
+                    "description",
+                    "icon",
+                    "is_active",
+                    "display_order",
+                )
+            },
+        ),
+        (
+            "条件配置",
+            {
+                "fields": (
+                    "condition",
+                    "metadata",
+                )
+            },
+        ),
+    )
+    formfield_overrides = {
+        models.JSONField: {"widget": admin.widgets.AdminTextareaWidget},
+    }
 
 
 @admin.register(DailyHistoryMessage)
@@ -72,12 +110,78 @@ class UserUploadAdmin(admin.ModelAdmin):
     ordering = ("-uploaded_at",)
 
 
+@admin.register(AchievementGroup)
+class AchievementGroupAdmin(admin.ModelAdmin):
+    list_display = ("name", "slug", "category", "display_order", "updated_at")
+    search_fields = ("name", "slug", "description")
+    ordering = ("display_order", "slug")
+    prepopulated_fields = {"slug": ("name",)}
+    inlines = [AchievementInline]
+    fieldsets = (
+        (
+            "基础信息",
+            {
+                "fields": (
+                    "name",
+                    "slug",
+                    "category",
+                    "description",
+                    "icon",
+                    "display_order",
+                )
+            },
+        ),
+        ("附加信息", {"fields": ("metadata",)}),
+        ("时间戳", {"fields": ("created_at", "updated_at")}),
+    )
+    readonly_fields = ("created_at", "updated_at")
+    formfield_overrides = {
+        models.JSONField: {"widget": admin.widgets.AdminTextareaWidget},
+    }
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).prefetch_related("achievements")
+
+
 @admin.register(Achievement)
 class AchievementAdmin(admin.ModelAdmin):
     list_display = ("name", "slug", "category", "is_active", "display_order", "updated_at")
     list_filter = ("is_active", "category")
     search_fields = ("name", "slug", "description")
     ordering = ("display_order", "slug")
+    prepopulated_fields = {"slug": ("name",)}
+    formfield_overrides = {
+        models.JSONField: {"widget": admin.widgets.AdminTextareaWidget},
+    }
+    fieldsets = (
+        (
+            "基础信息",
+            {
+                "fields": (
+                    "name",
+                    "slug",
+                    "category",
+                    "description",
+                    "icon",
+                    "is_active",
+                    "display_order",
+                )
+            },
+        ),
+        ("条件与元数据", {"fields": ("condition", "metadata")}),
+        ("时间戳", {"fields": ("created_at", "updated_at")}),
+    )
+    readonly_fields = ("created_at", "updated_at")
+    exclude = ("group", "level")
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.filter(group__isnull=True)
+
+    def save_model(self, request, obj, form, change):
+        obj.group = None
+        obj.level = 1
+        super().save_model(request, obj, form, change)
 
 
 @admin.register(TestAccountProfile)

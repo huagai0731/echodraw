@@ -4,7 +4,6 @@
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
-  gap: 1.5rem;
   background: #221b1b;
   color: #efeae7;
   font-family: "Manrope", "Segoe UI", system-ui, -apple-system, sans-serif;
@@ -47,8 +46,9 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  padding: calc(var(--top-nav-height, 64px) + 2.25rem) 1.5rem 3.5rem;
+  gap: clamp(2rem, 6vw, 3rem);
+  padding: calc(var(--top-nav-height, 64px) + 2rem) 1.5rem
+    calc(var(--bottom-nav-safe-area, var(--bottom-nav-height, 74px)) + 1rem);
 }
 
 .home-screen__header {
@@ -88,7 +88,6 @@
   flex-direction: column;
   gap: 1.5rem;
   margin-top: auto;
-  padding-bottom: 1rem;
 }
 
 .home-screen__card {

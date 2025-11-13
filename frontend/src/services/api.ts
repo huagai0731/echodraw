@@ -62,6 +62,7 @@ if (typeof window !== "undefined") {
 
 export const AUTH_STORAGE_KEY = "echodraw-auth";
 export const AUTH_CHANGED_EVENT = "echo.auth-changed";
+export const AUTH_FORCED_LOGOUT_EVENT = "echo.auth-forced-logout";
 
 let currentAuthToken: string | null = null;
 let lastNotifiedAuthToken: string | null | undefined;
@@ -155,6 +156,16 @@ function handleUnauthorizedResponse() {
   try {
     clearStoredAuth();
     setAuthToken(null);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent(AUTH_FORCED_LOGOUT_EVENT, {
+          detail: {
+            reason: "token_revoked",
+            timestamp: Date.now(),
+          },
+        }),
+      );
+    }
   } finally {
     isHandlingUnauthorizedResponse = false;
   }
@@ -381,6 +392,58 @@ function mapProfilePreferences(payload: ProfilePreferenceResponse): ProfilePrefe
     defaultDisplayName: payload.default_display_name ?? "",
     updatedAt: payload.updated_at ?? "",
   };
+}
+
+export type UserAchievementLevelRecord = {
+  id: number;
+  slug: string;
+  name: string;
+  description: string;
+  category: string | null;
+  icon: string | null;
+  level: number;
+  metadata: Record<string, unknown>;
+  condition: Record<string, unknown>;
+  unlocked_at: string | null;
+};
+
+export type UserAchievementGroupSummaryRecord = {
+  level_count: number;
+  highest_unlocked_level: number;
+  unlocked_levels: number[];
+};
+
+export type UserAchievementGroupRecord = {
+  id: number;
+  slug: string;
+  name: string;
+  description: string;
+  category: string | null;
+  icon: string | null;
+  display_order: number;
+  metadata: Record<string, unknown>;
+  summary: UserAchievementGroupSummaryRecord;
+  levels: UserAchievementLevelRecord[];
+};
+
+export type UserAchievementsSummary = {
+  group_count: number;
+  standalone_count: number;
+  achievement_count: number;
+};
+
+export type UserAchievementsResponse = {
+  summary: UserAchievementsSummary;
+  groups: UserAchievementGroupRecord[];
+  standalone: UserAchievementLevelRecord[];
+};
+
+export async function fetchUserAchievements(): Promise<UserAchievementsResponse> {
+  if (!hasAuthToken()) {
+    throw createUnauthorizedError();
+  }
+  const response = await api.get<UserAchievementsResponse>("/profile/achievements/");
+  return response.data;
 }
 
 export type LongTermGoalProgress = {

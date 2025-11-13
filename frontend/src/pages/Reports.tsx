@@ -5,6 +5,7 @@ import TopNav from "@/components/TopNav";
 import type { Artwork } from "@/types/artwork";
 import FourArtworkTemplateDesigner from "@/pages/reports/FourArtworkTemplateDesigner";
 import SingleArtworkTemplateDesigner from "@/pages/reports/SingleArtworkTemplateDesigner";
+import FullMonthlyReportDemo from "@/pages/reports/FullMonthlyReportDemo";
 
 import "./Reports.css";
 
@@ -123,6 +124,7 @@ function Reports({ artworks = [] }: ReportsProps) {
   const [activeFilter, setActiveFilter] = useState<FilterKey>("周报");
   const [singleTemplateOpen, setSingleTemplateOpen] = useState(false);
   const [quadTemplateOpen, setQuadTemplateOpen] = useState(false);
+  const [fullMonthlyDemoOpen, setFullMonthlyDemoOpen] = useState(false);
   const isTemplatesTab = activeTab === "templates";
   const isTemplateExperience = isTemplatesTab || singleTemplateOpen || quadTemplateOpen;
   const showTemplateBack = singleTemplateOpen || quadTemplateOpen;
@@ -256,6 +258,20 @@ function Reports({ artworks = [] }: ReportsProps) {
                 );
               })}
             </div>
+            <section className="reports-screen__demo" aria-label="完整月报 Demo">
+              <div className="reports-screen__demo-text">
+                <p className="reports-screen__demo-title">完整月报 · 0000-00-00</p>
+                <p className="reports-screen__demo-subtitle">按顺序预览 reports_screen_5 — reports_screen_12 的成品页面。</p>
+              </div>
+              <button
+                type="button"
+                className="reports-screen__demo-button"
+                onClick={() => setFullMonthlyDemoOpen(true)}
+              >
+                <MaterialIcon name="play_arrow" />
+                打开 Demo
+              </button>
+            </section>
 
             <div className="reports-screen__list">
               {filteredReports.map((item) => (
@@ -301,6 +317,7 @@ function Reports({ artworks = [] }: ReportsProps) {
         artworks={artworks}
         onClose={() => setQuadTemplateOpen(false)}
       />
+      <FullMonthlyReportDemo open={fullMonthlyDemoOpen} onClose={() => setFullMonthlyDemoOpen(false)} />
     </div>
   );
 }

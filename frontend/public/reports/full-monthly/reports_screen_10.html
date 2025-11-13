@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html class="dark" lang="zh"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>EchoDraw 创作深度</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200;300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 200, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined.fill {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .bg-pattern {
+            position: relative;
+            overflow: hidden;
+        }
+        .bg-pattern::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image:
+                radial-gradient(circle at 10% 85%, #98DBC61A, transparent 35%),
+                radial-gradient(circle at 90% 10%, #98DBC610, transparent 45%),
+                radial-gradient(circle at 50% 50%, #C5E1E208, transparent 30%);
+            background-repeat: no-repeat;
+            z-index: 0;
+            opacity: 0.6;
+            animation: breathing-glow 12s ease-in-out infinite;
+        }
+        @keyframes breathing-glow {
+            0%, 100% { transform: scale(1); opacity: 0.6; }
+            50% { transform: scale(1.1); opacity: 0.8; }
+        }
+        .content-wrapper {
+            position: relative;
+            z-index: 1;
+        }
+        .bar-glow {
+             filter: drop-shadow(0 -4px 10px #98DBC680);
+        }
+    </style>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#98DBC6",
+              "background-light": "#EFEAE7", 
+              "background-dark": "#221B1B",
+              "brown": "#4A3F4A",
+              "light-blue": "#C5E1E2",
+              "milky-white": "#EFEAE7",
+              "deep-coffee": "#221B1B"
+            },
+            fontFamily: {
+              "display": ["Manrope", "sans-serif"]
+            },
+            borderRadius: {"DEFAULT": "0.5rem", "lg": "0.75rem", "xl": "1rem", "full": "9999px"},
+            fontWeight: {
+                'thin': '100',
+                'extralight': '200',
+                'light': '300',
+            }
+          },
+        },
+      }
+    </script>
+<style>
+    body {
+      min-height: 100dvh;
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark">
+<div class="relative flex h-auto min-h-screen w-full flex-col font-display group/design-root overflow-x-hidden bg-pattern">
+<div class="content-wrapper flex flex-col flex-grow">
+<div class="p-5 pt-10 flex-grow">
+<div class="px-2 mb-8 text-center">
+<p class="text-2xl font-light leading-relaxed text-milky-white/90">
+                    你是<span class="text-primary font-normal">碎片型</span>创作者：本月 <span class="text-primary font-normal">72%</span> 的记录都在 20 分钟以内。
+                </p>
+</div>
+<div class="bg-white/[.03] border border-white/10 rounded-xl p-4 backdrop-blur-sm mb-6">
+<div class="flex justify-between items-center mb-4 px-1">
+<h2 class="text-base font-light text-white/80">时长格阵图</h2>
+<div class="flex items-center gap-1 text-xs font-light text-white/50">
+<span class="w-2 h-2 rounded-sm bg-gradient-to-t from-primary/30 to-primary/10"></span> 短
+                        <span class="w-2 h-2 rounded-sm bg-gradient-to-t from-primary/80 to-primary/40"></span>
+<span class="w-2 h-2 rounded-sm bg-gradient-to-t from-primary to-primary/60"></span> 长
+                    </div>
+</div>
+<div class="grid grid-cols-5 gap-3">
+<div class="relative aspect-square bg-white/5 rounded-md overflow-hidden"><div class="absolute bottom-0 left-0 right-0 h-[22%]" style="background: linear-gradient(to top, #98DBC666, #98DBC633);"></div></div>
+<div class="relative aspect-square bg-white/5 rounded-md overflow-hidden"><div class="absolute bottom-0 left-0 right-0 h-[45%]" style="background: linear-gradient(to top, #98DBC699, #98DBC655);"></div></div>
+<div class="relative aspect-square bg-white/5 rounded-md overflow-hidden"><div class="absolute bottom-0 left-0 right-0 h-[15%]" style="background: linear-gradient(to top, #98DBC655, #98DBC622);"></div></div>
+<div class="relative aspect-square bg-white/5 rounded-md overflow-hidden"><div class="absolute bottom-0 left-0 right-0 h-[80%]" style="background: linear-gradient(to top, #98DBC6DD, #98DBC688);"></div></div>
+<div class="relative aspect-square bg-white/5 rounded-md overflow-hidden"><div class="absolute bottom-0 left-0 right-0 h-[30%]" style="background: linear-gradient(to top, #98DBC677, #98DBC644);"></div></div>
+<div class="relative aspect-square bg-white/5 rounded-md overflow-hidden"><div class="absolute bottom-0 left-0 right-0 h-[100%]" style="background: linear-gradient(to top, #98DBC6, #98DBC6AA);"></div></div>
+<div class="relative aspect-square bg-white/5 rounded-md overflow-hidden"><div class="absolute bottom-0 left-0 right-0 h-[18%]" style="background: linear-gradient(to top, #98DBC666, #98DBC633);"></div></div>
+<div class="relative aspect-square bg-white/5 rounded-md overflow-hidden"><div class="absolute bottom-0 left-0 right-0 h-[55%]" style="background: linear-gradient(to top, #98DBC6AA, #98DBC666);"></div></div>
+<div class="relative aspect-square bg-white/5 rounded-md overflow-hidden"><div class="absolute bottom-0 left-0 right-0 h-[65%]" style="background: linear-gradient(to top, #98DBC6BB, #98DBC677);"></div></div>
+<div class="relative aspect-square bg-white/5 rounded-md overflow-hidden"><div class="absolute bottom-0 left-0 right-0 h-[25%]" style="background: linear-gradient(to top, #98DBC666, #98DBC633);"></div></div>
+<div class="relative aspect-square bg-white/5 rounded-md overflow-hidden"><div class="absolute bottom-0 left-0 right-0 h-[40%]" style="background: linear-gradient(to top, #98DBC688, #98DBC655);"></div></div>
+<div class="relative aspect-square bg-white/5 rounded-md overflow-hidden"><div class="absolute bottom-0 left-0 right-0 h-[12%]" style="background: linear-gradient(to top, #98DBC655, #98DBC622);"></div></div>
+<div class="relative aspect-square bg-white/5 rounded-md overflow-hidden"><div class="absolute bottom-0 left-0 right-0 h-[33%]" style="background: linear-gradient(to top, #98DBC677, #98DBC644);"></div></div>
+<div class="relative aspect-square bg-white/5 rounded-md overflow-hidden"><div class="absolute bottom-0 left-0 right-0 h-[75%]" style="background: linear-gradient(to top, #98DBC6CC, #98DBC688);"></div></div>
+<div class="relative aspect-square bg-white/5 rounded-md overflow-hidden"><div class="absolute bottom-0 left-0 right-0 h-[28%]" style="background: linear-gradient(to top, #98DBC677, #98DBC644);"></div></div>
+</div>
+</div>
+<div class="bg-white/[.03] border border-white/10 rounded-xl p-4 backdrop-blur-sm mb-10">
+<h2 class="text-base font-light text-white/80 mb-6 px-1">时长分布柱状</h2>
+<div class="flex items-end justify-around h-36 px-4">
+<div class="flex flex-col items-center gap-2 w-1/3">
+<div class="w-8 h-full flex items-end">
+<div class="w-full h-[80%] bg-primary/40 rounded-t-full bar-glow"></div>
+</div>
+<p class="text-xs font-light text-white/60">短 &lt;=15m</p>
+</div>
+<div class="flex flex-col items-center gap-2 w-1/3">
+<div class="w-8 h-full flex items-end">
+<div class="w-full h-[55%] bg-primary/40 rounded-t-full bar-glow"></div>
+</div>
+<p class="text-xs font-light text-white/60">中 15-120m</p>
+</div>
+<div class="flex flex-col items-center gap-2 w-1/3">
+<div class="w-8 h-full flex items-end">
+<div class="w-full h-[20%] bg-primary/40 rounded-t-full bar-glow"></div>
+</div>
+<p class="text-xs font-light text-white/60">长 &gt;120m</p>
+</div>
+</div>
+</div>
+<div class="px-2 text-center pb-6">
+<p class="text-base font-light leading-relaxed text-milky-white/80">
+                    你是典型的<span class="text-primary">碎片型创作者</span>，擅长在短时间内捕捉灵感。尝试安排<span class="text-primary">整块时间</span>，或许能开启更深度的创作旅程。
+                </p>
+</div>
+</div>
+</div>
+</div>
+
+</body></html>

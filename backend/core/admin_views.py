@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from django.db.models import Q
+from django.db.models import Prefetch, Q
 from django.utils.dateparse import parse_date
 from django.utils.timezone import make_aware
 from rest_framework import generics, viewsets
 
 from core.models import (
+    Achievement,
+    AchievementGroup,
     DailyCheckIn,
     DailyHistoryMessage,
     EncouragementMessage,
@@ -28,8 +30,8 @@ from core.serializers import (
     TestAccountSerializer,
     TestAccountUploadSerializer,
     UploadConditionalMessageSerializer,
+    AchievementGroupSerializer,
 )
-from core.models import Achievement
 
 
 class DailyHistoryMessageAdminViewSet(viewsets.ModelViewSet):
@@ -50,10 +52,59 @@ class UploadConditionalMessageAdminViewSet(viewsets.ModelViewSet):
     permission_classes = [IsStaffUser]
 
 
+class AchievementGroupAdminViewSet(viewsets.ModelViewSet):
+    serializer_class = AchievementGroupSerializer
+    permission_classes = [IsStaffUser]
+
+    def get_queryset(self):
+        achievement_order = (
+            Achievement.objects.select_related("group")
+            .all()
+            .order_by("level", "display_order", "slug", "id")
+        )
+        return (
+            AchievementGroup.objects.all()
+            .order_by("display_order", "slug")
+            .prefetch_related(Prefetch("achievements", queryset=achievement_order))
+        )
+
+
 class AchievementAdminViewSet(viewsets.ModelViewSet):
-    queryset = Achievement.objects.all().order_by("display_order", "slug")
     serializer_class = AchievementSerializer
     permission_classes = [IsStaffUser]
+
+    def get_queryset(self):
+        queryset = (
+            Achievement.objects.select_related("group")
+            .all()
+            .order_by(
+                "group__display_order",
+                "group__id",
+                "display_order",
+                "level",
+                "slug",
+            )
+        )
+
+        params = self.request.query_params
+        group_value = params.get("group")
+        standalone_value = params.get("standalone")
+
+        if group_value:
+            normalized = group_value.strip().lower()
+            if normalized in {"none", "null"}:
+                return queryset.filter(group__isnull=True)
+            if normalized.isdigit():
+                return queryset.filter(group_id=int(normalized))
+            return queryset.filter(group__slug=group_value.strip())
+
+        if standalone_value is not None:
+            if standalone_value.lower() in {"1", "true", "yes"}:
+                return queryset.filter(group__isnull=True)
+            if standalone_value.lower() in {"0", "false", "no"}:
+                return queryset.filter(group__isnull=False)
+
+        return queryset
 
 
 class ShortTermTaskPresetAdminViewSet(viewsets.ModelViewSet):

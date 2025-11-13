@@ -5,12 +5,14 @@ from typing import Any
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from django.urls import reverse
 from rest_framework import serializers
 
 from django.utils import timezone
 
 from core.models import (
     Achievement,
+    AchievementGroup,
     DailyCheckIn,
     DailyHistoryMessage,
     EncouragementMessage,
@@ -93,6 +95,19 @@ class UserUploadSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "uploaded_at", "created_at", "updated_at"]
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get("request")
+        if instance.image:
+            if request is not None:
+                proxy_url = reverse("core:user-upload-image", args=[instance.pk])
+                data["image"] = request.build_absolute_uri(proxy_url)
+            else:
+                data["image"] = instance.image.url
+        else:
+            data["image"] = None
+        return data
 
     def to_internal_value(self, data):
         mutable_data = data
@@ -712,7 +727,7 @@ class UploadConditionalMessageSerializer(serializers.ModelSerializer):
         read_only_fields = ["created_at", "updated_at"]
 
 
-class AchievementSerializer(serializers.ModelSerializer):
+class GroupAchievementSerializer(serializers.ModelSerializer):
     class Meta:
         model = Achievement
         fields = [
@@ -724,6 +739,56 @@ class AchievementSerializer(serializers.ModelSerializer):
             "icon",
             "is_active",
             "display_order",
+            "level",
+            "condition",
+            "metadata",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+
+class AchievementGroupSerializer(serializers.ModelSerializer):
+    achievements = GroupAchievementSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = AchievementGroup
+        fields = [
+            "id",
+            "slug",
+            "name",
+            "description",
+            "category",
+            "icon",
+            "display_order",
+            "metadata",
+            "created_at",
+            "updated_at",
+            "achievements",
+        ]
+        read_only_fields = ["created_at", "updated_at", "achievements"]
+
+
+class AchievementSerializer(serializers.ModelSerializer):
+    group = serializers.PrimaryKeyRelatedField(
+        queryset=AchievementGroup.objects.all(),
+        allow_null=True,
+        required=False,
+    )
+
+    class Meta:
+        model = Achievement
+        fields = [
+            "id",
+            "slug",
+            "name",
+            "description",
+            "category",
+            "icon",
+            "is_active",
+            "display_order",
+            "group",
+            "level",
             "condition",
             "metadata",
             "created_at",

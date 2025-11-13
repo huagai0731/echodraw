@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html class="dark" lang="zh"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>EchoDraw 月度摘要</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200;300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 200, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined.fill {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .bg-pattern {
+            position: relative;
+            overflow: hidden;
+        }
+        .bg-pattern::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image:
+                radial-gradient(circle at 15% 20%, #98DBC620, transparent 40%),
+                radial-gradient(circle at 80% 70%, #98DBC615, transparent 50%),
+                radial-gradient(circle at 50% 50%, #C5E1E205, transparent 30%);
+            background-repeat: no-repeat;
+            z-index: 0;
+            opacity: 0.5;
+            animation: breathing-glow 12s ease-in-out infinite;
+        }
+        @keyframes breathing-glow {
+            0%, 100% { transform: scale(1); opacity: 0.5; }
+            50% { transform: scale(1.1); opacity: 0.7; }
+        }
+        .content-wrapper {
+            position: relative;
+            z-index: 1;
+        }
+    </style>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#98DBC6",
+              "background-light": "#EFEAE7", 
+              "background-dark": "#221B1B",
+              "brown": "#4A3F4A",
+              "light-blue": "#C5E1E2",
+              "milky-white": "#EFEAE7",
+              "deep-coffee": "#221B1B"
+            },
+            fontFamily: {
+              "display": ["Manrope", "sans-serif"]
+            },
+            borderRadius: {"DEFAULT": "0.5rem", "lg": "0.75rem", "xl": "1rem", "full": "9999px"},
+            fontWeight: {
+                'thin': '100',
+                'extralight': '200',
+                'light': '300',
+            }
+          },
+        },
+      }
+    </script>
+<style>
+    body {
+      min-height: 100dvh;
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark">
+<div class="relative flex h-auto min-h-screen w-full flex-col font-display group/design-root overflow-x-hidden bg-pattern">
+<div class="content-wrapper flex flex-col flex-grow">
+<div class="p-5 pt-10 pb-6 flex-grow">
+<div class="px-2 mb-8">
+<p class="text-2xl font-light leading-relaxed text-milky-white/90">
+                    你本月画了 <span class="text-primary font-normal">12</span> 张图，累计 <span class="text-primary font-normal">48</span> 小时，比上月更专注，也更温柔。
+                </p>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div class="col-span-1 bg-white/[.03] border border-white/10 rounded-xl p-4 flex flex-col justify-between aspect-square backdrop-blur-sm">
+<div class="flex justify-between items-start">
+<p class="text-sm font-light text-white/70">上传总数</p>
+<span class="material-symbols-outlined text-primary text-xl -mt-1 -mr-1">layers</span>
+</div>
+<div>
+<p class="text-6xl font-extralight text-white tracking-tighter">12</p>
+<p class="text-xs font-light text-white/50 tracking-wide mt-1">Total Uploads</p>
+</div>
+</div>
+<div class="col-span-1 bg-white/[.03] border border-white/10 rounded-xl p-4 flex flex-col justify-between aspect-square backdrop-blur-sm">
+<div class="flex justify-between items-start">
+<p class="text-sm font-light text-white/70">总绘画时长</p>
+<span class="material-symbols-outlined text-primary text-xl -mt-1 -mr-1">schedule</span>
+</div>
+<div>
+<div class="flex items-baseline">
+<p class="text-6xl font-extralight text-white tracking-tighter">48</p>
+<p class="text-lg font-light text-white/70 ml-1.5">h</p>
+</div>
+<p class="text-xs font-light text-white/50 tracking-wide mt-1">Total Duration</p>
+</div>
+</div>
+<div class="col-span-1 bg-white/[.03] border border-white/10 rounded-xl p-4 flex flex-col justify-between backdrop-blur-sm">
+<div class="flex justify-between items-start">
+<p class="text-sm font-light text-white/70">平均单张时长</p>
+<span class="material-symbols-outlined text-primary text-xl -mt-1 -mr-1">timer</span>
+</div>
+<div class="mt-4">
+<div class="flex items-baseline">
+<p class="text-4xl font-extralight text-white tracking-tighter">4.0</p>
+<p class="text-base font-light text-white/70 ml-1.5">h</p>
+</div>
+<p class="text-xs font-light text-white/50 tracking-wide mt-1">Avg Duration</p>
+</div>
+</div>
+<div class="col-span-1 bg-white/[.03] border border-white/10 rounded-xl p-4 flex flex-col justify-between backdrop-blur-sm">
+<div class="flex justify-between items-start">
+<p class="text-sm font-light text-white/70">平均自评分</p>
+<span class="material-symbols-outlined text-primary text-xl -mt-1 -mr-1">star_half</span>
+</div>
+<div class="mt-4">
+<div class="flex items-baseline">
+<p class="text-4xl font-extralight text-white tracking-tighter">4.2</p>
+<p class="text-base font-light text-white/70 ml-1.5">/ 5</p>
+</div>
+<p class="text-xs font-light text-white/50 tracking-wide mt-1">Avg Rating</p>
+</div>
+</div>
+<div class="col-span-2 bg-white/[.03] border border-white/10 rounded-xl p-4 flex items-center justify-between backdrop-blur-sm">
+<div>
+<p class="text-sm font-light text-white/70">最多上传日</p>
+<p class="text-xs font-light text-white/50 tracking-wide mt-1">Most Upload Day</p>
+</div>
+<div class="text-right">
+<p class="text-2xl font-light text-white">10月23日</p>
+<p class="text-base font-normal text-primary mt-1">3 张</p>
+</div>
+</div>
+<div class="col-span-2 bg-white/[.03] border border-white/10 rounded-xl p-4 flex items-center justify-between backdrop-blur-sm">
+<div>
+<p class="text-sm font-light text-white/70">连续打卡最长天数</p>
+<p class="text-xs font-light text-white/50 tracking-wide mt-1">Longest Streak</p>
+</div>
+<div class="flex items-center gap-4 text-center">
+<div>
+<p class="text-2xl font-extralight text-white">7</p>
+<p class="text-xs font-light text-white/70">当前</p>
+</div>
+<div class="w-px h-6 bg-white/20"></div>
+<div>
+<p class="text-2xl font-extralight text-white">21</p>
+<p class="text-xs font-light text-white/70">历史</p>
+</div>
+</div>
+</div>
+<div class="col-span-2 bg-white/[.03] border border-white/10 rounded-xl p-4 flex items-center justify-between backdrop-blur-sm">
+<div>
+<p class="text-sm font-light text-white/70">本月新增成就</p>
+<p class="text-xs font-light text-white/50 tracking-wide mt-1">New Achievements</p>
+</div>
+<div class="flex items-center gap-2">
+<div class="w-10 h-10 bg-primary/20 rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-2xl">palette</span>
+</div>
+<div class="w-10 h-10 bg-primary/20 rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-2xl">local_florist</span>
+</div>
+<p class="text-white/70 ml-1">+1</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+</body></html>

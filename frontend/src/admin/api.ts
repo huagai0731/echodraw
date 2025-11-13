@@ -47,10 +47,26 @@ export type AdminAchievement = {
   icon: string;
   is_active: boolean;
   display_order: number;
+  level: number;
+  group: number | null;
   condition: Record<string, unknown>;
   metadata: Record<string, unknown>;
   created_at: string;
   updated_at: string;
+};
+
+export type AdminAchievementGroup = {
+  id: number;
+  slug: string;
+  name: string;
+  description: string;
+  category: string;
+  icon: string;
+  display_order: number;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+  achievements: AdminAchievement[];
 };
 
 export type AdminShortTermTaskPreset = {
@@ -181,8 +197,35 @@ export async function deleteConditionalMessage(id: number) {
   await api.delete(`/admin/home/conditionals/${id}/`);
 }
 
-export async function listAchievements() {
-  const response = await api.get<AdminAchievement[]>("/admin/achievements/");
+export type ListAchievementsOptions = {
+  standalone?: boolean;
+  group?: number | "none" | null;
+};
+
+function buildQuery(params: Record<string, string | number | undefined>) {
+  const searchParams = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined) {
+      return;
+    }
+    searchParams.set(key, String(value));
+  });
+  const serialized = searchParams.toString();
+  return serialized ? `?${serialized}` : "";
+}
+
+export async function listAchievements(options: ListAchievementsOptions = {}) {
+  const query = buildQuery({
+    standalone:
+      options.standalone === undefined ? undefined : options.standalone ? "true" : "false",
+    group:
+      options.group === undefined || options.group === null
+        ? undefined
+        : options.group === "none"
+          ? "none"
+          : options.group,
+  });
+  const response = await api.get<AdminAchievement[]>(`/admin/achievements/${query}`);
   return response.data;
 }
 
@@ -198,6 +241,31 @@ export async function updateAchievement(id: number, payload: Partial<AdminAchiev
 
 export async function deleteAchievement(id: number) {
   await api.delete(`/admin/achievements/${id}/`);
+}
+
+export async function listAchievementGroups() {
+  const response = await api.get<AdminAchievementGroup[]>("/admin/achievement-groups/");
+  return response.data;
+}
+
+export async function createAchievementGroup(payload: Partial<AdminAchievementGroup>) {
+  const response = await api.post<AdminAchievementGroup>("/admin/achievement-groups/", payload);
+  return response.data;
+}
+
+export async function updateAchievementGroup(
+  id: number,
+  payload: Partial<AdminAchievementGroup>,
+) {
+  const response = await api.patch<AdminAchievementGroup>(
+    `/admin/achievement-groups/${id}/`,
+    payload,
+  );
+  return response.data;
+}
+
+export async function deleteAchievementGroup(id: number) {
+  await api.delete(`/admin/achievement-groups/${id}/`);
 }
 
 export async function listShortTermTaskPresets() {

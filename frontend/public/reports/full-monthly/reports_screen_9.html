@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html class="dark" lang="zh"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>EchoDraw 节点回顾</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200;300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 200, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined.fill {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .bg-pattern {
+            position: relative;
+            overflow: hidden;
+        }
+        .bg-pattern::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image:
+                radial-gradient(circle at 10% 15%, #98DBC61A, transparent 35%),
+                radial-gradient(circle at 90% 80%, #98DBC610, transparent 45%),
+                radial-gradient(circle at 50% 50%, #C5E1E208, transparent 30%);
+            background-repeat: no-repeat;
+            z-index: 0;
+            opacity: 0.6;
+            animation: breathing-glow 12s ease-in-out infinite;
+        }
+        @keyframes breathing-glow {
+            0%, 100% { transform: scale(1); opacity: 0.6; }
+            50% { transform: scale(1.1); opacity: 0.8; }
+        }
+        .content-wrapper {
+            position: relative;
+            z-index: 1;
+        }
+        .thumbnail-glow {
+           filter: drop-shadow(0 0 10px #98DBC650);
+        }
+    </style>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#98DBC6",
+              "background-light": "#EFEAE7", 
+              "background-dark": "#221B1B",
+              "brown": "#4A3F4A",
+              "light-blue": "#C5E1E2",
+              "milky-white": "#EFEAE7",
+              "deep-coffee": "#221B1B"
+            },
+            fontFamily: {
+              "display": ["Manrope", "sans-serif"]
+            },
+            borderRadius: {"DEFAULT": "0.5rem", "lg": "0.75rem", "xl": "1rem", "full": "9999px"},
+            fontWeight: {
+                'thin': '100',
+                'extralight': '200',
+                'light': '300',
+            }
+          },
+        },
+      }
+    </script>
+<style>
+    body {
+      min-height: 100dvh;
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark">
+<div class="relative flex h-auto min-h-screen w-full flex-col font-display group/design-root overflow-x-hidden bg-pattern">
+<div class="content-wrapper flex flex-col flex-grow">
+<div class="p-4 pt-10 flex-grow">
+<div class="px-2 space-y-6 pb-6">
+<div class="text-center text-sm font-light text-milky-white/80 leading-relaxed">
+              你的最后一张作品是评分最高的，整体节奏逐步走向稳定。
+            </div>
+<div class="space-y-4">
+<div class="flex justify-between items-center gap-2">
+<div class="flex-1 text-center">
+<img alt="First artwork" class="rounded-lg w-full aspect-[3/4] object-cover mb-2 border border-white/10" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAa2H3DsaUB8YX6n3EH2Z_n5It55fV3dfrWD0jlWrLQf6jsIw3aqnAI5l0J-pNS17pY9fp2pCB6YG8FdUZQevrak8ZPnt8GH-nOWMMC1kywq4TNtAAAiM5eUl-c5y4E9QvhxmsCusrHcpA6cMUiZS0sEUvECP8t5cFRHgXMo6uf4vNyfKBBTB_zldp_tSJLqmZkEQmCf4_BQukFGgzOnV0EdhMoNiHilw_q6l-r5uR9DmSzsJtTJrNC-wIY4-DUGIkChf8ZZUNlhZBg"/>
+<p class="text-xs font-light text-white/70">1h 15m</p>
+<p class="text-xs font-light text-white/50">4.0 ★ | 平静</p>
+</div>
+<div class="text-white/40 font-thin text-2xl px-1">vs</div>
+<div class="flex-1 text-center">
+<img alt="Last artwork" class="rounded-lg w-full aspect-[3/4] object-cover mb-2 border border-primary/50 thumbnail-glow" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB38t32wIKMY2hYPf06Utya811lRUO3x0vo0QSmUSJznOCwQkhQ0EPoZ3ZAzX4OfnbIU07uXdDtH4fnWyRHsTxyW7wSyC3PLi9f49cmSeRF8ZiTf7LRPOg9i2dSrQHhGk6QYOPv8JKVJlXo-NrN4gXPFbQIWOVS7KJgLaUDY5kUYUifBrt6dcNd6CYykfxDQRV5FkTu6W9o3bBWP8hN-bP2KmAcRRyd-boJ9bw3zTUXKb9hSoNfUCT9sWJ3SLck_PucAN_DgsgouHra"/>
+<p class="text-xs font-light text-white/70">3h 45m</p>
+<p class="text-xs font-light text-white/50">5.0 ★ | 专注</p>
+</div>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div class="flex flex-col items-center gap-2">
+<img alt="Highest rated artwork" class="rounded-lg w-full aspect-[3/4] object-cover mb-2 border border-primary/50 thumbnail-glow" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCCL3OXOVTzuvs0uPJml29HAPGJ5SQ8_wofKgTYJ5HwYnbyzoHCClCUHq1QQbmn_GFn4k4mCS7NaNWgkDmeX-mg5grnr7ASm0uOVYcBv4bpgX9BJgv11sdML7C57ofId1KDFh8MmPjYV2m6LIvnYhiu50eE8qJEFRZZpDOTGk9OfglQZm_iO7nWRXq6nkxEsqeFySlUSYk3CRRnOtgZ61J8JsjMlBZOZZ67F19MsxtlS2A7vkzEIwsmTcl2FdsqAOsa6jP8A_0Wn7XO"/>
+<p class="text-xs font-light text-white/70">3h 45m</p>
+<p class="text-xs font-light text-white/50">5.0 ★ | 专注</p>
+</div>
+<div class="flex flex-col items-center gap-2">
+<img alt="Most unexpected artwork" class="rounded-lg w-full aspect-[3/4] object-cover mb-2 border border-white/10" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB1VDH437j43SIAJOwcpKiKk0MrEg-NUSPiEysRpbsn5vgcTrH3CPhed41mxfnMMWSsvr56vhSQxLfjDik3Gk_qcPH7YEwU-cZ-S-lWJ4KqM3-IvNxccpGvwXtuNKOehqzI9D7zlDoWMYeDYFcCgbu-nHlsv5QDoBvdkBCyJnlKa6FbjNTF39Ve17yRt9LsUc3AOHNmGBO2GXzNcxD-kcAWYImu9M68WbGaeZChJF1sG06LMXFWemZEozLL4PCPEWEDSEiYyrptR3YB"/>
+<p class="text-xs font-light text-white/70">0h 25m</p>
+<p class="text-xs font-light text-white/50">4.5 ★ | 灵感</p>
+</div>
+</div>
+<p class="text-center text-sm font-light text-milky-white/80 leading-relaxed">短时间的创作也带来了高分，灵感总在不经意间迸发。</p>
+</div>
+</div>
+</div>
+</div>
+</body></html>
