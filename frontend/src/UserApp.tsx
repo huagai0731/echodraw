@@ -188,20 +188,6 @@ function hashString(value: string): number {
   return hash;
 }
 
-function buildGradientFromSlug(slug: string): string {
-  const fallback = "achievement";
-  const source = slug && slug.trim().length > 0 ? slug : fallback;
-  const base = Math.abs(hashString(source));
-  const hue1 = base % 360;
-  const hue2 = (hue1 + 48) % 360;
-  const saturation = 64;
-  const lightness1 = 58;
-  const lightness2 = 36;
-  return `linear-gradient(135deg, hsl(${hue1} ${saturation}% ${lightness1}%), hsl(${hue2} ${
-    saturation + 6
-  }% ${lightness2}%))`;
-}
-
 function ensureRecord(value: unknown): Record<string, unknown> {
   if (value && typeof value === "object" && !Array.isArray(value)) {
     return value as Record<string, unknown>;
@@ -214,20 +200,6 @@ function getStringField(source: Record<string, unknown>, key: string): string | 
   if (typeof raw === "string") {
     const trimmed = raw.trim();
     return trimmed.length > 0 ? trimmed : null;
-  }
-  return null;
-}
-
-function getNumberField(source: Record<string, unknown>, key: string): number | null {
-  const raw = source[key];
-  if (typeof raw === "number" && Number.isFinite(raw)) {
-    return raw;
-  }
-  if (typeof raw === "string" && raw.trim().length > 0) {
-    const parsed = Number(raw);
-    if (!Number.isNaN(parsed) && Number.isFinite(parsed)) {
-      return parsed;
-    }
   }
   return null;
 }

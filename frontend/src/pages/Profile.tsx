@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import clsx from "clsx";
 
 import Login from "@/pages/Login";
 import ForgotPassword from "@/pages/ForgotPassword";
@@ -17,6 +18,7 @@ import TopNav from "@/components/TopNav";
 
 import "./Profile.css";
 import "./ProfileDashboard.css";
+import MembershipOptions, { type MembershipTier } from "./MembershipOptions";
 
 type AuthPayload = {
   token: string;
@@ -32,7 +34,8 @@ type ViewState =
   | "forgot-password"
   | "dashboard"
   | "settings"
-  | "custom-tags";
+  | "custom-tags"
+  | "membership-options";
 
 const STORAGE_KEY = "echodraw-auth";
 const DEFAULT_SIGNATURE = "一副完整的画，一个崭新落成的次元";
@@ -162,6 +165,7 @@ function Profile({
     return stored?.signature ?? DEFAULT_SIGNATURE;
   });
   const [handledForcedLogoutVersion, setHandledForcedLogoutVersion] = useState(0);
+  const [membershipTier, setMembershipTier] = useState<MembershipTier>("basic");
 
   useEffect(() => {
     if (auth) {
@@ -372,6 +376,19 @@ function Profile({
     );
   }
 
+  if (view === "membership-options" && auth) {
+    return (
+      <MembershipOptions
+        onBack={() => setView("dashboard")}
+        currentTier={membershipTier}
+        onSelectTier={(tier) => {
+          setMembershipTier(tier);
+          setView("dashboard");
+        }}
+      />
+    );
+  }
+
   if (view === "dashboard" && auth) {
     return (
       <ProfileDashboard
@@ -383,6 +400,8 @@ function Profile({
         onOpenAchievements={onOpenAchievements}
         pinnedAchievements={pinnedAchievements}
         recentAchievements={recentAchievements}
+        membershipTier={membershipTier}
+        onOpenMembership={() => setView("membership-options")}
       />
     );
   }
@@ -404,6 +423,8 @@ type ProfileDashboardProps = {
   onOpenAchievements?: () => void;
   pinnedAchievements: PinnedAchievement[];
   recentAchievements: RecentAchievement[];
+  membershipTier: MembershipTier;
+  onOpenMembership: () => void;
 };
 
 function ProfileDashboard({
@@ -415,9 +436,18 @@ function ProfileDashboard({
   onOpenAchievements,
   pinnedAchievements,
   recentAchievements,
+  membershipTier,
+  onOpenMembership,
 }: ProfileDashboardProps) {
   const effectiveName = displayName.trim() || formatName(email);
   const effectiveSignature = signature.trim() || DEFAULT_SIGNATURE;
+  const membershipLabels: Record<MembershipTier, string> = {
+    pending: "待开通",
+    basic: "基础版",
+    premium: "高级版",
+    premiumQuarter: "季度高级版",
+  };
+  const currentMembershipLabel = membershipLabels[membershipTier] ?? membershipLabels.pending;
   const [stats, setStats] = useState({
     totalCheckInDays: 0,
     totalDurationMinutes: 0,
@@ -511,6 +541,16 @@ function ProfileDashboard({
         title="个人"
         subtitle="Profile"
         className="top-nav--fixed"
+        leadingSlot={
+          <button
+            type="button"
+            className={clsx("profile-membership-trigger", `profile-membership-trigger--${membershipTier}`)}
+            onClick={onOpenMembership}
+          >
+            <span className="profile-membership-trigger__dot" />
+            <span className="profile-membership-trigger__label">{currentMembershipLabel}</span>
+          </button>
+        }
         trailingActions={[
           {
             icon: "more_horiz",

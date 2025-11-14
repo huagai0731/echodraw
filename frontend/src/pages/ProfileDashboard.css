@@ -101,6 +101,88 @@
   padding: calc(var(--top-nav-height, 64px) + 1.5rem) 1.5rem 3.5rem;
 }
 
+.profile-membership-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(239, 234, 231, 0.82);
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+.profile-membership-trigger:hover {
+  transform: translateY(-1px);
+}
+
+.profile-membership-trigger__dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 0 12px currentColor;
+  opacity: 0.85;
+}
+
+.profile-membership-trigger__label {
+  font-weight: 600;
+  letter-spacing: 0.14em;
+}
+
+.profile-membership-trigger--pending {
+  border-color: rgba(255, 186, 171, 0.45);
+  background: rgba(255, 186, 171, 0.16);
+  color: #ffbaa9;
+}
+
+.profile-membership-trigger--pending:hover {
+  border-color: rgba(255, 186, 171, 0.75);
+  background: rgba(255, 186, 171, 0.24);
+}
+
+.profile-membership-trigger--basic {
+  border-color: rgba(152, 219, 198, 0.35);
+  background: rgba(152, 219, 198, 0.16);
+  color: #98dbc6;
+}
+
+.profile-membership-trigger--basic:hover {
+  border-color: rgba(152, 219, 198, 0.6);
+  background: rgba(152, 219, 198, 0.24);
+}
+
+.profile-membership-trigger--premium {
+  border-color: rgba(255, 207, 134, 0.45);
+  background: rgba(255, 207, 134, 0.18);
+  color: #ffc978;
+}
+
+.profile-membership-trigger--premium:hover {
+  border-color: rgba(255, 207, 134, 0.7);
+  background: rgba(255, 207, 134, 0.26);
+}
+
+.profile-membership-trigger--premiumQuarter {
+  border-color: rgba(189, 178, 255, 0.45);
+  background: rgba(189, 178, 255, 0.18);
+  color: #cbbcff;
+}
+
+.profile-membership-trigger--premiumQuarter:hover {
+  border-color: rgba(189, 178, 255, 0.7);
+  background: rgba(189, 178, 255, 0.26);
+}
+
 .profile-page__intro {
   text-align: center;
   margin-top: 1rem;

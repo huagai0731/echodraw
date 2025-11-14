@@ -3,8 +3,9 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import UserApp from "@/UserApp";
 import AdminLayout from "@/admin/AdminLayout";
 import AdminLogin from "@/admin/AdminLogin";
-import HomeContentPage from "@/admin/pages/HomeContent";
 import AchievementsPage from "@/admin/pages/Achievements";
+import AchievementGroupsPage from "@/admin/pages/AchievementGroups";
+import HomeContentPage from "@/admin/pages/HomeContent";
 import TestAccountsPage from "@/admin/pages/TestAccounts";
 import TestAccountDetailPage from "@/admin/pages/TestAccountDetail";
 import ShortTermTaskPresetsPage from "@/admin/pages/ShortTermTaskPresets";
@@ -18,6 +19,7 @@ function App() {
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<Navigate to="home-content" replace />} />
           <Route path="home-content" element={<HomeContentPage />} />
+          <Route path="achievement-groups" element={<AchievementGroupsPage />} />
           <Route path="achievements" element={<AchievementsPage />} />
           <Route path="task-presets" element={<ShortTermTaskPresetsPage />} />
           <Route path="long-term-copy" element={<LongTermCopyPage />} />

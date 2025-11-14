@@ -21,6 +21,7 @@ type TopNavProps = {
   trailingActions?: TopNavAction[];
   children?: ReactNode;
   className?: string;
+  leadingSlot?: ReactNode;
 };
 
 function TopNav({
@@ -30,11 +31,14 @@ function TopNav({
   trailingActions = [],
   children,
   className,
+  leadingSlot,
 }: TopNavProps) {
   return (
     <header className={clsx("top-nav", className)}>
       <div className="top-nav__leading">
-        {leadingAction ? (
+        {leadingSlot ? (
+          leadingSlot
+        ) : leadingAction ? (
           <button
             type="button"
             className={clsx(
