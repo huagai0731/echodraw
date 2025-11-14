@@ -179,15 +179,6 @@ function resolveAssetUrl(source?: string | null): string {
   return ASSET_BASE_URL ? `${ASSET_BASE_URL}/${trimmed}` : trimmed;
 }
 
-function hashString(value: string): number {
-  let hash = 0;
-  for (let index = 0; index < value.length; index += 1) {
-    hash = (hash << 5) - hash + value.charCodeAt(index);
-    hash |= 0;
-  }
-  return hash;
-}
-
 function ensureRecord(value: unknown): Record<string, unknown> {
   if (value && typeof value === "object" && !Array.isArray(value)) {
     return value as Record<string, unknown>;
