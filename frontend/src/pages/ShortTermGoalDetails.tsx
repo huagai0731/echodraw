@@ -931,20 +931,7 @@ function findFallbackTasks(schedule: ShortTermGoal["schedule"], dayIndex: number
   return [];
 }
 
-function getTaskInitial(title: string): string {
-  if (!title) {
-    return "•";
-  }
-  const trimmed = title.trim();
-  if (!trimmed) {
-    return "•";
-  }
-  const first = trimmed[0];
-  if (/[\p{Letter}\p{Number}]/u.test(first)) {
-    return first.toUpperCase();
-  }
-  return "•";
-}
+// Removed unused function getTaskInitial
 
 function differenceInCalendarDays(start: Date, end: Date) {
   const startUtc = Date.UTC(start.getFullYear(), start.getMonth(), start.getDate());

@@ -8,10 +8,9 @@ import {
   deleteTest,
   getTest,
   listTests,
-  listTestDimensions,
   updateTest,
 } from "@/admin/api";
-import type { AdminTest, AdminTestDimension } from "@/admin/api";
+import type { AdminTest } from "@/admin/api";
 
 import "../styles/TestManagement.css";
 
@@ -63,7 +62,6 @@ const TEST_EMPTY: TestDraft = {
 
 function TestManagementPage() {
   const [tests, setTests] = useState<AdminTest[]>([]);
-  const [dimensions, setDimensions] = useState<AdminTestDimension[]>([]);
   const [draft, setDraft] = useState<TestDraft>(TEST_EMPTY);
   const [editingId, setEditingId] = useState<number | "new" | null>(null);
   const [saving, setSaving] = useState(false);
@@ -74,12 +72,9 @@ function TestManagementPage() {
     const load = async () => {
       try {
         setLoading(true);
-        const [testsData, dimensionsData] = await Promise.all([
-          listTests(),
-          listTestDimensions(),
-        ]);
+        const testsData = await listTests();
         setTests(testsData);
-        setDimensions(dimensionsData);
+        // Dimensions are loaded from test data, no need for separate state
       } catch (err) {
         handleError(err, "加载测试数据失败，请稍后再试。");
       } finally {
@@ -517,7 +512,11 @@ function TestManagementPage() {
     updates: Partial<{ text: string; score: number; dimension_scores?: Record<string, number> }>,
   ) => {
     const newQuestions = [...draft.questions];
-    const newOptions = [...newQuestions[questionIndex].options];
+    const question = newQuestions[questionIndex];
+    if (!question.options) {
+      question.options = [];
+    }
+    const newOptions = [...question.options];
     newOptions[optionIndex] = { ...newOptions[optionIndex], ...updates };
     newQuestions[questionIndex] = {
       ...newQuestions[questionIndex],

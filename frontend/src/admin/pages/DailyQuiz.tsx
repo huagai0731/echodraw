@@ -9,7 +9,7 @@ import {
   listDailyQuizzes,
   updateDailyQuiz,
 } from "@/admin/api";
-import type { AdminDailyQuiz, AdminDailyQuizOption } from "@/admin/api";
+import type { AdminDailyQuiz } from "@/admin/api";
 
 import "../styles/DailyQuiz.css";
 

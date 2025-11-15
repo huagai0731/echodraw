@@ -57,7 +57,7 @@ function normalizeMessages(payload: HomeMessagesResponse | null): HomeCopy | nul
   return hasContent ? normalized : null;
 }
 
-function Home({ onOpenUpload, onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomeProps) {
+function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomeProps) {
   const [copy, setCopy] = useState<HomeCopy>(FALLBACK_COPY);
   const [loadingCopy, setLoadingCopy] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);

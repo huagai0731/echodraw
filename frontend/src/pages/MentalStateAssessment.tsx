@@ -1,6 +1,5 @@
 import { useState } from "react";
 
-import MaterialIcon from "@/components/MaterialIcon";
 import TopNav from "@/components/TopNav";
 
 import "./MentalStateAssessment.css";
@@ -31,8 +30,6 @@ function MentalStateAssessment({ onBack }: MentalStateAssessmentProps) {
       setSelectedValue(null);
     }
   };
-
-  const progress = (currentStep / totalSteps) * 100;
 
   const circleColors = [
     { color: "#87D7D8", bgColor: "rgba(135, 215, 216, 0.1)", shadowColor: "rgba(135, 215, 216, 0.5)", size: "4rem", innerSize: "0.75rem" },
