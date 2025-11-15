@@ -439,9 +439,6 @@ export type UserAchievementsResponse = {
 };
 
 export async function fetchUserAchievements(): Promise<UserAchievementsResponse> {
-  if (!hasAuthToken()) {
-    throw createUnauthorizedError();
-  }
   const response = await api.get<UserAchievementsResponse>("/profile/achievements/");
   return response.data;
 }
@@ -903,6 +900,10 @@ export async function createShortTermGoal(input: CreateShortTermGoalInput) {
 
   const response = await api.post<ShortTermGoalResponse>("/goals/short-term/", payload);
   return mapShortTermGoal(response.data);
+}
+
+export async function deleteShortTermGoal(id: number) {
+  await api.delete(`/goals/short-term/${id}/`);
 }
 
 export async function createUserUpload(input: CreateUserUploadInput) {

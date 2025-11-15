@@ -13,14 +13,24 @@ from django.utils import timezone
 from core.models import (
     Achievement,
     AchievementGroup,
+    ConditionalMessage,
     DailyCheckIn,
     DailyHistoryMessage,
+    DailyQuiz,
+    DailyQuizOption,
     EncouragementMessage,
+    HolidayMessage,
     LongTermGoal,
     LongTermPlanCopy,
     ShortTermGoal,
     ShortTermTaskPreset,
     TestAccountProfile,
+    Test,
+    TestDimension,
+    TestQuestion,
+    TestOptionText,
+    TestOption,
+    UserTestResult,
     UploadConditionalMessage,
     UserTaskPreset,
     UserUpload,
@@ -100,46 +110,64 @@ class UserUploadSerializer(serializers.ModelSerializer):
         data = super().to_representation(instance)
         request = self.context.get("request")
         if instance.image:
+            proxy_url = reverse("core:user-upload-image", args=[instance.pk])
             if request is not None:
-                proxy_url = reverse("core:user-upload-image", args=[instance.pk])
-                data["image"] = request.build_absolute_uri(proxy_url)
+                absolute_url = request.build_absolute_uri(proxy_url)
             else:
-                data["image"] = instance.image.url
+                site_root = getattr(settings, "FRONTEND_ORIGIN", "").rstrip("/")
+                if site_root:
+                    absolute_url = f"{site_root}{proxy_url}"
+                else:
+                    absolute_url = proxy_url
+
+            token = getattr(getattr(request, "auth", None), "key", None)
+            if not token and request is not None:
+                token = getattr(request.user, "auth_token", None)
+                if token:
+                    token = getattr(token, "key", None)
+
+            if token:
+                separator = "&" if "?" in absolute_url else "?"
+                absolute_url = f"{absolute_url}{separator}token={token}"
+
+            data["image"] = absolute_url
         else:
             data["image"] = None
         return data
 
     def to_internal_value(self, data):
-        mutable_data = data
-        if hasattr(data, "copy"):
-            mutable_data = data.copy()
-
-        tags_value = mutable_data.get("tags")
+        # 对于包含文件的 multipart/form-data，避免使用 copy() 因为文件对象不能被 pickle
+        # 直接修改 data 的字段，而不是先 copy
+        
+        # 处理 tags
+        tags_value = data.get("tags")
         if isinstance(tags_value, str):
             parsed = self._parse_tags(tags_value)
             if parsed is not None:
-                if hasattr(mutable_data, "setlist"):
-                    mutable_data.setlist("tags", parsed)
-                else:
-                    mutable_data["tags"] = parsed
+                if hasattr(data, "setlist"):
+                    data.setlist("tags", parsed)
+                elif hasattr(data, "__setitem__"):
+                    data["tags"] = parsed
 
-        title_value = mutable_data.get("title")
+        # 处理 title
+        title_value = data.get("title")
         if isinstance(title_value, str):
             trimmed = title_value.strip()
-            if hasattr(mutable_data, "setlist"):
-                mutable_data.setlist("title", [trimmed])
-            else:
-                mutable_data["title"] = trimmed
+            if hasattr(data, "setlist"):
+                data.setlist("title", [trimmed])
+            elif hasattr(data, "__setitem__"):
+                data["title"] = trimmed
 
-        description_value = mutable_data.get("description")
+        # 处理 description
+        description_value = data.get("description")
         if isinstance(description_value, str):
             trimmed = description_value.strip()
-            if hasattr(mutable_data, "setlist"):
-                mutable_data.setlist("description", [trimmed])
-            else:
-                mutable_data["description"] = trimmed
+            if hasattr(data, "setlist"):
+                data.setlist("description", [trimmed])
+            elif hasattr(data, "__setitem__"):
+                data["description"] = trimmed
 
-        return super().to_internal_value(mutable_data)
+        return super().to_internal_value(data)
 
     @staticmethod
     def _parse_tags(value: str) -> list[str] | None:
@@ -703,6 +731,45 @@ class EncouragementMessageSerializer(serializers.ModelSerializer):
         read_only_fields = ["created_at", "updated_at"]
 
 
+class ConditionalMessageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ConditionalMessage
+        fields = [
+            "id",
+            "name",
+            "text",
+            "priority",
+            "is_active",
+            "min_total_checkins",
+            "max_total_checkins",
+            "min_streak_days",
+            "max_streak_days",
+            "min_total_uploads",
+            "max_total_uploads",
+            "match_last_upload_moods",
+            "match_last_upload_tags",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["created_at", "updated_at"]
+
+
+class HolidayMessageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = HolidayMessage
+        fields = [
+            "id",
+            "month",
+            "day",
+            "headline",
+            "text",
+            "is_active",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["created_at", "updated_at"]
+
+
 class UploadConditionalMessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = UploadConditionalMessage
@@ -955,4 +1022,484 @@ class TestAccountUploadSerializer(serializers.ModelSerializer):
                 instance.image.delete(save=False)
 
         return super().update(instance, validated_data)
+
+
+# ==================== 测试管理序列化器 ====================
+
+class TestDimensionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TestDimension
+        fields = [
+            "id",
+            "code",
+            "name",
+            "endpoint_a_code",
+            "endpoint_a_name",
+            "endpoint_b_code",
+            "endpoint_b_name",
+            "description",
+            "display_order",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["created_at", "updated_at"]
+
+
+class TestOptionSerializer(serializers.ModelSerializer):
+    dimension_name = serializers.CharField(source="dimension.name", read_only=True)
+
+    class Meta:
+        model = TestOption
+        fields = [
+            "id",
+            "dimension",
+            "dimension_name",
+            "endpoint_code",
+            "score_config",
+            "is_active",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["created_at", "updated_at"]
+
+
+class TestOptionTextSerializer(serializers.ModelSerializer):
+    options = TestOptionSerializer(many=True, read_only=True)
+    option_count = serializers.SerializerMethodField()
+
+    def get_option_count(self, obj):
+        return obj.options.count()
+
+    class Meta:
+        model = TestOptionText
+        fields = [
+            "id",
+            "text",
+            "display_order",
+            "is_active",
+            "options",
+            "option_count",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["created_at", "updated_at"]
+
+
+class TestQuestionSerializer(serializers.ModelSerializer):
+    option_texts = TestOptionTextSerializer(many=True, read_only=True)
+    option_text_count = serializers.SerializerMethodField()
+    dimension_id = serializers.IntegerField(source="dimension.id", read_only=True, allow_null=True)
+    dimension_name = serializers.CharField(source="dimension.name", read_only=True, allow_null=True)
+
+    def get_option_text_count(self, obj):
+        return obj.option_texts.count()
+
+    class Meta:
+        model = TestQuestion
+        fields = [
+            "id",
+            "test",
+            "question_text",
+            "dimension",
+            "dimension_id",
+            "dimension_name",
+            "endpoint_code",
+            "score_config",
+            "display_order",
+            "is_active",
+            "option_texts",
+            "option_text_count",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["created_at", "updated_at"]
+
+
+class TestQuestionOptionInputSerializer(serializers.Serializer):
+    """类型2的选项输入序列化器"""
+    text = serializers.CharField(max_length=256, help_text="选项文本")
+    # 类型2专用的维度分值配置：每个选项可以给多个维度加分
+    dimension_scores = serializers.DictField(
+        child=serializers.IntegerField(),
+        help_text="维度分值配置（类型2使用），键为维度端点代码，值为该选项给该维度加的分值",
+        required=False,
+        allow_empty=True,
+    )
+
+
+class TestQuestionInputSerializer(serializers.Serializer):
+    """简化的题目输入序列化器，用于创建测试时同时创建题目"""
+    question_text = serializers.CharField(help_text="题目文本")
+    display_order = serializers.IntegerField(default=100, help_text="排序权重")
+    # 类型1使用：题目对应的维度和分值配置
+    dimension_id = serializers.IntegerField(required=False, help_text="类型1使用：题目对应的维度ID")
+    endpoint_code = serializers.CharField(max_length=16, required=False, allow_blank=True, help_text="类型1使用：维度端点代码")
+    score_config = serializers.DictField(
+        child=serializers.IntegerField(),
+        required=False,
+        allow_empty=True,
+        help_text="类型1使用：5个选择强度对应的分值，格式：{\"-2\": 2, \"-1\": 1, \"0\": 0, \"1\": 1, \"2\": 2}",
+    )
+    # 类型2使用：选项列表（固定4个）
+    options = TestQuestionOptionInputSerializer(many=True, required=False, help_text="类型2使用：选项列表，固定4个")
+
+
+class TestSerializer(serializers.ModelSerializer):
+    dimensions = TestDimensionSerializer(many=True, read_only=True)
+    dimension_ids = serializers.PrimaryKeyRelatedField(
+        many=True, queryset=TestDimension.objects.all(), source="dimensions", write_only=True, required=False
+    )
+    questions = TestQuestionSerializer(many=True, read_only=True)
+    question_count = serializers.SerializerMethodField()
+    # 用于嵌套创建题目和选项
+    questions_data = TestQuestionInputSerializer(many=True, write_only=True, required=False)
+    test_type = serializers.ChoiceField(
+        choices=Test.TEST_TYPE_CHOICES,
+        default=Test.TYPE_1,
+        help_text="测试类型：类型1为5级选择，类型2为4个选项选择。",
+    )
+
+    def get_question_count(self, obj):
+        return obj.questions.count()
+
+    def create(self, validated_data):
+        questions_data = validated_data.pop("questions_data", [])
+        dimension_ids = validated_data.pop("dimensions", [])
+        
+        test = Test.objects.create(**validated_data)
+        
+        # 关联维度
+        if dimension_ids:
+            test.dimensions.set(dimension_ids)
+        
+        # 创建题目和选项
+        from core.models import TestOptionText, TestOption, TestQuestion, TestDimension
+        
+        for idx, question_data in enumerate(questions_data):
+            if test.test_type == Test.TYPE_1:
+                # 类型1：题目直接配置维度和分值
+                dimension_id = question_data.get("dimension_id")
+                endpoint_code = question_data.get("endpoint_code", "")
+                score_config = question_data.get("score_config", {})
+                
+                dimension = None
+                if dimension_id:
+                    try:
+                        dimension = TestDimension.objects.get(id=dimension_id)
+                    except TestDimension.DoesNotExist:
+                        pass
+                
+                question = TestQuestion.objects.create(
+                    test=test,
+                    question_text=question_data["question_text"],
+                    display_order=question_data.get("display_order", 100 + idx * 10),
+                    dimension=dimension,
+                    endpoint_code=endpoint_code,
+                    score_config=score_config,
+                )
+            else:
+                # 类型2：题目有选项文本
+                question = TestQuestion.objects.create(
+                    test=test,
+                    question_text=question_data["question_text"],
+                    display_order=question_data.get("display_order", 100 + idx * 10),
+                )
+                
+                # 创建选项文本和选项
+                options_data = question_data.get("options", [])
+                for opt_idx, option_data in enumerate(options_data):
+                    option_text = TestOptionText.objects.create(
+                        question=question,
+                        text=option_data["text"],
+                        display_order=100 + opt_idx * 10,
+                    )
+                    
+                    # 类型2：直接选择选项，可以给多个维度加分
+                    dimension_scores = option_data.get("dimension_scores", {})
+                    
+                    # 为每个维度创建TestOption
+                    for endpoint_code, score_value in dimension_scores.items():
+                        # 查找对应的维度
+                        dimension = None
+                        for dim in test.dimensions.all():
+                            if dim.endpoint_a_code == endpoint_code or dim.endpoint_b_code == endpoint_code:
+                                dimension = dim
+                                break
+                        
+                        if dimension:
+                            # 类型2的分值配置格式：{"selected": score_value}
+                            score_config = {"selected": score_value}
+                            TestOption.objects.create(
+                                option_text=option_text,
+                                dimension=dimension,
+                                endpoint_code=endpoint_code,
+                                score_config=score_config,
+                            )
+        
+        return test
+
+    def update(self, instance, validated_data):
+        questions_data = validated_data.pop("questions_data", None)
+        dimension_ids = validated_data.pop("dimensions", None)
+        
+        # 更新基本字段
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        
+        # 更新维度关联
+        if dimension_ids is not None:
+            instance.dimensions.set(dimension_ids)
+        
+        # 如果提供了questions_data，更新题目（这里简化处理，实际可能需要更复杂的逻辑）
+        if questions_data is not None:
+            # 删除旧题目（级联删除会处理选项）
+            instance.questions.all().delete()
+            
+            # 创建新题目
+            from core.models import TestOptionText, TestOption, TestDimension
+            
+            for idx, question_data in enumerate(questions_data):
+                if instance.test_type == Test.TYPE_1:
+                    # 类型1：题目直接配置维度和分值
+                    dimension_id = question_data.get("dimension_id")
+                    endpoint_code = question_data.get("endpoint_code", "")
+                    score_config = question_data.get("score_config", {})
+                    
+                    dimension = None
+                    if dimension_id:
+                        try:
+                            dimension = TestDimension.objects.get(id=dimension_id)
+                        except TestDimension.DoesNotExist:
+                            pass
+                    
+                    TestQuestion.objects.create(
+                        test=instance,
+                        question_text=question_data["question_text"],
+                        display_order=question_data.get("display_order", 100 + idx * 10),
+                        dimension=dimension,
+                        endpoint_code=endpoint_code,
+                        score_config=score_config,
+                    )
+                else:
+                    # 类型2：题目有选项文本
+                    question = TestQuestion.objects.create(
+                        test=instance,
+                        question_text=question_data["question_text"],
+                        display_order=question_data.get("display_order", 100 + idx * 10),
+                    )
+                    
+                    options_data = question_data.get("options", [])
+                    for opt_idx, option_data in enumerate(options_data):
+                        option_text = TestOptionText.objects.create(
+                            question=question,
+                            text=option_data["text"],
+                            display_order=100 + opt_idx * 10,
+                        )
+                        
+                        # 类型2：直接选择选项，可以给多个维度加分
+                        dimension_scores = option_data.get("dimension_scores", {})
+                        
+                        # 为每个维度创建TestOption
+                        for endpoint_code, score_value in dimension_scores.items():
+                            # 查找对应的维度
+                            dimension = None
+                            for dim in instance.dimensions.all():
+                                if dim.endpoint_a_code == endpoint_code or dim.endpoint_b_code == endpoint_code:
+                                    dimension = dim
+                                    break
+                            
+                            if dimension:
+                                # 类型2的分值配置格式：{"selected": score_value}
+                                score_config = {"selected": score_value}
+                                TestOption.objects.create(
+                                    option_text=option_text,
+                                    dimension=dimension,
+                                    endpoint_code=endpoint_code,
+                                    score_config=score_config,
+                                )
+        
+        return instance
+
+    class Meta:
+        model = Test
+        fields = [
+            "id",
+            "slug",
+            "name",
+            "description",
+            "test_type",
+            "dimensions",
+            "dimension_ids",
+            "questions",
+            "questions_data",
+            "question_count",
+            "is_active",
+            "display_order",
+            "metadata",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["created_at", "updated_at"]
+
+
+class UserTestResultSerializer(serializers.ModelSerializer):
+    test_name = serializers.CharField(source="test.name", read_only=True)
+    user_email = serializers.CharField(source="user.email", read_only=True)
+
+    class Meta:
+        model = UserTestResult
+        fields = [
+            "id",
+            "user",
+            "user_email",
+            "test",
+            "test_name",
+            "dimension_scores",
+            "answers",
+            "completed_at",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["created_at", "updated_at"]
+
+
+# ==================== 每日小测序列化器 ====================
+
+class DailyQuizOptionSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
+
+    def get_image_url(self, obj):
+        if obj.image:
+            request = self.context.get("request")
+            if request:
+                return request.build_absolute_uri(obj.image.url)
+            return obj.image.url
+        return None
+
+    class Meta:
+        model = DailyQuizOption
+        fields = [
+            "id",
+            "option_type",
+            "text",
+            "image",
+            "image_url",
+            "display_order",
+            "is_active",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["created_at", "updated_at", "image_url"]
+
+
+class DailyQuizOptionInputSerializer(serializers.Serializer):
+    """简化的选项输入序列化器，用于创建每日小测时同时创建选项"""
+    option_type = serializers.ChoiceField(
+        choices=[("text", "文字"), ("image", "图片")],
+        default="text",
+    )
+    text = serializers.CharField(max_length=256, required=False, allow_blank=True)
+    image = serializers.ImageField(required=False, allow_null=True)
+    display_order = serializers.IntegerField(default=100, required=False)
+
+
+class DailyQuizSerializer(serializers.ModelSerializer):
+    options = DailyQuizOptionSerializer(many=True, read_only=True)
+    option_count = serializers.SerializerMethodField()
+    # 用于嵌套创建选项 - 支持JSON字符串或列表
+    options_data = serializers.JSONField(write_only=True, required=False, allow_null=True)
+
+    def get_option_count(self, obj):
+        return obj.options.count()
+
+    def _parse_options_data(self, options_data, request=None):
+        """解析options_data，支持列表或JSON字符串，并处理图片文件"""
+        if options_data is None:
+            return []
+        if isinstance(options_data, str):
+            try:
+                parsed = json.loads(options_data)
+                if isinstance(parsed, list):
+                    options_data = parsed
+                else:
+                    return []
+            except (json.JSONDecodeError, TypeError):
+                return []
+        if not isinstance(options_data, list):
+            return []
+        
+        # 处理图片文件（从request中获取）
+        if request and hasattr(request, 'FILES'):
+            for idx, option_data in enumerate(options_data):
+                if isinstance(option_data, dict) and option_data.get("option_type") == "image":
+                    image_key = f"option_image_{idx}"
+                    if image_key in request.FILES:
+                        option_data["image"] = request.FILES[image_key]
+        
+        return options_data
+
+    def create(self, validated_data):
+        request = self.context.get("request")
+        options_data_raw = validated_data.pop("options_data", None)
+        options_data = self._parse_options_data(options_data_raw, request)
+        
+        quiz = DailyQuiz.objects.create(**validated_data)
+        
+        # 创建选项
+        for opt_idx, option_data in enumerate(options_data):
+            if isinstance(option_data, dict):
+                DailyQuizOption.objects.create(
+                    quiz=quiz,
+                    option_type=option_data.get("option_type", "text"),
+                    text=option_data.get("text", ""),
+                    image=option_data.get("image"),
+                    display_order=option_data.get("display_order", 100 + opt_idx * 10),
+                )
+        
+        return quiz
+
+    def update(self, instance, validated_data):
+        request = self.context.get("request")
+        options_data_raw = validated_data.pop("options_data", None)
+        
+        # 更新基本字段
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        
+        # 如果提供了options_data，更新选项
+        if options_data_raw is not None:
+            options_data = self._parse_options_data(options_data_raw, request)
+            # 删除旧选项
+            instance.options.all().delete()
+            
+            # 创建新选项
+            for opt_idx, option_data in enumerate(options_data):
+                if isinstance(option_data, dict):
+                    DailyQuizOption.objects.create(
+                        quiz=instance,
+                        option_type=option_data.get("option_type", "text"),
+                        text=option_data.get("text", ""),
+                        image=option_data.get("image"),
+                        display_order=option_data.get("display_order", 100 + opt_idx * 10),
+                    )
+        
+        return instance
+
+    class Meta:
+        model = DailyQuiz
+        fields = [
+            "id",
+            "date",
+            "question_text",
+            "options",
+            "options_data",
+            "option_count",
+            "display_order",
+            "is_active",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["created_at", "updated_at"]
 

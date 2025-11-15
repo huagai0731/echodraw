@@ -10,27 +10,47 @@ from rest_framework import generics, viewsets
 from core.models import (
     Achievement,
     AchievementGroup,
+    ConditionalMessage,
     DailyCheckIn,
     DailyHistoryMessage,
+    DailyQuiz,
+    DailyQuizOption,
     EncouragementMessage,
+    HolidayMessage,
     LongTermPlanCopy,
     ShortTermTaskPreset,
+    Test,
     TestAccountProfile,
+    TestDimension,
+    TestOptionText,
+    TestOption,
+    TestQuestion,
+    UserTestResult,
     UploadConditionalMessage,
     UserUpload,
 )
 from core.permissions import IsStaffUser
 from core.serializers import (
     AchievementSerializer,
+    AchievementGroupSerializer,
+    ConditionalMessageSerializer,
     DailyHistoryMessageSerializer,
+    DailyQuizSerializer,
+    DailyQuizOptionSerializer,
     EncouragementMessageSerializer,
+    HolidayMessageSerializer,
     LongTermPlanCopySerializer,
     ShortTermTaskPresetSerializer,
     TestAccountCheckInSerializer,
     TestAccountSerializer,
     TestAccountUploadSerializer,
+    TestDimensionSerializer,
+    TestOptionTextSerializer,
+    TestOptionSerializer,
+    TestQuestionSerializer,
+    TestSerializer,
     UploadConditionalMessageSerializer,
-    AchievementGroupSerializer,
+    UserTestResultSerializer,
 )
 
 
@@ -43,6 +63,18 @@ class DailyHistoryMessageAdminViewSet(viewsets.ModelViewSet):
 class EncouragementMessageAdminViewSet(viewsets.ModelViewSet):
     queryset = EncouragementMessage.objects.all().order_by("-updated_at")
     serializer_class = EncouragementMessageSerializer
+    permission_classes = [IsStaffUser]
+
+
+class ConditionalMessageAdminViewSet(viewsets.ModelViewSet):
+    queryset = ConditionalMessage.objects.all().order_by("priority", "id")
+    serializer_class = ConditionalMessageSerializer
+    permission_classes = [IsStaffUser]
+
+
+class HolidayMessageAdminViewSet(viewsets.ModelViewSet):
+    queryset = HolidayMessage.objects.all().order_by("month", "day")
+    serializer_class = HolidayMessageSerializer
     permission_classes = [IsStaffUser]
 
 
@@ -226,4 +258,75 @@ class TestAccountUploadDetailView(_BaseTestAccountChildView, generics.RetrieveUp
     def get_queryset(self):
         profile = self._get_profile()
         return UserUpload.objects.filter(user=profile.user).order_by("-uploaded_at")
+
+
+# ==================== 测试管理 ====================
+
+class TestDimensionAdminViewSet(viewsets.ModelViewSet):
+    queryset = TestDimension.objects.all().order_by("display_order", "code")
+    serializer_class = TestDimensionSerializer
+    permission_classes = [IsStaffUser]
+
+
+class TestAdminViewSet(viewsets.ModelViewSet):
+    queryset = Test.objects.prefetch_related("dimensions", "questions__options").all().order_by("display_order", "slug")
+    serializer_class = TestSerializer
+    permission_classes = [IsStaffUser]
+
+
+class TestQuestionAdminViewSet(viewsets.ModelViewSet):
+    queryset = TestQuestion.objects.select_related("test").prefetch_related("option_texts__options").all().order_by(
+        "test", "display_order", "id"
+    )
+    serializer_class = TestQuestionSerializer
+    permission_classes = [IsStaffUser]
+
+
+class TestOptionTextAdminViewSet(viewsets.ModelViewSet):
+    queryset = TestOptionText.objects.select_related("question", "question__test").prefetch_related("options").all().order_by(
+        "question", "display_order", "id"
+    )
+    serializer_class = TestOptionTextSerializer
+    permission_classes = [IsStaffUser]
+
+
+class TestOptionAdminViewSet(viewsets.ModelViewSet):
+    queryset = TestOption.objects.select_related("option_text", "option_text__question", "dimension").all().order_by(
+        "option_text", "id"
+    )
+    serializer_class = TestOptionSerializer
+    permission_classes = [IsStaffUser]
+
+
+class UserTestResultAdminViewSet(viewsets.ModelViewSet):
+    queryset = UserTestResult.objects.select_related("user", "test").all().order_by("-completed_at")
+    serializer_class = UserTestResultSerializer
+    permission_classes = [IsStaffUser]
+
+
+# ==================== 每日小测 ====================
+
+class DailyQuizAdminViewSet(viewsets.ModelViewSet):
+    queryset = DailyQuiz.objects.prefetch_related("options").all().order_by("-date")
+    serializer_class = DailyQuizSerializer
+    permission_classes = [IsStaffUser]
+    
+    def get_parser_classes(self):
+        from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
+        return [MultiPartParser, FormParser, JSONParser]
+    
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["request"] = self.request
+        return context
+
+
+class DailyQuizOptionAdminViewSet(viewsets.ModelViewSet):
+    queryset = DailyQuizOption.objects.select_related("quiz").all().order_by("quiz", "display_order", "id")
+    serializer_class = DailyQuizOptionSerializer
+    permission_classes = [IsStaffUser]
+    
+    def get_parser_classes(self):
+        from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
+        return [MultiPartParser, FormParser, JSONParser]
 

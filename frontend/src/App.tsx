@@ -9,6 +9,8 @@ import HomeContentPage from "@/admin/pages/HomeContent";
 import TestAccountsPage from "@/admin/pages/TestAccounts";
 import TestAccountDetailPage from "@/admin/pages/TestAccountDetail";
 import ShortTermTaskPresetsPage from "@/admin/pages/ShortTermTaskPresets";
+import TestManagementPage from "@/admin/pages/TestManagement";
+import DailyQuizPage from "@/admin/pages/DailyQuiz";
 import LongTermCopyPage from "@/admin/pages/LongTermCopy";
 
 function App() {
@@ -23,6 +25,8 @@ function App() {
           <Route path="achievements" element={<AchievementsPage />} />
           <Route path="task-presets" element={<ShortTermTaskPresetsPage />} />
           <Route path="long-term-copy" element={<LongTermCopyPage />} />
+          <Route path="test-management" element={<TestManagementPage />} />
+          <Route path="daily-quiz" element={<DailyQuizPage />} />
           <Route path="test-accounts" element={<TestAccountsPage />} />
           <Route path="test-accounts/:profileId" element={<TestAccountDetailPage />} />
         </Route>

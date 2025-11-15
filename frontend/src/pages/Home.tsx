@@ -18,6 +18,8 @@ import "./HomeScreen.css";
 
 type HomeProps = {
   onOpenUpload?: () => void;
+  onOpenMentalStateAssessment?: () => void;
+  onOpenColorPerceptionTest?: () => void;
 };
 
 type HomeCopy = {
@@ -55,7 +57,7 @@ function normalizeMessages(payload: HomeMessagesResponse | null): HomeCopy | nul
   return hasContent ? normalized : null;
 }
 
-function Home({ onOpenUpload }: HomeProps) {
+function Home({ onOpenUpload, onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomeProps) {
   const [copy, setCopy] = useState<HomeCopy>(FALLBACK_COPY);
   const [loadingCopy, setLoadingCopy] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
@@ -301,21 +303,25 @@ function Home({ onOpenUpload }: HomeProps) {
             <button
               type="button"
               className="home-screen__card home-screen__card--link"
-              onClick={() => onOpenUpload?.()}
+              onClick={() => onOpenColorPerceptionTest?.()}
             >
-              <MaterialIcon name="add_photo_alternate" className="home-screen__card-icon" />
+              <MaterialIcon name="palette" className="home-screen__card-icon" />
               <div className="home-screen__card-text">
-                <h2 className="home-screen__card-title">上传新作品</h2>
-                <p className="home-screen__card-description">+ 添加创作</p>
+                <h2 className="home-screen__card-title">每日色感测试</h2>
+                <p className="home-screen__card-description">测试你的色彩感知</p>
               </div>
             </button>
-            <div className="home-screen__card">
+            <button
+              type="button"
+              className="home-screen__card home-screen__card--link"
+              onClick={() => onOpenMentalStateAssessment?.()}
+            >
               <MaterialIcon name="task_alt" className="home-screen__card-icon" />
               <div className="home-screen__card-text">
-                <h2 className="home-screen__card-title">任务提醒</h2>
-                <p className="home-screen__card-description">今日 3 个目标</p>
+                <h2 className="home-screen__card-title">今日目标</h2>
+                <p className="home-screen__card-description">心境评估</p>
               </div>
-            </div>
+            </button>
           </div>
         </section>
       </main>

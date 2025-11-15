@@ -511,6 +511,45 @@ function Goals() {
     setLocalUploadDates(next);
   }, []);
 
+  // 从日历数据中提取已打卡的日期并更新 localUploadDates
+  const refreshCheckInDates = useCallback(async () => {
+    if (!hasAuthToken()) {
+      return;
+    }
+
+    try {
+      const today = new Date();
+      const currentYear = today.getFullYear();
+      const currentMonth = today.getMonth() + 1;
+      
+      // 获取当前月的打卡记录
+      const data = await fetchGoalsCalendar({ year: currentYear, month: currentMonth });
+      
+      // 从日历数据中提取已打卡的日期
+      const checkInDates = new Set<string>();
+      data.days.forEach((day) => {
+        if (day.status === "check" || day.status === "upload") {
+          checkInDates.add(day.date);
+        }
+      });
+      
+      // 合并本地存储的上传日期和API返回的打卡日期
+      const stored = loadStoredArtworks();
+      stored.forEach((artwork) => {
+        const dateKey = normalizeUploadedDate(artwork.uploadedDate ?? null, artwork.uploadedAt ?? null);
+        if (dateKey) {
+          checkInDates.add(dateKey);
+        }
+      });
+      
+      setLocalUploadDates(checkInDates);
+    } catch (error) {
+      console.warn("[Goals] Failed to refresh check-in dates", error);
+      // 如果API调用失败，至少使用本地存储的数据
+      refreshUploadData();
+    }
+  }, [refreshUploadData]);
+
   useEffect(() => {
     refreshUploadData();
   }, [refreshUploadData]);
@@ -769,12 +808,41 @@ function Goals() {
     );
   }
 
+  const handleGoalComplete = useCallback((dateKey: string) => {
+    // 立即更新本地状态，确保完成状态不会丢失
+    setLocalUploadDates((prev) => {
+      const next = new Set(prev);
+      next.add(dateKey);
+      console.log("[Goals] Updated localUploadDates after goal completion", {
+        dateKey,
+        allDates: Array.from(next)
+      });
+      return next;
+    });
+    // 然后异步刷新打卡记录，确保与服务器同步
+    refreshCheckInDates();
+  }, [refreshCheckInDates]);
+
+  const handleGoalClose = useCallback(() => {
+    // 关闭时也刷新一下，确保状态同步
+    refreshCheckInDates();
+    setActiveGoalDetail(null);
+  }, [refreshCheckInDates]);
+
+  const handleGoalDeleted = useCallback((goalId: number) => {
+    // 从列表中移除已删除的目标
+    setShortTermGoals((prev) => prev.filter((goal) => goal.id !== goalId));
+    console.log("[Goals] Removed deleted goal from list", goalId);
+  }, []);
+
   if (activeGoalDetail) {
     return (
       <ShortTermGoalDetails
         goal={activeGoalDetail}
-        onClose={() => setActiveGoalDetail(null)}
+        onClose={handleGoalClose}
         uploadDates={localUploadDates}
+        onComplete={handleGoalComplete}
+        onDeleted={handleGoalDeleted}
       />
     );
   }
@@ -831,6 +899,8 @@ function Goals() {
               const startDateLabel = formatDateLabel(longTermGoal.startedAt);
               const elapsedDays = longTermGoal.progress.elapsedDays;
               const checkpointSummary = `${longTermGoal.progress.completedCheckpoints}/${longTermGoal.progress.totalCheckpoints}`;
+              const progressLabel = `${spentLabel} / ${targetLabel}`;
+              const showLabelInside = progressPercent >= 50;
               return (
                 <button
                   type="button"
@@ -848,10 +918,17 @@ function Goals() {
                         className="goals-long-term__bar"
                         style={{ width: `${progressPercent}%` }}
                       >
-                        <span className="goals-long-term__bar-label">
-                          {spentLabel} / {targetLabel}
-                        </span>
+                        {showLabelInside ? (
+                          <span className="goals-long-term__bar-label goals-long-term__bar-label--inside">
+                            {progressLabel}
+                          </span>
+                        ) : null}
                       </div>
+                      {showLabelInside ? null : (
+                        <span className="goals-long-term__bar-label goals-long-term__bar-label--outside">
+                          {progressLabel}
+                        </span>
+                      )}
                     </div>
                     <div className="goals-long-term__summary">
                       <p className="goals-long-term__caption">

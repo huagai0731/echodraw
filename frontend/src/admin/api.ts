@@ -25,15 +25,17 @@ export type AdminConditionalMessage = {
   text: string;
   priority: number;
   is_active: boolean;
-  applies_when_no_upload: boolean;
-  min_days_since_last_upload: number | null;
-  max_days_since_last_upload: number | null;
-  min_self_rating: number | null;
-  max_self_rating: number | null;
-  min_duration_minutes: number | null;
-  max_duration_minutes: number | null;
-  match_moods: string[];
-  match_tags: string[];
+  // 打卡条件
+  min_total_checkins: number | null;
+  max_total_checkins: number | null;
+  min_streak_days: number | null;
+  max_streak_days: number | null;
+  // 上传条件
+  min_total_uploads: number | null;
+  max_total_uploads: number | null;
+  // 上一次上传条件
+  match_last_upload_moods: string[];
+  match_last_upload_tags: string[];
   created_at: string;
   updated_at: string;
 };
@@ -460,5 +462,324 @@ export async function updateTestAccountUpload(
 
 export async function deleteTestAccountUpload(profileId: number, uploadId: number) {
   await api.delete(`/admin/test-accounts/${profileId}/uploads/${uploadId}/`);
+}
+
+// ==================== 测试管理 API ====================
+
+export type AdminTestDimension = {
+  id: number;
+  code: string;
+  name: string;
+  endpoint_a_code: string;
+  endpoint_a_name: string;
+  endpoint_b_code: string;
+  endpoint_b_name: string;
+  description: string;
+  display_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AdminTestOption = {
+  id: number;
+  option_text: string;
+  dimension: number;
+  dimension_name: string;
+  endpoint_code: string;
+  score_config: Record<string, number>;
+  display_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AdminTestOptionText = {
+  id: number;
+  text: string;
+  display_order: number;
+  is_active: boolean;
+  options: AdminTestOption[];
+  option_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AdminTestQuestion = {
+  id: number;
+  test: number;
+  question_text: string;
+  dimension?: number | null;
+  dimension_id?: number | null;
+  dimension_name?: string | null;
+  endpoint_code?: string;
+  score_config?: Record<string, number>;
+  display_order: number;
+  is_active: boolean;
+  option_texts: AdminTestOptionText[];
+  option_text_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AdminTest = {
+  id: number;
+  slug: string;
+  name: string;
+  description: string;
+  test_type: "type_1" | "type_2";
+  dimensions: AdminTestDimension[];
+  dimension_ids?: number[];
+  questions: AdminTestQuestion[];
+  question_count: number;
+  is_active: boolean;
+  display_order: number;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AdminUserTestResult = {
+  id: number;
+  user: number;
+  user_email: string;
+  test: number;
+  test_name: string;
+  dimension_scores: Record<string, number>;
+  answers: Record<string, unknown>;
+  completed_at: string;
+  created_at: string;
+  updated_at: string;
+};
+
+// 测试维度 API
+export async function listTestDimensions() {
+  const response = await api.get<AdminTestDimension[]>("/admin/tests/dimensions/");
+  return response.data;
+}
+
+export async function createTestDimension(payload: Partial<AdminTestDimension>) {
+  const response = await api.post<AdminTestDimension>("/admin/tests/dimensions/", payload);
+  return response.data;
+}
+
+export async function updateTestDimension(id: number, payload: Partial<AdminTestDimension>) {
+  const response = await api.patch<AdminTestDimension>(`/admin/tests/dimensions/${id}/`, payload);
+  return response.data;
+}
+
+export async function deleteTestDimension(id: number) {
+  await api.delete(`/admin/tests/dimensions/${id}/`);
+}
+
+// 测试 API
+export async function listTests() {
+  const response = await api.get<AdminTest[]>("/admin/tests/");
+  return response.data;
+}
+
+export async function getTest(id: number) {
+  const response = await api.get<AdminTest>(`/admin/tests/${id}/`);
+  return response.data;
+}
+
+export async function createTest(payload: Partial<AdminTest>) {
+  const response = await api.post<AdminTest>("/admin/tests/", payload);
+  return response.data;
+}
+
+export async function updateTest(id: number, payload: Partial<AdminTest>) {
+  const response = await api.patch<AdminTest>(`/admin/tests/${id}/`, payload);
+  return response.data;
+}
+
+export async function deleteTest(id: number) {
+  await api.delete(`/admin/tests/${id}/`);
+}
+
+// 测试题目 API
+export async function listTestQuestions(testId?: number) {
+  const params = testId ? { test: testId } : {};
+  const response = await api.get<AdminTestQuestion[]>("/admin/tests/questions/", { params });
+  return response.data;
+}
+
+export async function getTestQuestion(id: number) {
+  const response = await api.get<AdminTestQuestion>(`/admin/tests/questions/${id}/`);
+  return response.data;
+}
+
+export async function createTestQuestion(payload: Partial<AdminTestQuestion>) {
+  const response = await api.post<AdminTestQuestion>("/admin/tests/questions/", payload);
+  return response.data;
+}
+
+export async function updateTestQuestion(id: number, payload: Partial<AdminTestQuestion>) {
+  const response = await api.patch<AdminTestQuestion>(`/admin/tests/questions/${id}/`, payload);
+  return response.data;
+}
+
+export async function deleteTestQuestion(id: number) {
+  await api.delete(`/admin/tests/questions/${id}/`);
+}
+
+// 测试选项 API
+export async function listTestOptions(questionId?: number) {
+  const params = questionId ? { question: questionId } : {};
+  const response = await api.get<AdminTestOption[]>("/admin/tests/options/", { params });
+  return response.data;
+}
+
+export async function getTestOption(id: number) {
+  const response = await api.get<AdminTestOption>(`/admin/tests/options/${id}/`);
+  return response.data;
+}
+
+export async function createTestOption(payload: Partial<AdminTestOption>) {
+  const response = await api.post<AdminTestOption>("/admin/tests/options/", payload);
+  return response.data;
+}
+
+export async function updateTestOption(id: number, payload: Partial<AdminTestOption>) {
+  const response = await api.patch<AdminTestOption>(`/admin/tests/options/${id}/`, payload);
+  return response.data;
+}
+
+export async function deleteTestOption(id: number) {
+  await api.delete(`/admin/tests/options/${id}/`);
+}
+
+// 用户测试结果 API
+export async function listUserTestResults(testId?: number, userId?: number) {
+  const params: Record<string, number> = {};
+  if (testId) params.test = testId;
+  if (userId) params.user = userId;
+  const response = await api.get<AdminUserTestResult[]>("/admin/tests/results/", { params });
+  return response.data;
+}
+
+export async function getUserTestResult(id: number) {
+  const response = await api.get<AdminUserTestResult>(`/admin/tests/results/${id}/`);
+  return response.data;
+}
+
+// ==================== 每日小测 API ====================
+
+export type AdminDailyQuizOption = {
+  id: number;
+  option_type: "text" | "image";
+  text: string;
+  image: string | null;
+  image_url: string | null;
+  display_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AdminDailyQuiz = {
+  id: number;
+  date: string;
+  question_text: string;
+  options: AdminDailyQuizOption[];
+  option_count: number;
+  display_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AdminDailyQuizInput = {
+  date: string;
+  question_text: string;
+  display_order?: number;
+  is_active?: boolean;
+  options_data?: Array<{
+    option_type: "text" | "image";
+    text?: string;
+    image?: File | null;
+    display_order?: number;
+  }>;
+};
+
+// 每日小测 API
+export async function listDailyQuizzes() {
+  const response = await api.get<AdminDailyQuiz[]>("/admin/daily-quiz/");
+  return response.data;
+}
+
+export async function getDailyQuiz(id: number) {
+  const response = await api.get<AdminDailyQuiz>(`/admin/daily-quiz/${id}/`);
+  return response.data;
+}
+
+function buildDailyQuizFormData(payload: AdminDailyQuizInput): FormData {
+  const formData = new FormData();
+  
+  formData.append("date", payload.date);
+  formData.append("question_text", payload.question_text);
+  
+  if (payload.display_order !== undefined) {
+    formData.append("display_order", String(payload.display_order));
+  }
+  if (payload.is_active !== undefined) {
+    formData.append("is_active", String(payload.is_active));
+  }
+  
+  // 构建options_data，将图片文件单独处理
+  if (payload.options_data) {
+    const optionsDataForJson: Array<{
+      option_type: string;
+      text?: string;
+      display_order?: number;
+    }> = [];
+    
+    payload.options_data.forEach((option, index) => {
+      const optionData: any = {
+        option_type: option.option_type,
+      };
+      
+      if (option.option_type === "text" && option.text !== undefined) {
+        optionData.text = option.text || "";
+      }
+      
+      if (option.display_order !== undefined) {
+        optionData.display_order = option.display_order;
+      } else {
+        optionData.display_order = 100 + index * 10;
+      }
+      
+      optionsDataForJson.push(optionData);
+      
+      // 如果有图片，单独添加
+      if (option.option_type === "image" && option.image instanceof File) {
+        formData.append(`option_image_${index}`, option.image, option.image.name);
+      }
+    });
+    
+    // 将options_data作为JSON字符串添加
+    formData.append("options_data", JSON.stringify(optionsDataForJson));
+  }
+  
+  return formData;
+}
+
+export async function createDailyQuiz(payload: AdminDailyQuizInput) {
+  const formData = buildDailyQuizFormData(payload);
+  const response = await api.post<AdminDailyQuiz>("/admin/daily-quiz/", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data;
+}
+
+export async function updateDailyQuiz(id: number, payload: AdminDailyQuizInput) {
+  const formData = buildDailyQuizFormData(payload);
+  const response = await api.patch<AdminDailyQuiz>(`/admin/daily-quiz/${id}/`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data;
+}
+
+export async function deleteDailyQuiz(id: number) {
+  await api.delete(`/admin/daily-quiz/${id}/`);
 }
 

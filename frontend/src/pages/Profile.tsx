@@ -18,7 +18,8 @@ import TopNav from "@/components/TopNav";
 
 import "./Profile.css";
 import "./ProfileDashboard.css";
-import MembershipOptions, { type MembershipTier } from "./MembershipOptions";
+import MembershipOptions, { MEMBERSHIP_PLANS, type MembershipTier } from "./MembershipOptions";
+import PaymentConfirmation from "./PaymentConfirmation";
 
 type AuthPayload = {
   token: string;
@@ -35,7 +36,8 @@ type ViewState =
   | "dashboard"
   | "settings"
   | "custom-tags"
-  | "membership-options";
+  | "membership-options"
+  | "payment-confirmation";
 
 const STORAGE_KEY = "echodraw-auth";
 const DEFAULT_SIGNATURE = "一副完整的画，一个崭新落成的次元";
@@ -166,6 +168,7 @@ function Profile({
   });
   const [handledForcedLogoutVersion, setHandledForcedLogoutVersion] = useState(0);
   const [membershipTier, setMembershipTier] = useState<MembershipTier>("basic");
+  const [pendingTier, setPendingTier] = useState<MembershipTier | null>(null);
 
   useEffect(() => {
     if (auth) {
@@ -316,6 +319,7 @@ function Profile({
   const handleLogout = useCallback(() => {
     setAuth(null);
     setView("welcome");
+    setPendingTier(null);
   }, []);
 
   if (view === "login") {
@@ -376,14 +380,38 @@ function Profile({
     );
   }
 
+  if (view === "payment-confirmation" && auth) {
+    const nextPlan =
+      (pendingTier && MEMBERSHIP_PLANS.find((item) => item.id === pendingTier)) ?? null;
+
+    if (!nextPlan) {
+      return null;
+    }
+
+    return (
+      <PaymentConfirmation
+        plan={nextPlan}
+        onBack={() => setView("membership-options")}
+        onConfirm={({ tier }) => {
+          setMembershipTier(tier);
+          setPendingTier(null);
+          setView("dashboard");
+        }}
+      />
+    );
+  }
+
   if (view === "membership-options" && auth) {
     return (
       <MembershipOptions
-        onBack={() => setView("dashboard")}
+        onBack={() => {
+          setPendingTier(null);
+          setView("dashboard");
+        }}
         currentTier={membershipTier}
         onSelectTier={(tier) => {
-          setMembershipTier(tier);
-          setView("dashboard");
+          setPendingTier(tier);
+          setView("payment-confirmation");
         }}
       />
     );

@@ -132,13 +132,13 @@
 
 .gallery-item__title {
   margin: 0;
-  font-size: 1rem;
+  font-size: 0.85rem;
   font-weight: 600;
 }
 
 .gallery-item__date {
-  margin: 0.25rem 0 0;
-  font-size: 0.75rem;
+  margin: 0.2rem 0 0;
+  font-size: 0.65rem;
   color: rgba(239, 234, 231, 0.7);
   letter-spacing: 0.05em;
 }
@@ -150,11 +150,11 @@
 }
 
 .gallery-item__tag {
-  padding: 0.3rem 0.7rem;
+  padding: 0.25rem 0.6rem;
   border-radius: 999px;
   background: rgba(197, 225, 226, 0.18);
   color: #c5e1e2;
-  font-size: 0.7rem;
+  font-size: 0.62rem;
   font-weight: 500;
 }
 

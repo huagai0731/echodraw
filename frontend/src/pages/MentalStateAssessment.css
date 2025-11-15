@@ -1,0 +1,279 @@
+@import url("https://fonts.googleapis.com/css2?family=Spline+Sans:wght@300;400;700&display=swap");
+
+.mental-state-assessment {
+  position: relative;
+  height: 100svh;
+  max-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  background: #221b1b;
+  color: #efeae7;
+  font-family: "Spline Sans", "Manrope", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-weight: 300;
+  overflow-x: hidden;
+  overflow-y: hidden;
+}
+
+.mental-state-assessment__background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  z-index: 0;
+}
+
+.mental-state-assessment__glow {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(90px);
+}
+
+.mental-state-assessment__glow--primary {
+  top: 10%;
+  left: 5%;
+  width: 12rem;
+  height: 12rem;
+  background: rgba(152, 219, 198, 0.1);
+  animation: pulse 4s ease-in-out infinite;
+}
+
+.mental-state-assessment__glow--secondary {
+  bottom: 5%;
+  right: -10%;
+  width: 16rem;
+  height: 16rem;
+  background: rgba(197, 225, 226, 0.05);
+  animation: pulse 8s ease-in-out infinite;
+}
+
+.mental-state-assessment__glow--tertiary {
+  top: 30%;
+  right: 10%;
+  width: 8rem;
+  height: 8rem;
+  border: 1px solid rgba(152, 219, 198, 0.2);
+  filter: blur(4px);
+  transform: rotate(-12deg);
+}
+
+.mental-state-assessment__glow--line {
+  bottom: 20%;
+  left: -5%;
+  width: 10rem;
+  height: 0.25rem;
+  background: rgba(152, 219, 198, 0.2);
+  filter: blur(4px);
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.mental-state-assessment__content {
+  position: relative;
+  z-index: 10;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: calc(var(--top-nav-height, 64px) + clamp(0.5rem, 2vh, 1rem)) clamp(1rem, 4vw, 1.5rem)
+    clamp(1rem, 3vh, 2rem);
+}
+
+.mental-state-assessment__progress-container {
+  width: 100%;
+  padding: clamp(0.25rem, 1vh, 0.5rem) clamp(0.75rem, 3vw, 1.5rem) clamp(0.5rem, 1.5vh, 1rem);
+  flex-shrink: 0;
+}
+
+.mental-state-assessment__progress-bar {
+  display: flex;
+  height: 1rem;
+  width: 100%;
+  border-radius: 9999px;
+  background: #221b1b;
+  gap: 0.5rem;
+  padding: 0.25rem;
+  border: 1px solid rgba(74, 63, 74, 0.5);
+}
+
+.mental-state-assessment__progress-segment {
+  flex: 1;
+  height: 100%;
+  border-radius: 9999px;
+  background: #4a3f4a;
+  transition: background-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.mental-state-assessment__progress-segment--active {
+  background: #98dbc6;
+  box-shadow: 0 0 10px 0px rgba(152, 219, 198, 0.7);
+}
+
+.mental-state-assessment__main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: clamp(0.75rem, 2vh, 1.5rem);
+  gap: clamp(1.5rem, 4vh, 3rem);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.mental-state-assessment__question {
+  font-size: clamp(1rem, 4vw, 1.25rem);
+  font-weight: 300;
+  line-height: 1.6;
+  color: #efeae7;
+  padding: clamp(0.5rem, 2vh, 1.5rem) 0;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+
+.mental-state-assessment__radio-group {
+  position: relative;
+  width: 100%;
+  max-width: 24rem;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: clamp(0.5rem, 2vh, 1rem) 0.5rem clamp(2.5rem, 5vh, 3rem) 0.5rem;
+  gap: clamp(0.75rem, 3vw, 2rem);
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+  margin: 0 auto;
+}
+
+.mental-state-assessment__radio-label {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.mental-state-assessment__label-text {
+  font-size: clamp(0.625rem, 2vw, 0.75rem);
+  font-weight: 300;
+  color: rgba(239, 234, 231, 0.6);
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  text-align: center;
+  line-height: 1.2;
+  width: 100%;
+  height: 1.2em;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mental-state-assessment__label-text--bottom {
+  /* 标签文字统一底部对齐 */
+}
+
+.mental-state-assessment__radio-input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  outline: none;
+  pointer-events: none;
+}
+
+.mental-state-assessment__radio-circle-outer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+  margin-bottom: 0.75rem;
+}
+
+.mental-state-assessment__radio-circle-inner {
+  border-radius: 9999px;
+  background: transparent;
+  transform: scale(0);
+  transition: all 0.3s ease;
+}
+
+.mental-state-assessment__radio-label--selected .mental-state-assessment__radio-circle-outer {
+  /* 样式通过内联样式设置，这里作为后备 */
+}
+
+.mental-state-assessment__radio-label--selected .mental-state-assessment__radio-circle-inner {
+  transform: scale(1);
+}
+
+.mental-state-assessment__actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: clamp(1rem, 3vh, 2rem) clamp(0.75rem, 3vw, 1.5rem);
+  margin-top: auto;
+  flex-shrink: 0;
+}
+
+.mental-state-assessment__button {
+  flex: 1;
+  height: 3.5rem;
+  text-align: center;
+  border-radius: 9999px;
+  font-size: 1rem;
+  font-weight: 400;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+}
+
+.mental-state-assessment__button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mental-state-assessment__button--secondary {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.mental-state-assessment__button--secondary:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.4);
+  color: #ffffff;
+}
+
+.mental-state-assessment__button--primary {
+  background: #98dbc6;
+  color: #221b1b;
+}
+
+.mental-state-assessment__button--primary:hover:not(:disabled) {
+  background: #87d7d8;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(152, 219, 198, 0.3);
+}
+

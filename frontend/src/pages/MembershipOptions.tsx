@@ -12,11 +12,12 @@ type MembershipOptionsProps = {
   onSelectTier: (tier: MembershipTier) => void;
 };
 
-type MembershipPlan = {
+export type MembershipPlan = {
   id: Exclude<MembershipTier, "pending">;
   name: string;
-  price: string;
+  amount: number;
   cycle: string;
+  billingCycleInMonths: number;
   tagline: string;
   description: string;
   features: { label: string; highlight?: boolean }[];
@@ -24,12 +25,13 @@ type MembershipPlan = {
   disabled?: boolean;
 };
 
-const MEMBERSHIP_PLANS: MembershipPlan[] = [
+export const MEMBERSHIP_PLANS: MembershipPlan[] = [
   {
     id: "basic",
     name: "基础版",
-    price: "¥0",
+    amount: 2.9,
     cycle: "/月",
+    billingCycleInMonths: 1,
     tagline: "体验入门功能",
     description: "适合偶尔创作的你，解锁每日灵感与基础统计。",
     features: [
@@ -42,8 +44,9 @@ const MEMBERSHIP_PLANS: MembershipPlan[] = [
   {
     id: "premium",
     name: "高级版",
-    price: "¥39",
+    amount: 6.9,
     cycle: "/月",
+    billingCycleInMonths: 1,
     tagline: "全面进阶伙伴",
     description: "专为高频创作者设计，提供深度分析与动态模板。",
     badge: "热门",
@@ -57,8 +60,9 @@ const MEMBERSHIP_PLANS: MembershipPlan[] = [
   {
     id: "premiumQuarter",
     name: "季度高级版",
-    price: "¥99",
+    amount: 17.7,
     cycle: "/季度",
+    billingCycleInMonths: 3,
     tagline: "季度卓越体验",
     description: "锁定整季灵感支持，享受专属线下活动名额与季度进阶课程优惠。",
     badge: "季选",
@@ -71,7 +75,19 @@ const MEMBERSHIP_PLANS: MembershipPlan[] = [
   },
 ];
 
+function formatPrice(amount: number): string {
+  const hasFraction = Math.round(amount * 10) % 10 !== 0;
+  return hasFraction ? amount.toFixed(1) : amount.toFixed(0);
+}
+
 function MembershipOptions({ onBack, currentTier, onSelectTier }: MembershipOptionsProps) {
+  const handleSelectTier = (tier: MembershipTier) => {
+    if (tier === currentTier) {
+      return;
+    }
+    onSelectTier(tier);
+  };
+
   return (
     <div className="membership-options">
       <div className="membership-options__bg">
@@ -115,14 +131,14 @@ function MembershipOptions({ onBack, currentTier, onSelectTier }: MembershipOpti
                   `membership-card--${plan.id}`,
                   currentTier === plan.id && "membership-card--active",
                 )}
-                onClick={() => onSelectTier(plan.id)}
+                onClick={() => handleSelectTier(plan.id)}
               >
                 {plan.badge ? <span className="membership-card__badge">{plan.badge}</span> : null}
                 <header className="membership-card__header">
                   <h2>{plan.name}</h2>
                   <p className="membership-card__tagline">{plan.tagline}</p>
                   <div className="membership-card__price">
-                    <strong>{plan.price}</strong>
+                    <strong>¥{formatPrice(plan.amount)}</strong>
                     <span>{plan.cycle}</span>
                   </div>
                   <p className="membership-card__description">{plan.description}</p>
@@ -146,10 +162,14 @@ function MembershipOptions({ onBack, currentTier, onSelectTier }: MembershipOpti
                 <footer className="membership-card__footer">
                   <button
                     type="button"
-                      className={clsx("membership-card__cta", currentTier === plan.id && "membership-card__cta--active")}
-                      onClick={() => onSelectTier(plan.id)}
+                    className={clsx(
+                      "membership-card__cta",
+                      currentTier === plan.id && "membership-card__cta--active",
+                    )}
+                    onClick={() => handleSelectTier(plan.id)}
+                    disabled={currentTier === plan.id}
                   >
-                      {currentTier === plan.id ? "当前版本" : "立即开通"}
+                    {currentTier === plan.id ? "当前版本" : "立即开通"}
                   </button>
                 </footer>
               </article>
@@ -180,5 +200,3 @@ function MembershipOptions({ onBack, currentTier, onSelectTier }: MembershipOpti
 }
 
 export default MembershipOptions;
-
-

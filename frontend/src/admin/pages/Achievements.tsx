@@ -19,7 +19,7 @@ const DEFAULT_FORM: Partial<AdminAchievement> & {
   slug: "",
   name: "",
   description: "",
-  category: "",
+  category: "彩蛋",
   icon: "",
   display_order: 100,
   is_active: true,
@@ -39,7 +39,7 @@ function AchievementsPage() {
     const load = async () => {
       try {
         setLoading(true);
-        const data = await listAchievements();
+        const data = await listAchievements({ standalone: true });
         setAchievements(data);
       } catch (err) {
         handleError(err, "加载成就配置失败，请稍后重试。");
@@ -104,6 +104,8 @@ function AchievementsPage() {
         icon: rowForm.icon?.trim() ?? "",
         is_active: rowForm.is_active ?? true,
         display_order: Number(rowForm.display_order) || 100,
+        level: rowForm.level ?? 1,
+        group: null,
         condition,
         metadata,
       };
@@ -117,10 +119,10 @@ function AchievementsPage() {
       }
 
       if (editingId === "new") {
-        const created = await createAchievement(payload);
+        const created = await createAchievement({ ...payload, group: null, level: 1 });
         setAchievements((prev) => [created, ...prev]);
       } else {
-        const updated = await updateAchievement(editingId, payload);
+        const updated = await updateAchievement(editingId, { ...payload, group: null, level: 1 });
         setAchievements((prev) => prev.map((item) => (item.id === editingId ? updated : item)));
       }
 
@@ -156,8 +158,8 @@ function AchievementsPage() {
     <div className="admin-achievements">
       <header className="admin-achievements__header">
         <div>
-          <h2>成就系统</h2>
-          <p>配置 Echo 平台的成就体系，提升用户激励与沉浸感。</p>
+          <h2>彩蛋成就</h2>
+          <p>维护独立彩蛋成就（不属于任何递增成就组）。</p>
         </div>
         <button
           type="button"
@@ -173,7 +175,7 @@ function AchievementsPage() {
       {error ? <p className="admin-achievements__error">{error}</p> : null}
 
       <section className="admin-achievements__list">
-        <h3>成就列表</h3>
+          <h3>彩蛋成就列表</h3>
         {loading ? (
           <div className="admin-achievements__loading">
             <div className="admin-achievements__spinner" />

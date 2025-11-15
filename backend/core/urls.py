@@ -5,8 +5,12 @@ from core import views
 from core.admin_views import (
     AchievementAdminViewSet,
     AchievementGroupAdminViewSet,
+    ConditionalMessageAdminViewSet,
     DailyHistoryMessageAdminViewSet,
+    DailyQuizAdminViewSet,
+    DailyQuizOptionAdminViewSet,
     EncouragementMessageAdminViewSet,
+    HolidayMessageAdminViewSet,
     LongTermPlanCopyAdminViewSet,
     ShortTermTaskPresetAdminViewSet,
     TestAccountCheckInDetailView,
@@ -14,7 +18,13 @@ from core.admin_views import (
     TestAccountUploadDetailView,
     TestAccountUploadListCreateView,
     TestAccountViewSet,
+    TestAdminViewSet,
+    TestDimensionAdminViewSet,
+    TestOptionTextAdminViewSet,
+    TestOptionAdminViewSet,
+    TestQuestionAdminViewSet,
     UploadConditionalMessageAdminViewSet,
+    UserTestResultAdminViewSet,
 )
 
 router = DefaultRouter()
@@ -30,8 +40,18 @@ router.register(
 )
 router.register(
     r"admin/home/conditionals",
-    UploadConditionalMessageAdminViewSet,
+    ConditionalMessageAdminViewSet,
     basename="admin-home-conditionals",
+)
+router.register(
+    r"admin/home/holidays",
+    HolidayMessageAdminViewSet,
+    basename="admin-home-holidays",
+)
+router.register(
+    r"admin/home/upload-conditionals",
+    UploadConditionalMessageAdminViewSet,
+    basename="admin-home-upload-conditionals",
 )
 router.register(
     r"admin/achievements",
@@ -57,6 +77,46 @@ router.register(
     r"admin/test-accounts",
     TestAccountViewSet,
     basename="admin-test-accounts",
+)
+router.register(
+    r"admin/tests/dimensions",
+    TestDimensionAdminViewSet,
+    basename="admin-test-dimensions",
+)
+router.register(
+    r"admin/tests",
+    TestAdminViewSet,
+    basename="admin-tests",
+)
+router.register(
+    r"admin/tests/questions",
+    TestQuestionAdminViewSet,
+    basename="admin-test-questions",
+)
+router.register(
+    r"admin/tests/option-texts",
+    TestOptionTextAdminViewSet,
+    basename="admin-test-option-texts",
+)
+router.register(
+    r"admin/tests/options",
+    TestOptionAdminViewSet,
+    basename="admin-test-options",
+)
+router.register(
+    r"admin/tests/results",
+    UserTestResultAdminViewSet,
+    basename="admin-test-results",
+)
+router.register(
+    r"admin/daily-quiz",
+    DailyQuizAdminViewSet,
+    basename="admin-daily-quiz",
+)
+router.register(
+    r"admin/daily-quiz/options",
+    DailyQuizOptionAdminViewSet,
+    basename="admin-daily-quiz-options",
 )
 
 urlpatterns = [
@@ -86,6 +146,11 @@ urlpatterns = [
         "goals/short-term/",
         views.ShortTermGoalListCreateView.as_view(),
         name="goals-short-term",
+    ),
+    path(
+        "goals/short-term/<int:pk>/",
+        views.ShortTermGoalDetailView.as_view(),
+        name="goals-short-term-detail",
     ),
     path(
         "goals/short-term/my-presets/",

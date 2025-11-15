@@ -675,14 +675,6 @@
   color: #98dbc6;
 }
 
-.achievements-locked__note {
-  display: block;
-  margin-top: 0.4rem;
-  font-size: 0.7rem;
-  letter-spacing: 0.1em;
-  color: rgba(239, 234, 231, 0.45);
-}
-
 .achievement-modal__levels {
   margin-top: 1.5rem;
   display: flex;

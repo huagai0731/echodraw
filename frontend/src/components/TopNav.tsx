@@ -22,6 +22,7 @@ type TopNavProps = {
   children?: ReactNode;
   className?: string;
   leadingSlot?: ReactNode;
+  trailingSlot?: ReactNode;
 };
 
 function TopNav({
@@ -32,6 +33,7 @@ function TopNav({
   children,
   className,
   leadingSlot,
+  trailingSlot,
 }: TopNavProps) {
   return (
     <header className={clsx("top-nav", className)}>
@@ -69,7 +71,9 @@ function TopNav({
       </div>
 
       <div className="top-nav__actions">
-        {trailingActions.length > 0 ? (
+        {trailingSlot ? (
+          trailingSlot
+        ) : trailingActions.length > 0 ? (
           trailingActions.map((action) => (
             <button
               key={action.label}

@@ -4,9 +4,14 @@ import BottomNav, { type NavId } from "@/components/BottomNav";
 import Gallery, { INITIAL_ARTWORKS, type Artwork } from "@/pages/Gallery";
 import Goals from "@/pages/Goals";
 import Home from "@/pages/Home";
+import MentalStateAssessment from "@/pages/MentalStateAssessment";
 import Reports from "@/pages/Reports";
 import Profile from "@/pages/Profile";
 import ProfileAchievements from "@/pages/ProfileAchievements";
+import TestList from "@/pages/TestList";
+import PointsRecharge from "@/pages/PointsRecharge";
+import ColorPerceptionTest from "@/pages/ColorPerceptionTest";
+import ColorTestResults from "@/pages/ColorTestResults";
 import type { AchievementGroupDefinition, AchievementLevelDefinition } from "@/pages/achievementsData";
 import Upload, { type UploadResult } from "@/pages/Upload";
 import {
@@ -302,7 +307,7 @@ function formatLevelSubtitle(level: AchievementLevelDefinition): string {
 }
 
 
-type PageId = NavId | "upload" | "profile-achievements";
+type PageId = NavId | "upload" | "profile-achievements" | "test-list" | "mental-state-assessment" | "points-recharge" | "color-perception-test" | "color-test-results";
 
 type PinnedAchievement = {
   id: string;
@@ -329,6 +334,15 @@ function UserApp() {
   const [achievementsLoading, setAchievementsLoading] = useState(false);
   const [forcedLogoutVersion, setForcedLogoutVersion] = useState(0);
   const [forcedLogoutVisible, setForcedLogoutVisible] = useState(false);
+  const [colorTestResultData, setColorTestResultData] = useState<{
+    selectedOptionId: string;
+    mainImageUrl: string;
+    options: Array<{
+      id: string;
+      imageUrl: string;
+      percentage: number;
+    }>;
+  } | null>(null);
 
   const combinedArtworks = useMemo(
     () => [...userArtworks, ...INITIAL_ARTWORKS],
@@ -405,14 +419,6 @@ function UserApp() {
   }, [mapUploadRecordToArtwork]);
 
   const refreshUserAchievements = useCallback(async () => {
-    if (!hasAuthToken()) {
-      setAchievementGroups([]);
-      setStandaloneAchievements([]);
-      setAchievementSummary(null);
-      setAchievementsLoading(false);
-      return;
-    }
-
     setAchievementsLoading(true);
     try {
       const response = await fetchUserAchievements();
@@ -442,9 +448,9 @@ function UserApp() {
     if (!hasAuthToken()) {
       const stored = loadStoredArtworks();
       setUserArtworks(stored);
-      setAchievementGroups([]);
-      setStandaloneAchievements([]);
-      setAchievementSummary(null);
+      refreshUserAchievements().catch(() => {
+        /* 已在函数内部处理 */
+      });
       return;
     }
 
@@ -580,6 +586,65 @@ function UserApp() {
   const handleOpenProfileAchievements = useCallback(() => {
     setActiveNav("profile");
     setActivePage("profile-achievements");
+  }, []);
+
+  const handleOpenTestList = useCallback(() => {
+    setActivePage("test-list");
+  }, []);
+
+  const handleCloseTestList = useCallback(() => {
+    setActivePage(activeNav);
+  }, [activeNav]);
+
+  const handleOpenMentalStateAssessment = useCallback(() => {
+    setActivePage("mental-state-assessment");
+  }, []);
+
+  const handleCloseMentalStateAssessment = useCallback(() => {
+    setActivePage("test-list");
+  }, []);
+
+  const handleOpenPointsRecharge = useCallback(() => {
+    setActivePage("points-recharge");
+  }, []);
+
+  const handleClosePointsRecharge = useCallback(() => {
+    setActivePage("test-list");
+  }, []);
+
+  const handleOpenColorPerceptionTest = useCallback(() => {
+    setActivePage("color-perception-test");
+  }, []);
+
+  const handleCloseColorPerceptionTest = useCallback(() => {
+    setActivePage(activeNav);
+  }, [activeNav]);
+
+  const handleColorTestComplete = useCallback(
+    (result: {
+      selectedOptionId: string;
+      mainImageUrl: string;
+      options: Array<{
+        id: string;
+        imageUrl: string;
+        percentage: number;
+      }>;
+    }) => {
+      setColorTestResultData(result);
+      setActivePage("color-test-results");
+    },
+    [],
+  );
+
+  const handleCloseColorTestResults = useCallback(() => {
+    setActivePage(activeNav);
+    setColorTestResultData(null);
+  }, [activeNav]);
+
+  const handleColorTestNext = useCallback(() => {
+    // 下一题逻辑：返回测试页面
+    setActivePage("color-perception-test");
+    setColorTestResultData(null);
   }, []);
 
   const handleTogglePinnedAchievement = useCallback(
@@ -804,8 +869,30 @@ function UserApp() {
           summary={achievementSummary}
           loading={achievementsLoading}
         />
+      ) : activePage === "test-list" ? (
+        <TestList
+          onBack={handleCloseTestList}
+          onSelectTest={handleOpenMentalStateAssessment}
+          onOpenPointsRecharge={handleOpenPointsRecharge}
+        />
+      ) : activePage === "points-recharge" ? (
+        <PointsRecharge onBack={handleClosePointsRecharge} />
+      ) : activePage === "mental-state-assessment" ? (
+        <MentalStateAssessment onBack={handleCloseMentalStateAssessment} />
+      ) : activePage === "color-perception-test" ? (
+        <ColorPerceptionTest onBack={handleCloseColorPerceptionTest} onComplete={handleColorTestComplete} />
+      ) : activePage === "color-test-results" ? (
+        <ColorTestResults
+          onBack={handleCloseColorTestResults}
+          onNext={handleColorTestNext}
+          testData={colorTestResultData || undefined}
+        />
       ) : activeNav === "home" ? (
-        <Home onOpenUpload={handleOpenUpload} />
+        <Home
+          onOpenUpload={handleOpenUpload}
+          onOpenMentalStateAssessment={handleOpenTestList}
+          onOpenColorPerceptionTest={handleOpenColorPerceptionTest}
+        />
       ) : activeNav === "gallery" ? (
         <Gallery
           artworks={combinedArtworks}

@@ -26,10 +26,12 @@ from rest_framework.views import APIView
 from core.models import (
     Achievement,
     AuthToken,
+    ConditionalMessage,
     DailyHistoryMessage,
     DailyCheckIn,
     EmailVerification,
     EncouragementMessage,
+    HolidayMessage,
     LongTermGoal,
     LongTermPlanCopy,
     ShortTermGoal,
@@ -481,7 +483,7 @@ def _build_achievement_payload(achievement: Achievement, *, unlocked_at=None) ->
 
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def profile_achievements(request):
     """
     返回当前用户的成就概览。
@@ -533,12 +535,22 @@ def profile_achievements(request):
         else:
             standalone.append(payload)
 
-    groups = list(group_map.values())
+    groups: list[dict] = []
+    for group_payload in group_map.values():
+        levels = group_payload.get("levels") or []
+        if len(levels) <= 1:
+            if levels:
+                standalone.append(levels[0])
+            continue
+        group_payload["summary"]["level_count"] = len(levels)
+        groups.append(group_payload)
 
     summary = {
         "group_count": len(groups),
         "standalone_count": len(standalone),
-        "achievement_count": len(achievements),
+        "achievement_count": len(standalone) + sum(
+            group["summary"]["level_count"] for group in groups
+        ),
     }
 
     return Response({"summary": summary, "groups": groups, "standalone": standalone})
@@ -553,7 +565,27 @@ class UserUploadListCreateView(generics.ListCreateAPIView):
         return UserUpload.objects.filter(user=self.request.user).order_by("-uploaded_at")
 
     def perform_create(self, serializer: UserUploadSerializer):
-        serializer.save(user=self.request.user)
+        upload = serializer.save(user=self.request.user)
+
+        # 确保 uploaded_at 有时区信息，如果没有则使用当前时间
+        uploaded_at = upload.uploaded_at
+        if uploaded_at is None:
+            uploaded_at = timezone.now()
+        # 确保是时区感知的 datetime（如果已经是 timezone-aware，timezone.localtime 可以直接处理）
+        elif timezone.is_naive(uploaded_at):
+            uploaded_at = timezone.make_aware(uploaded_at)
+
+        localized = timezone.localtime(uploaded_at)
+        checkin_date = localized.date()
+
+        checkin, created = DailyCheckIn.objects.get_or_create(
+            user=self.request.user,
+            date=checkin_date,
+            defaults={"source": "upload"},
+        )
+        if not created and not checkin.source:
+            checkin.source = "upload"
+            checkin.save(update_fields=["source"])
 
 
 class UserUploadDetailView(generics.RetrieveDestroyAPIView):
@@ -566,10 +598,35 @@ class UserUploadDetailView(generics.RetrieveDestroyAPIView):
 
 
 class UserUploadImageView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
+
+    @staticmethod
+    def _resolve_authenticated_user(request):
+        user = getattr(request, "user", None)
+        if getattr(user, "is_authenticated", False):
+            return user
+
+        token_value = request.query_params.get("token", "").strip()
+        if not token_value:
+            return None
+
+        try:
+            token = AuthToken.objects.select_related("user").get(key=token_value)
+        except AuthToken.DoesNotExist:
+            return None
+
+        AuthToken.objects.filter(pk=token.pk).update(last_used_at=timezone.now())
+        return token.user
 
     def get(self, request, pk: int):
-        upload = get_object_or_404(UserUpload, pk=pk, user=request.user)
+        user = self._resolve_authenticated_user(request)
+        if user is None:
+            return Response(
+                {"detail": "未登录或令牌无效"},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        upload = get_object_or_404(UserUpload, pk=pk, user=user)
         if not upload.image:
             raise Http404("图片不存在")
 
@@ -583,13 +640,20 @@ class UserUploadImageView(APIView):
         filename = os.path.basename(upload.image.name)
         response["Content-Disposition"] = f'inline; filename="{filename}"'
         response["Cache-Control"] = "public, max-age=86400"
+        response["Cross-Origin-Resource-Policy"] = "cross-origin"
+
         origin = request.headers.get("Origin")
+        auth_token = request.query_params.get("token")
         if origin:
-            response["Access-Control-Allow-Origin"] = origin
+            if auth_token:
+                response["Access-Control-Allow-Origin"] = origin
+                response["Access-Control-Allow-Credentials"] = "true"
+            else:
+                response["Access-Control-Allow-Origin"] = "*"
+            response["Vary"] = "Origin"
         else:
-            response["Access-Control-Allow-Origin"] = request.build_absolute_uri("/").rstrip("/")
-        response["Vary"] = "Origin"
-        response["Cross-Origin-Resource-Policy"] = "same-site"
+            response["Access-Control-Allow-Origin"] = "*"
+
         return response
 
 
@@ -604,6 +668,14 @@ class ShortTermGoalListCreateView(generics.ListCreateAPIView):
         context = super().get_serializer_context()
         context["request"] = self.request
         return context
+
+
+class ShortTermGoalDetailView(generics.RetrieveDestroyAPIView):
+    serializer_class = ShortTermGoalSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return ShortTermGoal.objects.filter(user=self.request.user)
 
 
 class UserTaskPresetListCreateView(generics.ListCreateAPIView):
@@ -634,39 +706,55 @@ class UserTaskPresetDetailView(generics.RetrieveUpdateDestroyAPIView):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def homepage_messages(request):
+    """
+    返回首页三大块文案：
+    1. 通用文案 - 随机展示一句（当不是特殊打卡日期时显示）
+    2. 条件文案 - 当用户达成某些条件时显示（如打卡满7天）
+    3. 节日文案 - 特定日期显示特定文案
+    """
     user = request.user
-    now = timezone.now()
     today = timezone.localdate()
 
-    history_entry = (
-        DailyHistoryMessage.objects.filter(date=today, is_active=True)
-        .order_by("-updated_at")
-        .first()
+    # 第二块：条件文案（基于用户条件，优先检查）
+    check_in_stats = _get_check_in_stats(user)
+    total_uploads = UserUpload.objects.filter(user=user).count()
+    last_upload = UserUpload.objects.filter(user=user).order_by("-uploaded_at").first()
+    conditional_text = _resolve_conditional_message(
+        user,
+        check_in_stats=check_in_stats,
+        total_uploads=total_uploads,
+        last_upload=last_upload,
     )
-    history_payload = {
-        "headline": history_entry.headline if history_entry else None,
-        "text": history_entry.text if history_entry else None,
-    }
 
-    last_upload = (
-        UserUpload.objects.filter(user=user).order_by("-uploaded_at").first()
-    )
-    conditional_text = _resolve_conditional_message(last_upload, now=now)
-    encouragement_text = _resolve_encouragement_message()
-    check_in_payload = _get_check_in_stats(user)
+    # 第一块：通用文案（随机展示，仅在不是特殊打卡日期时显示）
+    # 如果匹配到条件文案（特殊打卡日期），则不显示通用文案
+    general_text = None
+    if not conditional_text:
+        general_text = _resolve_general_message()
+
+    # 第三块：节日文案和历史文案（基于日期）
+    holiday_message = HolidayMessage.get_for_date(today)
+    holiday_payload = None
+    if holiday_message:
+        holiday_payload = {
+            "headline": holiday_message.headline or None,
+            "text": holiday_message.text,
+        }
+    
+    # 历史文案（历史上的今天）
+    history_message = DailyHistoryMessage.get_for_date(today)
+    history_payload = None
+    if history_message:
+        history_payload = {
+            "headline": history_message.headline or None,
+            "text": history_message.text,
+        }
 
     response_payload = {
-        "history": history_payload,
-        "conditional": conditional_text,
-        "encouragement": encouragement_text,
-        "last_upload": {
-            "uploaded_at": last_upload.uploaded_at if last_upload else None,
-            "self_rating": last_upload.self_rating if last_upload else None,
-            "mood_label": last_upload.mood_label if last_upload else None,
-            "duration_minutes": last_upload.duration_minutes if last_upload else None,
-            "tags": last_upload.tags if last_upload else None,
-        },
-        "check_in": check_in_payload,
+        "general": general_text,  # 通用文案（当不是特殊打卡日期时）
+        "conditional": conditional_text,  # 条件文案（特殊打卡日期等）
+        "holiday": holiday_payload,  # 节日文案
+        "history": history_payload,  # 历史文案（历史上的今天）
     }
     return Response(response_payload)
 
@@ -843,16 +931,6 @@ def goals_calendar(request):
     )
 
 
-def _resolve_conditional_message(last_upload: UserUpload | None, *, now):
-    queryset = UploadConditionalMessage.objects.filter(is_active=True).order_by(
-        "priority", "id"
-    )
-
-    for message in queryset:
-        if message.matches_upload(last_upload, reference_time=now):
-            return message.text
-
-    return None
 
 
 @api_view(["GET", "POST"])
@@ -866,11 +944,16 @@ def check_in(request):
         source = (request.data.get("source") or "").strip() or "app"
 
         if date_str:
-            try:
-                target_date = date.fromisoformat(date_str)
-            except ValueError:
+            if not isinstance(date_str, str):
                 return Response(
-                    {"detail": "日期格式不正确，应为 YYYY-MM-DD。"},
+                    {"detail": "日期参数必须是字符串格式。"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            try:
+                target_date = date.fromisoformat(date_str.strip())
+            except (ValueError, AttributeError) as e:
+                return Response(
+                    {"detail": f"日期格式不正确，应为 YYYY-MM-DD。收到: {date_str!r}"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
         else:
@@ -878,7 +961,7 @@ def check_in(request):
 
         if target_date > today:
             return Response(
-                {"detail": "不能为未来日期打卡。"},
+                {"detail": f"不能为未来日期打卡。目标日期: {target_date.isoformat()}, 今天: {today.isoformat()}"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -931,7 +1014,8 @@ def _get_check_in_stats(user):
     }
 
 
-def _resolve_encouragement_message():
+def _resolve_general_message():
+    """解析通用文案：随机展示一句。"""
     messages = list(EncouragementMessage.objects.filter(is_active=True))
     if not messages:
         return None
@@ -939,6 +1023,44 @@ def _resolve_encouragement_message():
     weights = [max(message.weight, 1) for message in messages]
     selected = random.choices(messages, weights=weights, k=1)[0]
     return selected.text
+
+
+def _resolve_conditional_message(
+    user, *, check_in_stats=None, total_uploads=None, last_upload=None
+):
+    """
+    解析条件文案：当用户达成某些条件时显示特定语句。
+    例如：打卡满7天、连续打卡30天、上传达到10张、上一次上传的心情等。
+    """
+    queryset = ConditionalMessage.objects.filter(is_active=True).order_by(
+        "priority", "id"
+    )
+
+    for message in queryset:
+        if message.matches_user(
+            user,
+            check_in_stats=check_in_stats,
+            total_uploads=total_uploads,
+            last_upload=last_upload,
+        ):
+            return message.text
+
+    return None
+
+
+def _resolve_upload_conditional_message(last_upload: UserUpload | None, *, now):
+    """
+    解析基于上传记录的条件文案（保留原有功能，用于其他场景）。
+    """
+    queryset = UploadConditionalMessage.objects.filter(is_active=True).order_by(
+        "priority", "id"
+    )
+
+    for message in queryset:
+        if message.matches_upload(last_upload, reference_time=now):
+            return message.text
+
+    return None
 
 
 class LongTermGoalView(APIView):

@@ -180,6 +180,25 @@
   letter-spacing: 0.02em;
 }
 
+.goals-long-term__bar-label--inside {
+  display: inline-flex;
+  align-items: center;
+}
+
+.goals-long-term__bar-label--outside {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 0.75rem;
+  color: rgba(239, 234, 231, 0.92);
+  text-shadow:
+    0 0 6px rgba(0, 0, 0, 0.4),
+    0 0 18px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+
 .goals-long-term__summary {
   display: flex;
   align-items: center;

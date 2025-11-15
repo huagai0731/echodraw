@@ -43,16 +43,18 @@ const CONDITIONAL_EMPTY = {
   name: "",
   text: "",
   priority: "100",
-  applies_when_no_upload: false,
   is_active: true,
-  min_days_since_last_upload: "",
-  max_days_since_last_upload: "",
-  min_self_rating: "",
-  max_self_rating: "",
-  min_duration_minutes: "",
-  max_duration_minutes: "",
-  match_moods: "",
-  match_tags: "",
+  // 打卡条件
+  min_total_checkins: "",
+  max_total_checkins: "",
+  min_streak_days: "",
+  max_streak_days: "",
+  // 上传条件
+  min_total_uploads: "",
+  max_total_uploads: "",
+  // 上一次上传条件
+  match_last_upload_moods: "",
+  match_last_upload_tags: "",
 };
 
 function HomeContentPage() {
@@ -212,16 +214,18 @@ function HomeContentPage() {
         name: conditionalDraft.name.trim(),
         text: conditionalDraft.text.trim(),
         priority: Number(conditionalDraft.priority) || 100,
-        applies_when_no_upload: conditionalDraft.applies_when_no_upload,
         is_active: conditionalDraft.is_active,
-        min_days_since_last_upload: parseNullableNumber(conditionalDraft.min_days_since_last_upload),
-        max_days_since_last_upload: parseNullableNumber(conditionalDraft.max_days_since_last_upload),
-        min_self_rating: parseNullableNumber(conditionalDraft.min_self_rating),
-        max_self_rating: parseNullableNumber(conditionalDraft.max_self_rating),
-        min_duration_minutes: parseNullableNumber(conditionalDraft.min_duration_minutes),
-        max_duration_minutes: parseNullableNumber(conditionalDraft.max_duration_minutes),
-        match_moods: parseCommaList(conditionalDraft.match_moods),
-        match_tags: parseCommaList(conditionalDraft.match_tags),
+        // 打卡条件
+        min_total_checkins: parseNullableNumber(conditionalDraft.min_total_checkins),
+        max_total_checkins: parseNullableNumber(conditionalDraft.max_total_checkins),
+        min_streak_days: parseNullableNumber(conditionalDraft.min_streak_days),
+        max_streak_days: parseNullableNumber(conditionalDraft.max_streak_days),
+        // 上传条件
+        min_total_uploads: parseNullableNumber(conditionalDraft.min_total_uploads),
+        max_total_uploads: parseNullableNumber(conditionalDraft.max_total_uploads),
+        // 上一次上传条件
+        match_last_upload_moods: parseCommaList(conditionalDraft.match_last_upload_moods),
+        match_last_upload_tags: parseCommaList(conditionalDraft.match_last_upload_tags),
       };
 
       if (!payload.name) {
@@ -312,20 +316,24 @@ function HomeContentPage() {
       name: message.name,
       text: message.text,
       priority: String(message.priority),
-      applies_when_no_upload: Boolean(message.applies_when_no_upload),
       is_active: message.is_active,
-      min_days_since_last_upload:
-        message.min_days_since_last_upload === null ? "" : String(message.min_days_since_last_upload),
-      max_days_since_last_upload:
-        message.max_days_since_last_upload === null ? "" : String(message.max_days_since_last_upload),
-      min_self_rating: message.min_self_rating === null ? "" : String(message.min_self_rating),
-      max_self_rating: message.max_self_rating === null ? "" : String(message.max_self_rating),
-      min_duration_minutes:
-        message.min_duration_minutes === null ? "" : String(message.min_duration_minutes),
-      max_duration_minutes:
-        message.max_duration_minutes === null ? "" : String(message.max_duration_minutes),
-      match_moods: Array.isArray(message.match_moods) ? message.match_moods.join(", ") : "",
-      match_tags: Array.isArray(message.match_tags) ? message.match_tags.join(", ") : "",
+      // 打卡条件
+      min_total_checkins:
+        message.min_total_checkins === null ? "" : String(message.min_total_checkins),
+      max_total_checkins:
+        message.max_total_checkins === null ? "" : String(message.max_total_checkins),
+      min_streak_days: message.min_streak_days === null ? "" : String(message.min_streak_days),
+      max_streak_days: message.max_streak_days === null ? "" : String(message.max_streak_days),
+      // 上传条件
+      min_total_uploads: message.min_total_uploads === null ? "" : String(message.min_total_uploads),
+      max_total_uploads: message.max_total_uploads === null ? "" : String(message.max_total_uploads),
+      // 上一次上传条件
+      match_last_upload_moods: Array.isArray(message.match_last_upload_moods)
+        ? message.match_last_upload_moods.join(", ")
+        : "",
+      match_last_upload_tags: Array.isArray(message.match_last_upload_tags)
+        ? message.match_last_upload_tags.join(", ")
+        : "",
     });
     setConditionalEditingId(message.id);
     setActiveTab("conditional");
@@ -861,8 +869,8 @@ function HomeContentPage() {
                   <th>名称</th>
                   <th>文案内容</th>
                   <th>优先级</th>
-                  <th>上传 / 评分 / 时长条件</th>
-                  <th>心情 / 标签</th>
+                  <th>打卡 / 上传条件</th>
+                  <th>上一次上传条件</th>
                   <th>状态</th>
                   <th>操作</th>
                 </tr>
@@ -902,87 +910,85 @@ function HomeContentPage() {
                     <td>
                       <div className="admin-home__field-grid">
                         <label>
-                          最少间隔天数
+                          最少打卡次数
                           <input
                             type="number"
                             min={0}
-                            value={conditionalDraft.min_days_since_last_upload}
+                            value={conditionalDraft.min_total_checkins}
                             onChange={(event) =>
                               setConditionalDraft((prev) => ({
                                 ...prev,
-                                min_days_since_last_upload: event.target.value,
+                                min_total_checkins: event.target.value,
                               }))
                             }
                           />
                         </label>
                         <label>
-                          最多间隔天数
+                          最多打卡次数
                           <input
                             type="number"
                             min={0}
-                            value={conditionalDraft.max_days_since_last_upload}
+                            value={conditionalDraft.max_total_checkins}
                             onChange={(event) =>
                               setConditionalDraft((prev) => ({
                                 ...prev,
-                                max_days_since_last_upload: event.target.value,
+                                max_total_checkins: event.target.value,
                               }))
                             }
                           />
                         </label>
                         <label>
-                          最低自评分
+                          最少连续打卡天数
                           <input
                             type="number"
                             min={0}
-                            max={100}
-                            value={conditionalDraft.min_self_rating}
+                            value={conditionalDraft.min_streak_days}
                             onChange={(event) =>
                               setConditionalDraft((prev) => ({
                                 ...prev,
-                                min_self_rating: event.target.value,
+                                min_streak_days: event.target.value,
                               }))
                             }
                           />
                         </label>
                         <label>
-                          最高自评分
+                          最多连续打卡天数
                           <input
                             type="number"
                             min={0}
-                            max={100}
-                            value={conditionalDraft.max_self_rating}
+                            value={conditionalDraft.max_streak_days}
                             onChange={(event) =>
                               setConditionalDraft((prev) => ({
                                 ...prev,
-                                max_self_rating: event.target.value,
+                                max_streak_days: event.target.value,
                               }))
                             }
                           />
                         </label>
                         <label>
-                          最短时长（分钟）
+                          最少上传张数
                           <input
                             type="number"
                             min={0}
-                            value={conditionalDraft.min_duration_minutes}
+                            value={conditionalDraft.min_total_uploads}
                             onChange={(event) =>
                               setConditionalDraft((prev) => ({
                                 ...prev,
-                                min_duration_minutes: event.target.value,
+                                min_total_uploads: event.target.value,
                               }))
                             }
                           />
                         </label>
                         <label>
-                          最长时长（分钟）
+                          最多上传张数
                           <input
                             type="number"
                             min={0}
-                            value={conditionalDraft.max_duration_minutes}
+                            value={conditionalDraft.max_total_uploads}
                             onChange={(event) =>
                               setConditionalDraft((prev) => ({
                                 ...prev,
-                                max_duration_minutes: event.target.value,
+                                max_total_uploads: event.target.value,
                               }))
                             }
                           />
@@ -992,29 +998,29 @@ function HomeContentPage() {
                     <td>
                       <div className="admin-home__field-group">
                         <label>
-                          心情标签（逗号分隔）
+                          上一次上传心情（逗号分隔）
                           <input
                             type="text"
-                            placeholder="如：开心, 集中"
-                            value={conditionalDraft.match_moods}
+                            placeholder="如：心如止水, 兴高采烈"
+                            value={conditionalDraft.match_last_upload_moods}
                             onChange={(event) =>
                               setConditionalDraft((prev) => ({
                                 ...prev,
-                                match_moods: event.target.value,
+                                match_last_upload_moods: event.target.value,
                               }))
                             }
                           />
                         </label>
                         <label>
-                          作品标签（逗号分隔）
+                          上一次上传标签（逗号分隔）
                           <input
                             type="text"
                             placeholder="如：风景, 油画"
-                            value={conditionalDraft.match_tags}
+                            value={conditionalDraft.match_last_upload_tags}
                             onChange={(event) =>
                               setConditionalDraft((prev) => ({
                                 ...prev,
-                                match_tags: event.target.value,
+                                match_last_upload_tags: event.target.value,
                               }))
                             }
                           />
@@ -1023,19 +1029,6 @@ function HomeContentPage() {
                     </td>
                     <td>
                       <div className="admin-home__status-column">
-                        <label className="admin-home__toggle">
-                          <input
-                            type="checkbox"
-                            checked={conditionalDraft.applies_when_no_upload}
-                            onChange={(event) =>
-                              setConditionalDraft((prev) => ({
-                                ...prev,
-                                applies_when_no_upload: event.target.checked,
-                              }))
-                            }
-                          />
-                          <span>无上传时适用</span>
-                        </label>
                         <label className="admin-home__toggle">
                           <input
                             type="checkbox"
@@ -1121,87 +1114,85 @@ function HomeContentPage() {
                           <td>
                             <div className="admin-home__field-grid">
                               <label>
-                                最少间隔天数
+                                最少打卡次数
                                 <input
                                   type="number"
                                   min={0}
-                                  value={conditionalDraft.min_days_since_last_upload}
+                                  value={conditionalDraft.min_total_checkins}
                                   onChange={(event) =>
                                     setConditionalDraft((prev) => ({
                                       ...prev,
-                                      min_days_since_last_upload: event.target.value,
+                                      min_total_checkins: event.target.value,
                                     }))
                                   }
                                 />
                               </label>
                               <label>
-                                最多间隔天数
+                                最多打卡次数
                                 <input
                                   type="number"
                                   min={0}
-                                  value={conditionalDraft.max_days_since_last_upload}
+                                  value={conditionalDraft.max_total_checkins}
                                   onChange={(event) =>
                                     setConditionalDraft((prev) => ({
                                       ...prev,
-                                      max_days_since_last_upload: event.target.value,
+                                      max_total_checkins: event.target.value,
                                     }))
                                   }
                                 />
                               </label>
                               <label>
-                                最低自评分
+                                最少连续打卡天数
                                 <input
                                   type="number"
                                   min={0}
-                                  max={100}
-                                  value={conditionalDraft.min_self_rating}
+                                  value={conditionalDraft.min_streak_days}
                                   onChange={(event) =>
                                     setConditionalDraft((prev) => ({
                                       ...prev,
-                                      min_self_rating: event.target.value,
+                                      min_streak_days: event.target.value,
                                     }))
                                   }
                                 />
                               </label>
                               <label>
-                                最高自评分
+                                最多连续打卡天数
                                 <input
                                   type="number"
                                   min={0}
-                                  max={100}
-                                  value={conditionalDraft.max_self_rating}
+                                  value={conditionalDraft.max_streak_days}
                                   onChange={(event) =>
                                     setConditionalDraft((prev) => ({
                                       ...prev,
-                                      max_self_rating: event.target.value,
+                                      max_streak_days: event.target.value,
                                     }))
                                   }
                                 />
                               </label>
                               <label>
-                                最短时长（分钟）
+                                最少上传张数
                                 <input
                                   type="number"
                                   min={0}
-                                  value={conditionalDraft.min_duration_minutes}
+                                  value={conditionalDraft.min_total_uploads}
                                   onChange={(event) =>
                                     setConditionalDraft((prev) => ({
                                       ...prev,
-                                      min_duration_minutes: event.target.value,
+                                      min_total_uploads: event.target.value,
                                     }))
                                   }
                                 />
                               </label>
                               <label>
-                                最长时长（分钟）
+                                最多上传张数
                                 <input
                                   type="number"
                                   min={0}
-                                  value={conditionalDraft.max_duration_minutes}
+                                  value={conditionalDraft.max_total_uploads}
                                   onChange={(event) =>
                                     setConditionalDraft((prev) => ({
                                       ...prev,
-                                      max_duration_minutes: event.target.value,
+                                      max_total_uploads: event.target.value,
                                     }))
                                   }
                                 />
@@ -1211,27 +1202,27 @@ function HomeContentPage() {
                           <td>
                             <div className="admin-home__field-group">
                               <label>
-                                心情标签（逗号分隔）
+                                上一次上传心情（逗号分隔）
                                 <input
                                   type="text"
-                                  value={conditionalDraft.match_moods}
+                                  value={conditionalDraft.match_last_upload_moods}
                                   onChange={(event) =>
                                     setConditionalDraft((prev) => ({
                                       ...prev,
-                                      match_moods: event.target.value,
+                                      match_last_upload_moods: event.target.value,
                                     }))
                                   }
                                 />
                               </label>
                               <label>
-                                作品标签（逗号分隔）
+                                上一次上传标签（逗号分隔）
                                 <input
                                   type="text"
-                                  value={conditionalDraft.match_tags}
+                                  value={conditionalDraft.match_last_upload_tags}
                                   onChange={(event) =>
                                     setConditionalDraft((prev) => ({
                                       ...prev,
-                                      match_tags: event.target.value,
+                                      match_last_upload_tags: event.target.value,
                                     }))
                                   }
                                 />
@@ -1240,19 +1231,6 @@ function HomeContentPage() {
                           </td>
                           <td>
                             <div className="admin-home__status-column">
-                              <label className="admin-home__toggle">
-                                <input
-                                  type="checkbox"
-                                  checked={conditionalDraft.applies_when_no_upload}
-                                  onChange={(event) =>
-                                    setConditionalDraft((prev) => ({
-                                      ...prev,
-                                      applies_when_no_upload: event.target.checked,
-                                    }))
-                                  }
-                                />
-                                <span>无上传时适用</span>
-                              </label>
                               <label className="admin-home__toggle">
                                 <input
                                   type="checkbox"
@@ -1293,13 +1271,13 @@ function HomeContentPage() {
                           </td>
                           <td>
                             <div className="admin-home__meta">
-                              {item.match_moods?.length ? (
-                                <div>心情：{item.match_moods.join(" / ")}</div>
+                              {item.match_last_upload_moods?.length ? (
+                                <div>心情：{item.match_last_upload_moods.join(" / ")}</div>
                               ) : (
                                 <div>心情：无</div>
                               )}
-                              {item.match_tags?.length ? (
-                                <div>标签：{item.match_tags.join(" / ")}</div>
+                              {item.match_last_upload_tags?.length ? (
+                                <div>标签：{item.match_last_upload_tags.join(" / ")}</div>
                               ) : (
                                 <div>标签：无</div>
                               )}
@@ -1307,11 +1285,6 @@ function HomeContentPage() {
                           </td>
                           <td>
                             <div className="admin-home__status-column">
-                              {item.applies_when_no_upload ? (
-                                <span className="status status--active">无上传适用</span>
-                              ) : (
-                                <span className="status">无上传不适用</span>
-                              )}
                               <span className={item.is_active ? "status status--active" : "status"}>
                                 {item.is_active ? "启用" : "停用"}
                               </span>
@@ -1367,26 +1340,22 @@ function parseNullableNumber(value: string): number | null {
 
 function formatConditionSummary(item: AdminConditionalMessage): string {
   const parts: string[] = [];
-  if (item.min_days_since_last_upload !== null || item.max_days_since_last_upload !== null) {
-    const min = item.min_days_since_last_upload ?? 0;
-    const max = item.max_days_since_last_upload ?? "∞";
-    parts.push(`距上次上传 ${min}-${max} 天`);
+  // 打卡条件
+  if (item.min_total_checkins !== null || item.max_total_checkins !== null) {
+    const min = item.min_total_checkins ?? 0;
+    const max = item.max_total_checkins ?? "∞";
+    parts.push(`打卡次数 ${min}-${max}`);
   }
-  if (item.min_self_rating !== null || item.max_self_rating !== null) {
-    const min = item.min_self_rating ?? 0;
-    const max = item.max_self_rating ?? 100;
-    parts.push(`评分 ${min}-${max}`);
+  if (item.min_streak_days !== null || item.max_streak_days !== null) {
+    const min = item.min_streak_days ?? 0;
+    const max = item.max_streak_days ?? "∞";
+    parts.push(`连续打卡 ${min}-${max} 天`);
   }
-  if (item.min_duration_minutes !== null || item.max_duration_minutes !== null) {
-    const min = item.min_duration_minutes ?? 0;
-    const max = item.max_duration_minutes ?? "∞";
-    parts.push(`时长 ${min}-${max} 分钟`);
-  }
-  if (item.match_moods?.length) {
-    parts.push(`心情：${item.match_moods.join(" / ")}`);
-  }
-  if (item.match_tags?.length) {
-    parts.push(`标签：${item.match_tags.join(" / ")}`);
+  // 上传条件
+  if (item.min_total_uploads !== null || item.max_total_uploads !== null) {
+    const min = item.min_total_uploads ?? 0;
+    const max = item.max_total_uploads ?? "∞";
+    parts.push(`上传张数 ${min}-${max}`);
   }
   if (!parts.length) {
     return "无附加条件";

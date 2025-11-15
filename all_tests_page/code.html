@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>All Tests - EchoDraw</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Spline+Sans:wght@300;400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "primary": "#98DBC6",
+            "background-light": "#EFEAE7", // Milky white for light mode
+            "background-dark": "#221B1B", // Deep coffee brown for dark mode
+            "card-dark": "#4A3F4A",
+            "card-light": "#FFFFFF",
+            "text-light": "#221B1B",
+            "text-dark": "#FFFFFF",
+            "text-muted-light": "#4A3F4A",
+            "text-muted-dark": "#C5E1E2", // Light blue for muted text on dark
+          },
+          fontFamily: {
+            "display": ["Spline Sans", "sans-serif"]
+          },
+          borderRadius: {
+            "DEFAULT": "1rem",
+            "lg": "1.5rem",
+            "xl": "2rem",
+            "full": "9999px"
+          },
+          boxShadow: {
+             'glow-primary': '0 0 15px 0 rgba(152, 219, 198, 0.3)',
+          }
+        },
+      },
+    }
+  </script>
+<style>
+    body {
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      min-height: max(884px, 100dvh);
+    }
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+    }
+    .font-thin {
+      font-weight: 300;
+    }
+    .background-art {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      z-index: 0;
+    }
+    .shape1 {
+      position: absolute;
+      top: 10%;
+      left: -15%;
+      width: 60%;
+      padding-bottom: 60%;
+      background-color: #98DBC6;
+      border-radius: 50%;
+      opacity: 0.1;
+      filter: blur(80px);
+      animation: breathe 12s ease-in-out infinite alternate;
+    }
+    .shape2 {
+      position: absolute;
+      bottom: 5%;
+      right: -20%;
+      width: 70%;
+      padding-bottom: 70%;
+      background-color: #4A3F4A;
+      border-radius: 50%;
+      opacity: 0.2;
+      filter: blur(100px);
+      animation: breathe 15s ease-in-out infinite alternate-reverse;
+    }
+    @keyframes breathe {
+      0% { transform: scale(1) translate(0, 0); opacity: 0.1; }
+      100% { transform: scale(1.1) translate(10px, -10px); opacity: 0.15; }
+    }
+    .card-bg-art {
+      background-image: radial-gradient(circle at 10% 10%, hsla(164, 52%, 72%, 0.15), transparent 40%),
+                        radial-gradient(circle at 90% 80%, hsla(164, 52%, 72%, 0.1), transparent 50%);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-display bg-background-light dark:bg-background-dark">
+<div class="relative flex h-auto min-h-screen w-full flex-col group/design-root overflow-x-hidden">
+<div class="background-art">
+<div class="shape1"></div>
+<div class="shape2"></div>
+</div>
+<div class="sticky top-0 z-20 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-lg">
+<div class="flex items-center p-4 pb-3 justify-between border-b border-text-dark/10 dark:border-text-light/10">
+<h1 class="text-text-light dark:text-text-dark text-xl font-medium leading-tight tracking-wide">所有测试</h1>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-2xl">toll</span>
+<p class="text-primary text-lg font-medium leading-normal tracking-wider">150</p>
+</div>
+</div>
+</div>
+<main class="relative z-10 flex flex-col gap-6 p-4">
+<div class="relative flex h-[280px] w-full flex-col justify-end overflow-hidden rounded-xl bg-card-dark/70 card-bg-art p-5 backdrop-blur-md border border-white/10 shadow-lg shadow-black/20">
+<img alt="Illustrative image for Creative Style Analysis test" class="absolute inset-0 h-full w-full object-cover opacity-10" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCok7zoVr0FqDn2i-YzoEjl67OjCzoKFiWN0OzUAbghXWUjgNBDQA52_LUftDwy_gbepZKLJ6cO1AGwR-yoWRcCRzblYq_ZAvOLnmgMNZct5qho3D9Zq6USPm_25_Vh14xS7VZSK5YKM2cS5B9SRKjmL_ARac6_1VNcEfFPTOdJgY4oJFvlg8UAiDnUhV22OqbOOb6fLLYHn_KRpf9lFCBH3JwKxEFK1zUDW_oIbEIVvzMQlGC9IcGxy_HSym3U1oQkVXylHxeyKUSi"/>
+<div class="absolute inset-0 bg-gradient-to-t from-card-dark/80 via-card-dark/40 to-transparent"></div>
+<div class="relative z-10 flex flex-col gap-2">
+<div class="flex items-center justify-between">
+<h2 class="text-text-dark text-xl font-medium leading-tight tracking-wide">Creative Style Analysis</h2>
+<div class="flex items-center gap-1.5 rounded-full bg-black/20 px-3 py-1 text-sm font-normal text-primary border border-primary/20">
+<span class="material-symbols-outlined text-base">toll</span>
+<span class="font-light">25</span>
+</div>
+</div>
+<p class="text-text-muted-dark text-sm font-thin leading-normal">Discover your dominant artistic style through a series of visual questions.</p>
+<p class="text-xs font-light text-text-muted-dark/80 mt-1">12 种可能结果</p>
+</div>
+<button class="relative z-10 mt-4 w-full rounded-full bg-primary py-3.5 text-base font-medium tracking-wider text-background-dark shadow-md shadow-primary/20 transition-all hover:bg-opacity-90 hover:shadow-glow-primary active:scale-95">开始测试</button>
+</div>
+<div class="relative flex h-[280px] w-full flex-col justify-end overflow-hidden rounded-xl bg-card-dark/70 card-bg-art p-5 backdrop-blur-md border border-white/10 shadow-lg shadow-black/20">
+<img alt="Illustrative image for Color Palette Harmony test" class="absolute inset-0 h-full w-full object-cover opacity-10" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDleTxrkJY5EXTpE2pk-4lOUTtTtBtxMaaCMbkaxOj1c2_MhdbLkLNAKh7Ha3R4L3uiOJ0cdDAQYcNj-UoXL9K8GqhSAZb0tlNSt9d4v4X-v1t_LT4ISp73xN7cT0U2ZzmXIGb5UaYMwthOr9APk58L2Xp28yWSWPND2vTaZMC8mnlbINfjUCG0Ebo46rU-dcq2tthysgmW1IVqsFonydPLLOrUqE5NcRiwR6O65yFFnVy356hKePOoujcBucd7RyRwdE6Y6hZDA_t7"/>
+<div class="absolute inset-0 bg-gradient-to-t from-card-dark/80 via-card-dark/40 to-transparent"></div>
+<div class="relative z-10 flex flex-col gap-2">
+<div class="flex items-center justify-between">
+<h2 class="text-text-dark text-xl font-medium leading-tight tracking-wide">Color Palette Harmony</h2>
+<div class="flex items-center gap-1.5 rounded-full bg-black/20 px-3 py-1 text-sm font-normal text-primary border border-primary/20">
+<span class="material-symbols-outlined text-base">toll</span>
+<span class="font-light">50</span>
+</div>
+</div>
+<p class="text-text-muted-dark text-sm font-thin leading-normal">Find out which color palettes resonate most with your artistic senses.</p>
+<p class="text-xs font-light text-text-muted-dark/80 mt-1">8 种可能结果</p>
+</div>
+<button class="relative z-10 mt-4 w-full rounded-full bg-primary py-3.5 text-base font-medium tracking-wider text-background-dark shadow-md shadow-primary/20 transition-all hover:bg-opacity-90 hover:shadow-glow-primary active:scale-95">开始测试</button>
+</div>
+<div class="relative flex h-[280px] w-full flex-col justify-end overflow-hidden rounded-xl bg-card-dark/70 card-bg-art p-5 backdrop-blur-md border border-white/10 shadow-lg shadow-black/20">
+<img alt="Illustrative image for Artistic Mood Board test" class="absolute inset-0 h-full w-full object-cover opacity-10" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCRUuNwJ40AbnC44BGw76pdCpdR7rCtxMy35jaNAbGrMykZS4xFaDE47_b7ey6ZXsTezpeRkjJmRNyLNDntkAbQUSoU5jOlVXvV1HjbhI14Noz0pbe2PljuyrfwrUZ9lfm7_4otgl47L0dIifw8kGt1QBksNn2ENe0yyP2t4rOmz5XiVVlEcP_bKZW5ca5FulVD31mcb7G4LZuCVUzdlk79sfgYPKbUhPJR6ER05KbXC5r8YLFGwC22JTYO-Vza5G5_-2M6gpcyIrVP"/>
+<div class="absolute inset-0 bg-gradient-to-t from-card-dark/80 via-card-dark/40 to-transparent"></div>
+<div class="relative z-10 flex flex-col gap-2">
+<div class="flex items-center justify-between">
+<h2 class="text-text-dark text-xl font-medium leading-tight tracking-wide">Artistic Mood Board</h2>
+<div class="flex items-center gap-1.5 rounded-full bg-black/20 px-3 py-1 text-sm font-normal text-primary border border-primary/20">
+<span class="material-symbols-outlined text-base">toll</span>
+<span class="font-light">30</span>
+</div>
+</div>
+<p class="text-text-muted-dark text-sm font-thin leading-normal">A test to determine your current creative mood and suggest inspirational themes.</p>
+<p class="text-xs font-light text-text-muted-dark/80 mt-1">6 种可能结果</p>
+</div>
+<button class="relative z-10 mt-4 w-full rounded-full bg-primary py-3.5 text-base font-medium tracking-wider text-background-dark shadow-md shadow-primary/20 transition-all hover:bg-opacity-90 hover:shadow-glow-primary active:scale-95">开始测试</button>
+</div>
+</main>
+</div>
+
+</body></html>

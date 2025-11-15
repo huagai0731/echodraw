@@ -18,14 +18,37 @@ type TemplateViewModel = {
   subtitle: string;
   tags: string[];
   timestampLabel: string;
+  dateLabel: string;
+  durationLabel: string;
   username: string;
+  accentColor: string;
+  textColor: string;
+  shadowColor: string;
+  overlayMode: "dark" | "light";
 };
 
 type ImageStatus = "idle" | "loading" | "ready" | "error";
 
-const CANVAS_SIZE = 1080;
+const CANVAS_WIDTH = 1080;
+const CANVAS_HEIGHT = 1760;
 const DEFAULT_USERNAME = "@EchoUser";
 const MAX_TAG_COUNT = 6;
+const MIN_IMAGE_HEIGHT_RATIO = 0.6;
+const MAX_IMAGE_HEIGHT_RATIO = 1.35;
+const MIN_FOOTER_HEIGHT_RATIO = 0.35;
+const MAX_FOOTER_HEIGHT_RATIO = 0.7;
+
+type CanvasLayout = {
+  imageHeight: number;
+  footerHeight: number;
+  canvasHeight: number;
+};
+
+const DEFAULT_CANVAS_LAYOUT: CanvasLayout = {
+  imageHeight: CANVAS_WIDTH,
+  footerHeight: CANVAS_HEIGHT - CANVAS_WIDTH,
+  canvasHeight: CANVAS_HEIGHT,
+};
 
 function SingleArtworkTemplateDesigner({ open, artworks, onClose }: SingleArtworkTemplateDesignerProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -37,6 +60,15 @@ function SingleArtworkTemplateDesigner({ open, artworks, onClose }: SingleArtwor
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [imageStatus, setImageStatus] = useState<ImageStatus>("idle");
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [showTitle, setShowTitle] = useState(true);
+  const [showSubtitle, setShowSubtitle] = useState(true);
+  const [showUsername, setShowUsername] = useState(true);
+  const [showDate, setShowDate] = useState(true);
+  const [showDuration, setShowDuration] = useState(true);
+  const [shadowTone, setShadowTone] = useState(40);
+  const [textTone, setTextTone] = useState(70);
+  const [overlayMode, setOverlayMode] = useState<"dark" | "light">("dark");
+  const [canvasLayout, setCanvasLayout] = useState<CanvasLayout>(DEFAULT_CANVAS_LAYOUT);
 
   const hasArtworks = artworks.length > 0;
 
@@ -166,10 +198,32 @@ function SingleArtworkTemplateDesigner({ open, artworks, onClose }: SingleArtwor
     const handleLoad = () => {
       setImage(img);
       setImageStatus("ready");
+      const ratio =
+        img.naturalWidth > 0 && img.naturalHeight > 0
+          ? img.naturalWidth / img.naturalHeight
+          : CANVAS_WIDTH / DEFAULT_CANVAS_LAYOUT.imageHeight;
+      const safeRatio = Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
+      const desiredImageHeight = CANVAS_WIDTH / safeRatio;
+      const imageHeight = clamp(
+        desiredImageHeight,
+        CANVAS_WIDTH * MIN_IMAGE_HEIGHT_RATIO,
+        CANVAS_WIDTH * MAX_IMAGE_HEIGHT_RATIO,
+      );
+      const footerHeight = clamp(
+        imageHeight * 0.55,
+        CANVAS_WIDTH * MIN_FOOTER_HEIGHT_RATIO,
+        CANVAS_WIDTH * MAX_FOOTER_HEIGHT_RATIO,
+      );
+      setCanvasLayout({
+        imageHeight,
+        footerHeight,
+        canvasHeight: Math.round(imageHeight + footerHeight),
+      });
     };
     const handleError = () => {
       setImage(null);
       setImageStatus("error");
+      setCanvasLayout(DEFAULT_CANVAS_LAYOUT);
     };
     img.addEventListener("load", handleLoad);
     img.addEventListener("error", handleError);
@@ -193,16 +247,68 @@ function SingleArtworkTemplateDesigner({ open, artworks, onClose }: SingleArtwor
       ),
     ).slice(0, MAX_TAG_COUNT);
 
+    const accentColor = "#98dbc6";
+    const textColor = mixHexColors("#d9d2cc", "#ffffff", textTone / 100);
+    const shadowColor =
+      overlayMode === "dark"
+        ? mixHexColors("#221b1b", "#4a3f4a", shadowTone / 100)
+        : mixHexColors("#f5f0e8", "#ffffff", textTone / 100);
+
+    const meta = composeMetaLabels(selectedArtwork, {
+      showDate,
+      showDuration,
+    });
+    const dateLabel = showDate ? meta.dateLabel : "";
+    const durationLabel = showDuration ? meta.durationLabel : "";
+
     return {
-      title: title.trim() || "自定义标题名",
-      subtitle: subtitle.trim(),
+      title: showTitle ? title.trim() || "自定义标题名" : "",
+      subtitle: showSubtitle ? subtitle.trim() : "",
       tags: preparedTags,
-      timestampLabel: buildTimestampLabel(selectedArtwork),
-      username: normalizeUsername(username),
+      timestampLabel: meta.timestampLabel,
+      dateLabel,
+      durationLabel,
+      username: showUsername ? normalizeUsername(username) : "",
+      accentColor,
+      textColor,
+      shadowColor,
+      overlayMode,
     };
-  }, [selectedArtwork, selectedTags, subtitle, title, username]);
+  }, [
+    selectedArtwork,
+    selectedTags,
+    shadowTone,
+    showDate,
+    showDuration,
+    showSubtitle,
+    showTitle,
+    showUsername,
+    subtitle,
+    textTone,
+    title,
+    username,
+    overlayMode,
+  ]);
 
   const timestampLabel = templateData?.timestampLabel ?? "日期未知";
+  const sliderShadowColor =
+    overlayMode === "dark"
+      ? mixHexColors("#4a3f4a", "#98dbc6", shadowTone / 100)
+      : mixHexColors("#bfb8af", "#ffffff", shadowTone / 100);
+  const sliderTextColor = mixHexColors("#efeae7", "#ffffff", textTone / 100);
+  const downloadDisabled = !templateData || imageStatus === "loading";
+
+  const renderToggle = (active: boolean, onToggle: () => void, label: string) => (
+    <button
+      type="button"
+      className={`single-template-designer__toggle${active ? " is-active" : ""}`}
+      aria-pressed={active}
+      aria-label={`切换${label}`}
+      onClick={onToggle}
+    >
+      <MaterialIcon name={active ? "toggle_on" : "toggle_off"} filled />
+    </button>
+  );
 
   const handleToggleTag = (tag: string) => {
     if (!availableTags.includes(tag)) {
@@ -235,13 +341,21 @@ function SingleArtworkTemplateDesigner({ open, artworks, onClose }: SingleArtwor
       return;
     }
 
-    if (canvas.width !== CANVAS_SIZE || canvas.height !== CANVAS_SIZE) {
-      canvas.width = CANVAS_SIZE;
-      canvas.height = CANVAS_SIZE;
+    if (canvas.width !== CANVAS_WIDTH || canvas.height !== canvasLayout.canvasHeight) {
+      canvas.width = CANVAS_WIDTH;
+      canvas.height = canvasLayout.canvasHeight;
     }
 
-    drawTemplate(context, CANVAS_SIZE, templateData, image);
-  }, [image, open, templateData]);
+    drawTemplate(
+      context,
+      CANVAS_WIDTH,
+      canvasLayout.canvasHeight,
+      canvasLayout.imageHeight,
+      canvasLayout.footerHeight,
+      templateData,
+      image,
+    );
+  }, [canvasLayout.canvasHeight, canvasLayout.footerHeight, canvasLayout.imageHeight, image, open, templateData]);
 
   const handleDownload = () => {
     const canvas = canvasRef.current;
@@ -264,164 +378,270 @@ function SingleArtworkTemplateDesigner({ open, artworks, onClose }: SingleArtwor
   return (
     <>
       <div className="single-template-designer" role="dialog" aria-modal="true">
-        <div className="single-template-designer__backdrop" onClick={onClose} />
-        <div className="single-template-designer__panel">
-          <div className="single-template-designer__preview">
-            <canvas ref={canvasRef} className="single-template-designer__canvas" />
-
-            {imageStatus === "loading" ? (
-              <div className="single-template-designer__status">正在加载作品…</div>
-            ) : null}
-
-            {imageStatus === "error" ? (
-              <div className="single-template-designer__status single-template-designer__status--error">
-                图片加载失败，请选择其他作品或稍后重试。
-              </div>
-            ) : null}
-          </div>
-
-          <aside className="single-template-designer__sidebar">
-            <div className="single-template-designer__heading">
-              <h2>单张图模板</h2>
-              <p>选择一张已上传作品，生成咖啡色主题的 EchoDraw 画框。</p>
+        <div className="single-template-designer__background" aria-hidden="true">
+          <div className="single-template-designer__glow single-template-designer__glow--left" />
+          <div className="single-template-designer__glow single-template-designer__glow--right" />
+        </div>
+        <div className="single-template-designer__content">
+          <header className="single-template-designer__header">
+            <button type="button" aria-label="关闭模板" onClick={onClose}>
+              <MaterialIcon name="arrow_back_ios_new" />
+            </button>
+            <div className="single-template-designer__header-text">
+              <p>EchoDraw 模版中心</p>
+              <h1>单张图博物馆展板</h1>
             </div>
+            <div className="single-template-designer__header-placeholder" />
+          </header>
 
-            {hasArtworks ? (
-              <>
-                <div className="single-template-designer__group">
-                  <h3>选择作品</h3>
-                  <button
-                    type="button"
-                    className="single-template-designer__selected"
-                    onClick={() => setPickerOpen(true)}
+          <div className="single-template-designer__layout">
+            <section className="single-template-designer__mockup">
+              {hasArtworks ? (
+                <div className="single-template-designer__device">
+                  <div
+                    className="single-template-designer__device-screen"
+                    style={{ aspectRatio: CANVAS_WIDTH / canvasLayout.canvasHeight }}
                   >
-                    {selectedArtwork ? (
-                      <>
-                        <img src={selectedArtwork.imageSrc} alt={selectedArtwork.alt} loading="lazy" />
-                        <div className="single-template-designer__selected-info">
-                          <span>当前选择</span>
-                          <h4>{selectedArtwork.title || "未命名"}</h4>
-                          <p>{selectedArtwork.mood || "未知心情"}</p>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="single-template-designer__selected-info">
-                        <span>当前选择</span>
-                        <h4>尚未选择作品</h4>
-                        <p>点击挑选一张作品</p>
+                    <canvas ref={canvasRef} className="single-template-designer__canvas" />
+                    {imageStatus === "loading" ? (
+                      <div className="single-template-designer__status">正在加载作品…</div>
+                    ) : null}
+                    {imageStatus === "error" ? (
+                      <div className="single-template-designer__status single-template-designer__status--error">
+                        图片加载失败，请选择其他作品或稍后重试。
                       </div>
-                    )}
+                    ) : null}
+                  </div>
+                </div>
+              ) : (
+                <div className="single-template-designer__preview-empty">
+                  <MaterialIcon name="photo_library" />
+                  <p>你还没有上传作品</p>
+                  <span>请先在「画集」里完成一次上传，再体验展板模板。</span>
+                  <button type="button" onClick={onClose}>
+                    返回画集
                   </button>
                 </div>
+              )}
+            </section>
 
-                <div className="single-template-designer__group">
-                  <h3>模版文案</h3>
-                  <label className="single-template-designer__field">
-                    <span>标题</span>
-                    <input
-                      type="text"
-                      value={title}
-                      maxLength={40}
-                      onChange={(event) => setTitle(event.target.value)}
-                      placeholder="请输入模版主标题"
-                    />
-                  </label>
-                  <label className="single-template-designer__field">
-                    <span>文案</span>
-                    <textarea
-                      rows={3}
-                      value={subtitle}
-                      maxLength={120}
-                      onChange={(event) => setSubtitle(event.target.value)}
-                      placeholder="为作品写一句说明（可选）"
-                    />
-                  </label>
-                  <p className="single-template-designer__hint">标题与文案会显示在画面左上角，可随时修改。</p>
-                </div>
-
-                <div className="single-template-designer__group">
-                  <h3>展示标签</h3>
-                  <p className="single-template-designer__hint">
-                    至多选择 {MAX_TAG_COUNT} 个标签，顺序按照上传时的原始排序展示。未选择时右上角不会显示标签。
-                  </p>
-                  <div className="single-template-designer__tag-list" role="listbox" aria-label="可展示的标签">
-                    {availableTags.length === 0 ? (
-                      <span className="single-template-designer__hint single-template-designer__hint--muted">
-                        该作品尚未设置标签。
-                      </span>
-                    ) : (
-                      availableTags.map((tag) => {
-                        const active = selectedTags.includes(tag);
-                        return (
-                          <button
-                            key={tag}
-                            type="button"
-                            role="option"
-                            aria-selected={active}
-                            className={`single-template-designer__tag-option${active ? " single-template-designer__tag-option--active" : ""}`}
-                            onClick={() => handleToggleTag(tag)}
-                          >
-                            <span>{tag}</span>
-                            {active ? <MaterialIcon name="check" /> : null}
-                          </button>
-                        );
-                      })
-                    )}
-                  </div>
-                  {selectedTags.length > 0 ? (
+            <section className="single-template-designer__controls">
+              {hasArtworks ? (
+                <>
+                  <div className="single-template-designer__group single-template-designer__group--hero">
+                    <div className="single-template-designer__group-header">
+                      <h2>作品选择</h2>
+                      <p>挑选你的代表作，预览真机效果。</p>
+                    </div>
                     <button
                       type="button"
-                      className="single-template-designer__tag-reset"
-                      onClick={() => setSelectedTags([])}
+                      className="single-template-designer__selection"
+                      onClick={() => setPickerOpen(true)}
                     >
-                      清空已选标签
+                      {selectedArtwork ? (
+                        <>
+                          <img src={selectedArtwork.imageSrc} alt={selectedArtwork.alt} loading="lazy" />
+                          <div>
+                            <p>当前作品</p>
+                            <h4>{selectedArtwork.title || "未命名"}</h4>
+                            <small>{selectedArtwork.mood || "未知心情"}</small>
+                          </div>
+                          <MaterialIcon name="chevron_right" />
+                        </>
+                      ) : (
+                        <div>
+                          <p>当前作品</p>
+                          <h4>尚未选择</h4>
+                          <small>点击打开作品库</small>
+                        </div>
+                      )}
                     </button>
-                  ) : null}
-                </div>
+                  </div>
 
-                <div className="single-template-designer__group">
-                  <h3>署名信息</h3>
-                  <label className="single-template-designer__field">
-                    <span>显示昵称</span>
-                    <input
-                      type="text"
-                      value={username}
-                      maxLength={32}
-                      onChange={(event) => setUsername(event.target.value)}
-                      placeholder="将展示在模板右下角"
-                    />
-                  </label>
-                  <p className="single-template-designer__meta">
-                    上传时间 <strong>{timestampLabel}</strong>
-                  </p>
-                </div>
+                  <div className="single-template-designer__group">
+                    <div className="single-template-designer__field-row">
+                      <label htmlFor="single-template-title">
+                        <span>标题</span>
+                        <input
+                          id="single-template-title"
+                          type="text"
+                          value={title}
+                          maxLength={40}
+                          onChange={(event) => setTitle(event.target.value)}
+                          placeholder="请输入作品名称"
+                        />
+                      </label>
+                      {renderToggle(showTitle, () => setShowTitle((prev) => !prev), "标题")}
+                    </div>
+                    <div className="single-template-designer__field-row single-template-designer__field-row--textarea">
+                      <label htmlFor="single-template-desc">
+                        <span>简介</span>
+                        <textarea
+                          id="single-template-desc"
+                          rows={3}
+                          value={subtitle}
+                          maxLength={160}
+                          onChange={(event) => setSubtitle(event.target.value)}
+                          placeholder="为作品写一句陈列说明"
+                        />
+                      </label>
+                      {renderToggle(showSubtitle, () => setShowSubtitle((prev) => !prev), "简介")}
+                    </div>
+                  </div>
 
-                <div className="single-template-designer__actions">
-                  <button
-                    type="button"
-                    className="single-template-designer__download"
-                    onClick={handleDownload}
-                    disabled={!templateData || imageStatus === "loading"}
-                  >
-                    <MaterialIcon name="download" />
-                    保存为图片
+                  <div className="single-template-designer__group">
+                    <div className="single-template-designer__field-row">
+                      <label htmlFor="single-template-username">
+                        <span>署名</span>
+                        <input
+                          id="single-template-username"
+                          type="text"
+                          value={username}
+                          maxLength={32}
+                          onChange={(event) => setUsername(event.target.value)}
+                          placeholder="将呈现在右下角"
+                        />
+                      </label>
+                      {renderToggle(showUsername, () => setShowUsername((prev) => !prev), "署名")}
+                    </div>
+                    <div className="single-template-designer__field-row single-template-designer__field-row--meta">
+                      <div>
+                        <p>日期与时长</p>
+                        <span>{timestampLabel}</span>
+                      </div>
+                      <div className="single-template-designer__meta-toggles">
+                        {renderToggle(showDate, () => setShowDate((prev) => !prev), "日期")}
+                        {renderToggle(showDuration, () => setShowDuration((prev) => !prev), "时长")}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="single-template-designer__group">
+                    <div className="single-template-designer__group-header">
+                      <h3>标签陈列</h3>
+                      <p>至多选择 {MAX_TAG_COUNT} 个标签，呈现在画板右上角。</p>
+                    </div>
+                    <div className="single-template-designer__tag-list" role="listbox" aria-label="可展示的标签">
+                      {availableTags.length === 0 ? (
+                        <span className="single-template-designer__hint">该作品尚未设置标签。</span>
+                      ) : (
+                        availableTags.map((tag) => {
+                          const active = selectedTags.includes(tag);
+                          return (
+                            <button
+                              key={tag}
+                              type="button"
+                              role="option"
+                              aria-selected={active}
+                              className={`single-template-designer__tag-option${active ? " single-template-designer__tag-option--active" : ""}`}
+                              onClick={() => handleToggleTag(tag)}
+                            >
+                              <span>{tag}</span>
+                              {active ? <MaterialIcon name="check" /> : null}
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                    {selectedTags.length > 0 ? (
+                      <button
+                        type="button"
+                        className="single-template-designer__tag-reset"
+                        onClick={() => setSelectedTags([])}
+                      >
+                        清空标签
+                      </button>
+                    ) : null}
+                  </div>
+
+                  <div className="single-template-designer__group single-template-designer__group--tuning">
+                    <div className="single-template-designer__tuning single-template-designer__tuning--mode">
+                      <div>
+                        <p>信息背景色</p>
+                        <span>选择黑色或白色渐变风格。</span>
+                      </div>
+                      <div className="single-template-designer__mode-toggle">
+                        <button
+                          type="button"
+                          className={overlayMode === "dark" ? "is-active" : ""}
+                          onClick={() => setOverlayMode("dark")}
+                        >
+                          深色
+                        </button>
+                        <button
+                          type="button"
+                          className={overlayMode === "light" ? "is-active" : ""}
+                          onClick={() => setOverlayMode("light")}
+                        >
+                          浅色
+                        </button>
+                      </div>
+                    </div>
+                    <div className="single-template-designer__tuning">
+                      <div>
+                        <p>自定义阴影区颜色</p>
+                        <span>让画框更符合展厅光线。</span>
+                      </div>
+                      <div className="single-template-designer__slider">
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          value={shadowTone}
+                          onChange={(event) => setShadowTone(Number(event.target.value))}
+                          style={{
+                            backgroundImage: `linear-gradient(90deg, rgba(34,27,27,0.4), ${sliderShadowColor})`,
+                          }}
+                        />
+                        <span className="single-template-designer__slider-dot" style={{ backgroundColor: sliderShadowColor }} />
+                      </div>
+                    </div>
+                    <div className="single-template-designer__tuning">
+                      <div>
+                        <p>自定义文字颜色</p>
+                        <span>微调展板文字亮度。</span>
+                      </div>
+                      <div className="single-template-designer__slider">
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          value={textTone}
+                          onChange={(event) => setTextTone(Number(event.target.value))}
+                          style={{
+                            backgroundImage: `linear-gradient(90deg, rgba(255,255,255,0.25), ${sliderTextColor})`,
+                          }}
+                        />
+                        <span className="single-template-designer__slider-dot" style={{ backgroundColor: sliderTextColor }} />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="single-template-designer__actions">
+                    <button
+                      type="button"
+                      className="single-template-designer__download"
+                      onClick={handleDownload}
+                      disabled={downloadDisabled}
+                    >
+                      <MaterialIcon name="download" />
+                      保存为图片
+                    </button>
+                    <p>导出 PNG · 1080 × {canvasLayout.canvasHeight} 像素 · 适配社交媒体展示。</p>
+                  </div>
+                </>
+              ) : (
+                <div className="single-template-designer__empty">
+                  <MaterialIcon name="photo_library" />
+                  <p>尚无可用作品</p>
+                  <p>完成首次上传后即可使用博物馆模板。</p>
+                  <button type="button" onClick={onClose}>
+                    去上传
                   </button>
-                  <p className="single-template-designer__fineprint">
-                    图片会以 PNG 格式下载，尺寸为 1080 × 1080 像素。
-                  </p>
                 </div>
-              </>
-            ) : (
-              <div className="single-template-designer__empty">
-                <MaterialIcon name="photo_library" />
-                <p>你还没有上传作品，无法生成模版。</p>
-                <p>请先前往「画集」上传至少一张作品，再回来尝试。</p>
-                <button type="button" onClick={onClose}>
-                  好的
-                </button>
-              </div>
-            )}
-          </aside>
+              )}
+            </section>
+          </div>
         </div>
       </div>
 
@@ -511,15 +731,73 @@ function formatNameFromEmail(email: string): string {
   return localPart.slice(0, 1).toUpperCase() + localPart.slice(1);
 }
 
-function buildTimestampLabel(artwork: Artwork): string {
+type TimestampOptions = {
+  showDate: boolean;
+  showDuration: boolean;
+};
+
+type MetaLabels = {
+  timestampLabel: string;
+  dateLabel: string;
+  durationLabel: string;
+};
+
+function composeMetaLabels(artwork: Artwork, options: TimestampOptions): MetaLabels {
+  const date = options.showDate ? resolveArtworkDate(artwork) : null;
+  const dateLabel = date ? formatDateLabel(date) : "";
+  const durationLabel = options.showDuration ? buildDurationLabel(artwork) ?? "" : "";
+
+  const labelParts: string[] = [];
+  if (dateLabel) {
+    labelParts.push(dateLabel);
+  }
+  if (durationLabel) {
+    labelParts.push(durationLabel);
+  }
+
+  return {
+    timestampLabel: labelParts.join(" • ") || "日期未知",
+    dateLabel,
+    durationLabel,
+  };
+}
+
+function resolveArtworkDate(artwork: Artwork): Date | null {
   const candidates = [artwork.uploadedAt, artwork.uploadedDate, artwork.date];
   for (const source of candidates) {
     const parsed = parseDateTime(source);
     if (parsed) {
-      return formatTimestamp(parsed);
+      return parsed;
     }
   }
-  return "日期未知";
+  return null;
+}
+
+function formatDateLabel(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function buildDurationLabel(artwork: Artwork): string | null {
+  const value = artwork.durationMinutes;
+  if (typeof value !== "number" || value <= 0) {
+    return null;
+  }
+  return formatDurationCompact(value);
+}
+
+function formatDurationCompact(minutesTotal: number): string {
+  const hours = Math.floor(minutesTotal / 60);
+  const minutes = Math.max(0, minutesTotal % 60);
+  if (hours === 0) {
+    return `${minutes}m`;
+  }
+  if (minutes === 0) {
+    return `${hours}h`;
+  }
+  return `${hours}h ${minutes}m`;
 }
 
 function parseDateTime(source: string | null | undefined): Date | null {
@@ -591,238 +869,222 @@ function parseDate(source: string | null | undefined): Date | null {
   return new Date(year, month - 1, day);
 }
 
-function formatTimestamp(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  return `${year}-${month}-${day} ${hours}H${minutes}M`;
-}
-
 function drawTemplate(
   context: CanvasRenderingContext2D,
-  size: number,
+  width: number,
+  canvasHeight: number,
+  imageHeight: number,
+  footerHeight: number,
   data: TemplateViewModel,
   image: HTMLImageElement | null,
 ) {
   context.save();
-  context.clearRect(0, 0, size, size);
+  context.clearRect(0, 0, width, canvasHeight);
 
-  const layout = createTemplateLayout(size);
+  const rect = createImageRect(width, imageHeight);
 
-  drawCanvasBackground(context, size);
-  drawPaper(context, layout);
-  drawArtworkFrame(context, layout, image);
-  drawTopLeftCopy(context, size, data.title, data.subtitle);
-  drawTagGrid(context, size, data.tags);
-  drawFooterInfo(context, size, data.timestampLabel, data.username);
+  drawCanvasBackground(context, width, canvasHeight, data.shadowColor);
+  drawPrimaryImage(context, rect, image);
+  drawGradientFooter(context, rect, footerHeight, data);
 
   context.restore();
 }
 
-type TemplateLayout = {
-  paperX: number;
-  paperY: number;
-  paperSize: number;
-  paperRadius: number;
-  frameX: number;
-  frameY: number;
-  frameSize: number;
-  frameRadius: number;
+type ImageRect = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  radius: number;
 };
 
-function createTemplateLayout(size: number): TemplateLayout {
-  const paperSize = size * 0.84;
-  const paperX = (size - paperSize) / 2;
-  const paperY = size * 0.11;
-  const paperRadius = paperSize * 0.06;
-  const frameInset = paperSize * 0.045;
-  const frameSize = paperSize - frameInset * 2;
-  const frameX = paperX + frameInset;
-  const frameY = paperY + frameInset;
-  const frameRadius = paperSize * 0.05;
-  return { paperX, paperY, paperSize, paperRadius, frameX, frameY, frameSize, frameRadius };
+function createImageRect(width: number, imageHeight: number): ImageRect {
+  const rectHeight = Math.max(1, imageHeight);
+  return {
+    x: 0,
+    y: 0,
+    width,
+    height: rectHeight,
+    radius: width * 0.03,
+  };
 }
 
-function drawCanvasBackground(context: CanvasRenderingContext2D, size: number) {
-  context.fillStyle = "#2f2521";
-  context.fillRect(0, 0, size, size);
+function drawCanvasBackground(context: CanvasRenderingContext2D, width: number, height: number, shadowColor: string) {
+  context.fillStyle = "#120c0b";
+  context.fillRect(0, 0, width, height);
 
-  const overlay = context.createLinearGradient(0, 0, size, size);
-  overlay.addColorStop(0, "rgba(146, 215, 193, 0.2)");
-  overlay.addColorStop(1, "rgba(146, 215, 193, 0)");
+  const overlay = context.createLinearGradient(0, 0, width, height);
+  overlay.addColorStop(0, withAlpha(shadowColor || "#4a3f4a", 0.25));
+  overlay.addColorStop(1, "rgba(0, 0, 0, 0.9)");
   context.fillStyle = overlay;
-  context.fillRect(0, 0, size, size);
+  context.fillRect(0, 0, width, height);
 }
 
-function drawPaper(context: CanvasRenderingContext2D, layout: TemplateLayout) {
+function drawPrimaryImage(context: CanvasRenderingContext2D, rect: ImageRect, image: HTMLImageElement | null) {
   context.save();
-  context.shadowColor = "rgba(0, 0, 0, 0.32)";
-  context.shadowBlur = layout.paperSize * 0.06;
-  context.shadowOffsetX = layout.paperSize * 0.03;
-  context.shadowOffsetY = layout.paperSize * 0.035;
-  drawRoundedRectPath(
-    context,
-    layout.paperX + layout.paperSize * 0.012,
-    layout.paperY + layout.paperSize * 0.012,
-    layout.paperSize,
-    layout.paperSize,
-    layout.paperRadius,
-  );
-  context.fillStyle = "rgba(0, 0, 0, 0.28)";
+  context.shadowColor = "rgba(0, 0, 0, 0.25)";
+  context.shadowBlur = rect.width * 0.03;
+  context.shadowOffsetY = rect.width * 0.01;
+  drawRoundedRectPath(context, rect.x, rect.y, rect.width, rect.height, rect.radius);
+  context.fillStyle = "#0d0b0a";
   context.fill();
-  context.restore();
-
   context.save();
-  drawRoundedRectPath(context, layout.paperX, layout.paperY, layout.paperSize, layout.paperSize, layout.paperRadius);
-  const paperGradient = context.createLinearGradient(layout.paperX, layout.paperY, layout.paperX + layout.paperSize, layout.paperY + layout.paperSize);
-  paperGradient.addColorStop(0, "#f7f2c9");
-  paperGradient.addColorStop(1, "#f1e5a9");
-  context.fillStyle = paperGradient;
-  context.fill();
-  context.lineWidth = layout.paperSize * 0.008;
-  context.strokeStyle = "rgba(34, 26, 22, 0.12)";
-  context.stroke();
-  context.restore();
-}
-
-function drawArtworkFrame(context: CanvasRenderingContext2D, layout: TemplateLayout, image: HTMLImageElement | null) {
-  context.save();
-  context.shadowColor = "rgba(0, 0, 0, 0.22)";
-  context.shadowBlur = layout.paperSize * 0.05;
-  context.shadowOffsetX = layout.paperSize * 0.02;
-  context.shadowOffsetY = layout.paperSize * 0.03;
-  drawRoundedRectPath(
-    context,
-    layout.frameX + layout.paperSize * 0.009,
-    layout.frameY + layout.paperSize * 0.009,
-    layout.frameSize,
-    layout.frameSize,
-    layout.frameRadius,
-  );
-  context.fillStyle = "rgba(0, 0, 0, 0.28)";
-  context.fill();
-  context.restore();
-
-  context.save();
-  drawRoundedRectPath(context, layout.frameX, layout.frameY, layout.frameSize, layout.frameSize, layout.frameRadius);
+  drawRoundedRectPath(context, rect.x, rect.y, rect.width, rect.height, rect.radius);
   context.clip();
+
   if (image && image.width > 0 && image.height > 0) {
-    const scale = Math.max(layout.frameSize / image.width, layout.frameSize / image.height);
+    const scale = Math.max(rect.width / image.width, rect.height / image.height);
     const drawWidth = image.width * scale;
     const drawHeight = image.height * scale;
-    const dx = layout.frameX + (layout.frameSize - drawWidth) / 2;
-    const dy = layout.frameY + (layout.frameSize - drawHeight) / 2;
+    const dx = rect.x + (rect.width - drawWidth) / 2;
+    const dy = rect.y + (rect.height - drawHeight) / 2;
     context.drawImage(image, dx, dy, drawWidth, drawHeight);
   } else {
-    const placeholder = context.createLinearGradient(
-      layout.frameX,
-      layout.frameY,
-      layout.frameX + layout.frameSize,
-      layout.frameY + layout.frameSize,
-    );
-    placeholder.addColorStop(0, "rgba(251, 245, 210, 0.9)");
-    placeholder.addColorStop(1, "rgba(240, 230, 190, 0.85)");
+    const placeholder = context.createLinearGradient(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height);
+    placeholder.addColorStop(0, "rgba(230, 216, 189, 0.6)");
+    placeholder.addColorStop(1, "rgba(180, 164, 138, 0.6)");
     context.fillStyle = placeholder;
-    context.fillRect(layout.frameX, layout.frameY, layout.frameSize, layout.frameSize);
-
-    context.fillStyle = "rgba(47, 37, 34, 0.6)";
-    context.font = `600 ${Math.round(layout.paperSize * 0.05)}px "Manrope", "Segoe UI", sans-serif`;
-    context.textAlign = "center";
-    context.textBaseline = "middle";
-    context.fillText("加载中", layout.frameX + layout.frameSize / 2, layout.frameY + layout.frameSize / 2);
-  }
-  context.restore();
-
-  context.save();
-  drawRoundedRectPath(context, layout.frameX, layout.frameY, layout.frameSize, layout.frameSize, layout.frameRadius);
-  context.lineWidth = layout.paperSize * 0.0085;
-  context.strokeStyle = "rgba(34, 26, 22, 0.16)";
-  context.stroke();
-  context.restore();
-}
-
-function drawTopLeftCopy(context: CanvasRenderingContext2D, size: number, title: string, subtitle: string) {
-  const margin = size * 0.08;
-  context.save();
-  context.textAlign = "left";
-  context.textBaseline = "top";
-  context.fillStyle = "#9edac4";
-  context.font = `700 ${Math.round(size * 0.06)}px "Manrope", "Segoe UI", sans-serif`;
-  context.fillText(title, margin, margin);
-
-  const trimmedSubtitle = subtitle.trim();
-  if (trimmedSubtitle) {
-    const maxWidth = size * 0.42;
-    const subtitleTop = margin + Math.round(size * 0.07);
-    const lineHeight = Math.round(size * 0.045);
-    context.font = `400 ${Math.round(size * 0.035)}px "Manrope", "Segoe UI", sans-serif`;
-    const lines = wrapText(context, trimmedSubtitle, maxWidth);
-    lines.forEach((line, index) => {
-      context.fillText(line, margin, subtitleTop + index * lineHeight);
-    });
+    context.fillRect(rect.x, rect.y, rect.width, rect.height);
   }
 
   context.restore();
 }
 
-function drawTagGrid(context: CanvasRenderingContext2D, size: number, tags: string[]) {
-  if (tags.length === 0) {
-    return;
+function drawGradientFooter(
+  context: CanvasRenderingContext2D,
+  rect: ImageRect,
+  footerHeight: number,
+  data: TemplateViewModel,
+) {
+  const overlayHeight = Math.min(rect.height * 0.35, rect.width * 0.6);
+  const overlayY = rect.y + rect.height - overlayHeight;
+
+  const footerY = rect.y + rect.height;
+  context.save();
+  context.fillStyle = data.overlayMode === "light" ? "#f3efe9" : "#100d0d";
+  context.fillRect(rect.x, footerY, rect.width, footerHeight);
+  context.restore();
+
+  const gradient = context.createLinearGradient(0, overlayY, 0, rect.y + rect.height);
+  if (data.overlayMode === "light") {
+    gradient.addColorStop(0, withAlpha("#ffffff", 0));
+    gradient.addColorStop(0.35, withAlpha("#fefcf7", 0.85));
+    gradient.addColorStop(1, withAlpha("#f2ede4", 0.98));
+  } else {
+    gradient.addColorStop(0, withAlpha("#000000", 0));
+    gradient.addColorStop(0.35, withAlpha(data.shadowColor || "#221b1b", 0.85));
+    gradient.addColorStop(1, withAlpha("#000000", 0.98));
   }
 
-  const columns = 2;
-  const boxWidth = size * 0.16;
-  const boxHeight = size * 0.055;
-  const columnGap = size * 0.02;
-  const rowGap = size * 0.02;
-  const margin = size * 0.08;
-  const startX = size - margin - columns * boxWidth - (columns - 1) * columnGap;
-  const startY = margin;
+  context.save();
+  drawRoundedRectPath(context, rect.x, overlayY, rect.width, overlayHeight, rect.radius);
+  context.clip();
+  context.fillStyle = gradient;
+  context.fillRect(rect.x, overlayY, rect.width, overlayHeight);
+  context.restore();
+
+  const paddingX = rect.width * 0.06;
+  let cursorY = overlayY + rect.width * 0.08;
+  const contentX = rect.x + paddingX;
+  const contentWidth = rect.width - paddingX * 2;
 
   context.save();
   context.textAlign = "left";
-  context.textBaseline = "middle";
-  context.font = `600 ${Math.round(size * 0.027)}px "Manrope", "Segoe UI", sans-serif`;
+  context.fillStyle = data.accentColor || "#9edac4";
+  context.font = `600 ${Math.round(rect.width * 0.065)}px "Manrope", "Segoe UI", sans-serif`;
+  const displayTitle = data.title || "未命名作品";
+  context.fillText(displayTitle, contentX, cursorY);
 
-  tags.forEach((rawTag, index) => {
-    const row = Math.floor(index / columns);
-    const column = index % columns;
-    const x = startX + column * (boxWidth + columnGap);
-    const y = startY + row * (boxHeight + rowGap);
-    const text = rawTag.trim().toUpperCase();
+  cursorY += Math.round(rect.width * 0.085);
 
-    drawRoundedRectPath(context, x, y, boxWidth, boxHeight, size * 0.012);
-    context.fillStyle = "rgba(34, 26, 22, 0.72)";
-    context.fill();
-    context.strokeStyle = "rgba(146, 215, 193, 0.55)";
-    context.lineWidth = size * 0.0022;
-    context.stroke();
-
-    context.fillStyle = "#9edac4";
-    context.fillText(text, x + size * 0.02, y + boxHeight / 2);
+  const subtitle = data.subtitle.trim() || "An expressive abstract awaiting its story.";
+  context.font = `400 ${Math.round(rect.width * 0.035)}px "Manrope", "Segoe UI", sans-serif`;
+  context.fillStyle =
+    data.overlayMode === "light" ? withAlpha("#0c0a09", 0.9) : withAlpha("#f7f2ec", 0.92);
+  const descriptionLines = wrapText(context, subtitle, contentWidth);
+  descriptionLines.forEach((line) => {
+    context.fillText(line, contentX, cursorY);
+    cursorY += Math.round(rect.width * 0.05);
   });
 
+  cursorY += Math.round(rect.width * 0.02);
+
+  const tags = data.tags.slice(0, 5);
+  if (tags.length > 0) {
+    context.font = `500 ${Math.round(rect.width * 0.032)}px "Manrope", "Segoe UI", sans-serif`;
+    const gap = rect.width * 0.02;
+    let tagX = contentX;
+    let tagY = cursorY;
+    const maxX = contentX + contentWidth;
+    const lineHeight = rect.width * 0.06;
+
+    tags.forEach((tag) => {
+      const label = `#${tag}`;
+      const width = measureTagBadgeWidth(context, label, rect.width);
+      if (tagX + width > maxX) {
+        tagX = contentX;
+        tagY += lineHeight;
+      }
+      drawTagBadge(context, tagX, tagY, label, rect.width);
+      tagX += width + gap;
+    });
+
+    cursorY = tagY + lineHeight;
+  }
+
+  cursorY += Math.round(rect.width * 0.02);
+
+  const metaLineParts: string[] = [];
+  if (data.dateLabel) {
+    metaLineParts.push(data.dateLabel);
+  }
+  if (data.durationLabel) {
+    metaLineParts.push(data.durationLabel);
+  }
+  const metaLine = metaLineParts.join(" / ") || data.timestampLabel || "日期未知";
+
+  if (metaLine) {
+    context.font = `400 ${Math.round(rect.width * 0.032)}px "Manrope", "Segoe UI", sans-serif`;
+  context.fillStyle =
+    data.overlayMode === "light" ? withAlpha("#0c0a09", 0.8) : withAlpha("#f7f2ec", 0.92);
+    context.fillStyle =
+      data.overlayMode === "light" ? withAlpha("#0c0a09", 0.85) : withAlpha("#f7f2ec", 0.9);
+    context.textAlign = "left";
+    context.fillText(metaLine, contentX, cursorY);
+  }
+
+  const usernameLine = (data.username || "").trim();
+  if (usernameLine) {
+    context.textAlign = "right";
+    context.font = `500 ${Math.round(rect.width * 0.038)}px "Manrope", "Segoe UI", sans-serif`;
+    context.fillStyle =
+      data.overlayMode === "light" ? withAlpha("#0c0a09", 0.92) : withAlpha("#f7f2ec", 0.92);
+    context.fillText(usernameLine, contentX + contentWidth, cursorY);
+  }
+
   context.restore();
 }
 
-function drawFooterInfo(context: CanvasRenderingContext2D, size: number, timestampLabel: string, username: string) {
-  const margin = size * 0.08;
+function drawTagBadge(context: CanvasRenderingContext2D, x: number, y: number, text: string, baseWidth: number) {
+  const paddingX = baseWidth * 0.015;
+  const textWidth = context.measureText(text).width;
+  const height = baseWidth * 0.045;
+  const width = textWidth + paddingX * 2;
+  drawRoundedRectPath(context, x, y, width, height, height / 2);
+  context.fillStyle = "rgba(152, 219, 198, 0.12)";
+  context.fill();
+  context.strokeStyle = "rgba(152, 219, 198, 0.4)";
+  context.stroke();
+  context.fillStyle = "rgba(152, 219, 198, 0.9)";
+  context.textAlign = "left";
+  context.textBaseline = "middle";
+  context.fillText(text, x + paddingX, y + height / 2);
+}
 
-  context.save();
-  context.fillStyle = "#93d4bc";
-  context.textBaseline = "alphabetic";
-
-  context.textAlign = "center";
-  context.font = `600 ${Math.round(size * 0.034)}px "Manrope", "Segoe UI", sans-serif`;
-  context.fillText(timestampLabel, size / 2, size - margin);
-
-  context.textAlign = "right";
-  context.font = `600 ${Math.round(size * 0.038)}px "Manrope", "Segoe UI", sans-serif`;
-  context.fillText(username, size - margin, size - margin * 0.35);
-
-  context.restore();
+function measureTagBadgeWidth(context: CanvasRenderingContext2D, text: string, baseWidth: number): number {
+  const paddingX = baseWidth * 0.015;
+  const textWidth = context.measureText(text).width;
+  return textWidth + paddingX * 2;
 }
 
 function wrapText(context: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
@@ -877,4 +1139,71 @@ function drawRoundedRectPath(
   context.closePath();
 }
 
+type RGBColor = {
+  r: number;
+  g: number;
+  b: number;
+};
 
+function mixHexColors(colorA: string, colorB: string, ratio: number): string {
+  const rgbA = hexToRgb(colorA);
+  const rgbB = hexToRgb(colorB);
+  if (!rgbA || !rgbB) {
+    return colorA;
+  }
+  const clamped = clamp01(ratio);
+  const mixed: RGBColor = {
+    r: Math.round(rgbA.r + (rgbB.r - rgbA.r) * clamped),
+    g: Math.round(rgbA.g + (rgbB.g - rgbA.g) * clamped),
+    b: Math.round(rgbA.b + (rgbB.b - rgbA.b) * clamped),
+  };
+  return rgbToHex(mixed);
+}
+
+function withAlpha(color: string, alpha: number): string {
+  const rgb = hexToRgb(color);
+  if (!rgb) {
+    return `rgba(0, 0, 0, ${clamp01(alpha)})`;
+  }
+  return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${clamp01(alpha)})`;
+}
+
+function hexToRgb(hex: string): RGBColor | null {
+  const normalized = hex.replace("#", "").trim();
+  if (![3, 6].includes(normalized.length)) {
+    return null;
+  }
+  const expanded =
+    normalized.length === 3 ? normalized.split("").map((char) => char + char).join("") : normalized;
+  const value = Number.parseInt(expanded, 16);
+  if (Number.isNaN(value)) {
+    return null;
+  }
+  return {
+    r: (value >> 16) & 255,
+    g: (value >> 8) & 255,
+    b: value & 255,
+  };
+}
+
+function rgbToHex(color: RGBColor): string {
+  const toHex = (component: number) => component.toString(16).padStart(2, "0");
+  return `#${toHex(color.r)}${toHex(color.g)}${toHex(color.b)}`;
+}
+
+function clamp01(value: number): number {
+  if (Number.isNaN(value)) {
+    return 0;
+  }
+  return Math.min(1, Math.max(0, value));
+}
+
+function clamp(value: number, min: number, max: number): number {
+  if (Number.isNaN(value)) {
+    return min;
+  }
+  if (min > max) {
+    return min;
+  }
+  return Math.min(max, Math.max(min, value));
+}

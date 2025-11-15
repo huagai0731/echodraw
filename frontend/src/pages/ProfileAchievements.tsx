@@ -83,15 +83,6 @@ function getHighestUnlockedLevel(group: AchievementGroupDefinition): Achievement
   return unlocked[0] ?? null;
 }
 
-function getLowestLevel(group: AchievementGroupDefinition): AchievementLevelDefinition | null {
-  if (!group.levels || group.levels.length === 0) {
-    return null;
-  }
-  return group.levels
-    .slice()
-    .sort((a, b) => a.level - b.level)[0];
-}
-
 function formatLevelSubtitle(level: AchievementLevelDefinition): string {
   return level.conditionText || level.description || "持续创作以解锁更多故事。";
 }
@@ -416,17 +407,11 @@ function ProfileAchievements({
             <div className="achievements-section__state">全部成就组已解锁</div>
           ) : (
             <div className="achievements-locked__grid" role="list">
-              {lockedGroups.map((group) => {
-                const firstLevel = getLowestLevel(group);
-                return (
-                  <div key={group.id} className="achievements-locked__item" role="listitem">
-                    <span className="achievements-locked__name">{group.name}</span>
-                    {firstLevel ? (
-                      <span className="achievements-locked__note">首个条件：{formatLevelSubtitle(firstLevel)}</span>
-                    ) : null}
-                  </div>
-                );
-              })}
+              {lockedGroups.map((group) => (
+                <div key={group.id} className="achievements-locked__item" role="listitem">
+                  <span className="achievements-locked__name">{group.name}</span>
+                </div>
+              ))}
             </div>
           )}
         </section>
@@ -443,7 +428,6 @@ function ProfileAchievements({
               {lockedStandalone.map((level) => (
                 <div key={level.id} className="achievements-locked__item" role="listitem">
                   <span className="achievements-locked__name">{level.name}</span>
-                  <span className="achievements-locked__note">{formatLevelSubtitle(level)}</span>
                 </div>
               ))}
             </div>

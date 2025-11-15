@@ -177,8 +177,7 @@ function ArtworkDetails({
         role="region"
         aria-label={`${artwork.title} 详情`}
       >
-        <div className="artwork-details-screen__image-frame">
-          <img src={artwork.imageSrc} alt={artwork.alt} className="artwork-details-screen__image" />
+        <div className="artwork-details-screen__header">
           {hasPrev ? (
             <button
               type="button"
@@ -188,7 +187,19 @@ function ArtworkDetails({
             >
               <MaterialIcon name="chevron_left" />
             </button>
-          ) : null}
+          ) : (
+            <div className="artwork-details-screen__nav-placeholder" />
+          )}
+          
+          <div className="artwork-details-screen__title-block">
+            <p className="artwork-details-screen__date">{artwork.date}</p>
+            <h1 className="artwork-details-screen__title">{artwork.title}</h1>
+            <div className="artwork-details-screen__duration">
+              <MaterialIcon name="schedule" className="artwork-details-screen__stat-icon" />
+              {artwork.duration}
+            </div>
+          </div>
+
           {hasNext ? (
             <button
               type="button"
@@ -198,23 +209,19 @@ function ArtworkDetails({
             >
               <MaterialIcon name="chevron_right" />
             </button>
-          ) : null}
+          ) : (
+            <div className="artwork-details-screen__nav-placeholder" />
+          )}
+        </div>
+
+        <div className="artwork-details-screen__image-frame">
+          <img src={artwork.imageSrc} alt={artwork.alt} className="artwork-details-screen__image" />
         </div>
 
         <section className="artwork-details-screen__meta">
-          <div className="artwork-details-screen__title-block">
-            <p className="artwork-details-screen__date">{artwork.date}</p>
-            <h1 className="artwork-details-screen__title">{artwork.title}</h1>
-          </div>
-
           <p className="artwork-details-screen__description">{artwork.description}</p>
 
           <div className="artwork-details-screen__stats" aria-label="作品信息">
-            <span className="artwork-details-screen__stat">
-              <MaterialIcon name="schedule" className="artwork-details-screen__stat-icon" />
-              {artwork.duration}
-            </span>
-            <span className="artwork-details-screen__divider" aria-hidden="true" />
             <span className="artwork-details-screen__stat">
               <MaterialIcon name="sentiment_calm" className="artwork-details-screen__stat-icon" />
               {artwork.mood}

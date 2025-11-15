@@ -18,6 +18,8 @@ const NAV_ITEMS = [
   { to: "achievements", label: "成就系统", description: "配置成就名称、描述与条件" },
   { to: "task-presets", label: "短期任务预设", description: "维护短期挑战的任务模板库" },
   { to: "long-term-copy", label: "长期计划文案", description: "管理时间区间对应的提示文案" },
+  { to: "test-management", label: "测试管理", description: "管理测试、题目和选项" },
+  { to: "daily-quiz", label: "每日小测", description: "管理每日小测题目和选项" },
   { to: "test-accounts", label: "测试账号", description: "管理测试账号与历史数据" },
 ];
 

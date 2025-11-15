@@ -129,7 +129,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = "en-us"
 
-TIME_ZONE = "UTC"
+TIME_ZONE = "Asia/Shanghai"
 
 USE_I18N = True
 
@@ -162,6 +162,12 @@ _required_tos_settings = {
     "TOS_BUCKET": TOS_BUCKET,
     "TOS_ENDPOINT_URL": TOS_ENDPOINT_URL,
 }
+
+_tos_flag = os.getenv("DJANGO_USE_TOS_STORAGE")
+if _tos_flag is None:
+    USE_TOS_STORAGE = all(value not in {None, ""} for value in _required_tos_settings.values())
+else:
+    USE_TOS_STORAGE = _tos_flag.lower() == "true"
 
 if USE_TOS_STORAGE and any(value in {None, ""} for value in _required_tos_settings.values()):
     missing_keys = [key for key, value in _required_tos_settings.items() if value in {None, ""}]
@@ -258,6 +264,8 @@ REST_FRAMEWORK = {
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "http://192.168.3.3:8000").rstrip("/")
 
 
 # Email configuration

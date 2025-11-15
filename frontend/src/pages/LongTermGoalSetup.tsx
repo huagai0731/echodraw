@@ -41,6 +41,7 @@ const DIGIT_HEIGHT = {
   medium: 64,
 } as const;
 const MIN_TOTAL_HOURS = 50;
+const MAX_TOTAL_HOURS = 5000;
 const MAX_CHECKPOINTS = 90;
 
 function LongTermGoalSetup({
@@ -272,6 +273,7 @@ function LongTermGoalSetup({
                   ))}
                   <span className="long-term-setup__unit">小时</span>
                 </div>
+                <p className="long-term-setup__hint">数值范围：50 - 5000 小时</p>
                 {copyLoading ? (
                   <p className="long-term-setup__hint">正在加载建议文案...</p>
                 ) : activeCopyGuide ? (
@@ -526,7 +528,7 @@ function clampTotalHours(value: number) {
   if (!Number.isFinite(value)) {
     return MIN_TOTAL_HOURS;
   }
-  return Math.min(Math.max(Math.round(value), MIN_TOTAL_HOURS), 9999);
+  return Math.min(Math.max(Math.round(value), MIN_TOTAL_HOURS), MAX_TOTAL_HOURS);
 }
 
 function clampCheckpointCount(value: number, totalHours: number) {
