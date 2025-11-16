@@ -885,20 +885,30 @@ class ConditionalMessage(models.Model):
             total_checkins = check_in_stats.get("total_checkins", 0)
             current_streak = check_in_stats.get("current_streak", 0)
             
-            if self.min_total_checkins is not None and total_checkins < self.min_total_checkins:
+            # 确保类型一致（防止从数据库读取时是字符串）
+            min_total_checkins = int(self.min_total_checkins) if self.min_total_checkins is not None else None
+            max_total_checkins = int(self.max_total_checkins) if self.max_total_checkins is not None else None
+            min_streak_days = int(self.min_streak_days) if self.min_streak_days is not None else None
+            max_streak_days = int(self.max_streak_days) if self.max_streak_days is not None else None
+            
+            if min_total_checkins is not None and total_checkins < min_total_checkins:
                 return False
-            if self.max_total_checkins is not None and total_checkins > self.max_total_checkins:
+            if max_total_checkins is not None and total_checkins > max_total_checkins:
                 return False
-            if self.min_streak_days is not None and current_streak < self.min_streak_days:
+            if min_streak_days is not None and current_streak < min_streak_days:
                 return False
-            if self.max_streak_days is not None and current_streak > self.max_streak_days:
+            if max_streak_days is not None and current_streak > max_streak_days:
                 return False
 
         # 检查上传条件
         if total_uploads is not None:
-            if self.min_total_uploads is not None and total_uploads < self.min_total_uploads:
+            # 确保类型一致（防止从数据库读取时是字符串）
+            min_total_uploads = int(self.min_total_uploads) if self.min_total_uploads is not None else None
+            max_total_uploads = int(self.max_total_uploads) if self.max_total_uploads is not None else None
+            
+            if min_total_uploads is not None and total_uploads < min_total_uploads:
                 return False
-            if self.max_total_uploads is not None and total_uploads > self.max_total_uploads:
+            if max_total_uploads is not None and total_uploads > max_total_uploads:
                 return False
 
         # 检查上一次上传的心情和标签条件
@@ -1577,22 +1587,34 @@ class MonthlyReportTemplate(models.Model):
         
         # 检查上传条件
         if total_uploads is not None:
-            if self.min_total_uploads is not None and total_uploads < self.min_total_uploads:
+            # 确保类型一致（防止从数据库读取时是字符串）
+            min_total_uploads = int(self.min_total_uploads) if self.min_total_uploads is not None else None
+            max_total_uploads = int(self.max_total_uploads) if self.max_total_uploads is not None else None
+            
+            if min_total_uploads is not None and total_uploads < min_total_uploads:
                 return False
-            if self.max_total_uploads is not None and total_uploads > self.max_total_uploads:
+            if max_total_uploads is not None and total_uploads > max_total_uploads:
                 return False
         
         # 检查时长条件
         if total_hours is not None:
-            if self.min_total_hours is not None and total_hours < self.min_total_hours:
+            # 确保类型一致（防止从数据库读取时是字符串）
+            min_total_hours = float(self.min_total_hours) if self.min_total_hours is not None else None
+            max_total_hours = float(self.max_total_hours) if self.max_total_hours is not None else None
+            
+            if min_total_hours is not None and total_hours < min_total_hours:
                 return False
-            if self.max_total_hours is not None and total_hours > self.max_total_hours:
+            if max_total_hours is not None and total_hours > max_total_hours:
                 return False
         
         if avg_hours is not None:
-            if self.min_avg_hours is not None and avg_hours < self.min_avg_hours:
+            # 确保类型一致（防止从数据库读取时是字符串）
+            min_avg_hours = float(self.min_avg_hours) if self.min_avg_hours is not None else None
+            max_avg_hours = float(self.max_avg_hours) if self.max_avg_hours is not None else None
+            
+            if min_avg_hours is not None and avg_hours < min_avg_hours:
                 return False
-            if self.max_avg_hours is not None and avg_hours > self.max_avg_hours:
+            if max_avg_hours is not None and avg_hours > max_avg_hours:
                 return False
         
         # 检查创作类型条件
