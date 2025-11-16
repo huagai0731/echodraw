@@ -891,15 +891,7 @@ function drawTemplate(
   context.restore();
 }
 
-function drawBackground(context: CanvasRenderingContext2D, width: number, height: number, shadowColor: string) {
-  context.fillStyle = "#120c0b";
-  context.fillRect(0, 0, width, height);
-  const overlay = context.createLinearGradient(0, 0, width, height);
-  overlay.addColorStop(0, withAlpha(shadowColor || "#4a3f4a", 0.18));
-  overlay.addColorStop(1, "rgba(0, 0, 0, 0.9)");
-  context.fillStyle = overlay;
-  context.fillRect(0, 0, width, height);
-}
+// 移除未使用的 drawBackground 以通过构建
 
 function drawGridFrames(
   context: CanvasRenderingContext2D,
@@ -908,8 +900,8 @@ function drawGridFrames(
   frameWidth: number,
   frameHeight: number,
   gap: number,
-  width: number,
-  height: number,
+  _width: number,
+  _height: number,
   data: TemplateViewModel,
   images: Record<string, HTMLImageElement>,
 ) {
@@ -975,7 +967,7 @@ function drawTileFooter(
   tile: { x: number; y: number; width: number; height: number },
   data: TemplateViewModel,
   item: TemplateItem,
-  baseWidth: number,
+  _baseWidth: number,
 ) {
   const overlayHeight = Math.min(tile.height * 0.35, tile.width * 0.55);
   const overlayY = tile.y + tile.height - overlayHeight;
@@ -1044,115 +1036,7 @@ function drawTileFooter(
   }
 }
 
-function drawGradientFooter(
-  context: CanvasRenderingContext2D,
-  width: number,
-  height: number,
-  imageBottomY: number,
-  data: TemplateViewModel,
-) {
-  const rect = { x: 0, y: 0, width, height };
-  const overlayHeight = Math.min((height - imageBottomY) + width * 0.12, width * 0.45);
-  const overlayY = Math.max(0, height - overlayHeight);
-  const gradient = context.createLinearGradient(0, overlayY, 0, height);
-  const base = data.shadowColor || "#221b1b";
-  gradient.addColorStop(0, withAlpha(base, 0));
-  gradient.addColorStop(1, withAlpha(base, 0.95 * data.overlayOpacity));
-
-  context.save();
-  drawRoundedRectPath(context, rect.x, overlayY, rect.width, overlayHeight, width * 0.03);
-  context.clip();
-  context.fillStyle = gradient;
-  context.fillRect(rect.x, overlayY, rect.width, overlayHeight);
-  context.restore();
-
-  const paddingX = width * 0.06;
-  const contentX = rect.x + paddingX;
-  const contentWidth = rect.width - paddingX * 2;
-  const bottomPadding = Math.round(width * 0.02);
-  const usernameY = height - bottomPadding;
-  const blockBottomY = usernameY - Math.round(width * 0.02);
-
-  const displayTitle = (data.title || "").trim();
-  const subtitle = (data.subtitle || "").replace(/\s+/g, " ").trim();
-  const subtitleDisplay = (() => {
-    const tempFont = `400 ${Math.round(width * 0.026)}px "Manrope", "Segoe UI", sans-serif`;
-    context.save();
-    context.font = tempFont;
-    const baseLine = subtitle || "";
-    const result = baseLine ? ellipsizeToWidth(context, baseLine, contentWidth) : "";
-    context.restore();
-    return result;
-  })();
-
-  const metaLineParts: string[] = [];
-  if (data.dateLabel) metaLineParts.push(data.dateLabel);
-  if (data.durationLabel) metaLineParts.push(data.durationLabel);
-  const metaLine = metaLineParts.length > 0 ? metaLineParts.join(" / ") : "";
-
-  const enabledLines: Array<"title" | "subtitle" | "tags" | "meta"> = [];
-  if (displayTitle) enabledLines.push("title");
-  if (subtitleDisplay) enabledLines.push("subtitle");
-  if (data.tags && data.tags.length > 0) enabledLines.push("tags");
-  if (metaLine) enabledLines.push("meta");
-
-  const lineHeight = Math.round(width * 0.055);
-  const totalLines = enabledLines.length;
-  const getLineY = (indexFromTop: number) => {
-    const indexFromBottom = totalLines - 1 - indexFromTop;
-    return blockBottomY - lineHeight * indexFromBottom;
-  };
-
-  context.save();
-  context.textAlign = "left";
-  enabledLines.forEach((kind, indexFromTop) => {
-    const y = getLineY(indexFromTop);
-    if (kind === "title") {
-      context.fillStyle = withAlpha(data.accentColor || "#9edac4", data.textOpacity);
-      context.font = `600 ${Math.round(width * 0.030)}px "Manrope", "Segoe UI", sans-serif`;
-      context.fillText(displayTitle, contentX, y);
-      return;
-    }
-    if (kind === "subtitle") {
-      context.font = `400 ${Math.round(width * 0.026)}px "Manrope", "Segoe UI", sans-serif`;
-      context.fillStyle = withAlpha(data.textColor, data.textOpacity);
-      context.fillText(subtitleDisplay, contentX, y);
-      return;
-    }
-    if (kind === "tags") {
-      const tags = data.tags.slice(0, 5);
-      if (tags.length > 0) {
-        context.font = `500 ${Math.round(width * 0.024)}px "Manrope", "Segoe UI", sans-serif`;
-        const gap = width * 0.016;
-        let tagX = contentX;
-        const maxX = contentX + contentWidth;
-        for (const tag of tags) {
-          const label = `#${tag}`;
-          const badgeWidth = measureTagBadgeWidth(context, label, width);
-          if (tagX + badgeWidth > maxX) break;
-          const badgeTop = Math.round(y - (width * 0.034) * 0.6);
-          drawTagBadge(context, tagX, badgeTop, label, width, data.textOpacity, data.accentColor);
-          tagX += badgeWidth + gap;
-        }
-      }
-      return;
-    }
-    if (kind === "meta") {
-      context.font = `400 ${Math.round(width * 0.024)}px "Manrope", "Segoe UI", sans-serif`;
-      context.fillStyle = withAlpha(data.textColor, data.textOpacity);
-      context.fillText(metaLine, contentX, y);
-    }
-  });
-  context.restore();
-
-  const username = (data.username || "").trim();
-  if (username) {
-    context.textAlign = "right";
-    context.font = `500 ${Math.round(width * 0.028)}px "Manrope", "Segoe UI", sans-serif`;
-    context.fillStyle = withAlpha(data.textColor, data.textOpacity);
-    context.fillText(username, contentX + contentWidth, usernameY);
-  }
-}
+// 移除未使用的 drawGradientFooter 以通过构建
 
 function drawTagBadge(
   context: CanvasRenderingContext2D,
@@ -1247,11 +1131,7 @@ function clamp01(value: number): number {
   if (Number.isNaN(value)) return 0;
   return Math.min(1, Math.max(0, value));
 }
-function clamp(value: number, min: number, max: number): number {
-  if (Number.isNaN(value)) return min;
-  if (min > max) return min;
-  return Math.min(max, Math.max(min, value));
-}
+// 移除未使用的 clamp 以通过构建
 type HSL = { h: number; s: number; l: number };
 function rgbToHsl({ r, g, b }: RGBColor): HSL {
   const rn = r / 255, gn = g / 255, bn = b / 255;

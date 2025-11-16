@@ -37,8 +37,7 @@ const DEFAULT_USERNAME = "@EchoUser";
 const MAX_TAG_COUNT = 6;
 const MIN_IMAGE_HEIGHT_RATIO = 0.6;
 const MAX_IMAGE_HEIGHT_RATIO = 1.35;
-const MIN_FOOTER_HEIGHT_RATIO = 0.35;
-const MAX_FOOTER_HEIGHT_RATIO = 0.7;
+// 移除未使用的页脚高度比例常量以通过构建
 
 const PRESET_SHADOW_COLORS = [
   "#221b1b",
@@ -1044,7 +1043,7 @@ function drawPrimaryImage(context: CanvasRenderingContext2D, rect: ImageRect, im
 function drawGradientFooter(
   context: CanvasRenderingContext2D,
   rect: ImageRect,
-  footerHeight: number,
+  _footerHeight: number,
   data: TemplateViewModel,
 ) {
   // 更窄的覆盖高度，靠近底部，营造细薄但更集中于底部的遮罩
@@ -1234,35 +1233,7 @@ function measureTagBadgeWidth(context: CanvasRenderingContext2D, text: string, b
   return textWidth + paddingX * 2;
 }
 
-function wrapText(context: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
-  const lines: string[] = [];
-  const paragraphs = text.replace(/\r\n/g, "\n").split("\n");
-
-  paragraphs.forEach((paragraph, paragraphIndex) => {
-    if (!paragraph) {
-      lines.push("");
-      return;
-    }
-    let current = "";
-    for (const char of paragraph) {
-      const tentative = current + char;
-      if (context.measureText(tentative).width > maxWidth && current) {
-        lines.push(current);
-        current = char.trim().length > 0 ? char : "";
-      } else {
-        current = tentative;
-      }
-    }
-    if (current) {
-      lines.push(current);
-    }
-    if (paragraphIndex < paragraphs.length - 1) {
-      lines.push("");
-    }
-  });
-
-  return lines.filter((line, index, arr) => !(line === "" && (index === 0 || arr[index - 1] === "")));
-}
+// 移除未使用的 wrapText 以通过构建
 
 function drawRoundedRectPath(
   context: CanvasRenderingContext2D,
@@ -1292,20 +1263,7 @@ type RGBColor = {
   b: number;
 };
 
-function mixHexColors(colorA: string, colorB: string, ratio: number): string {
-  const rgbA = hexToRgb(colorA);
-  const rgbB = hexToRgb(colorB);
-  if (!rgbA || !rgbB) {
-    return colorA;
-  }
-  const clamped = clamp01(ratio);
-  const mixed: RGBColor = {
-    r: Math.round(rgbA.r + (rgbB.r - rgbA.r) * clamped),
-    g: Math.round(rgbA.g + (rgbB.g - rgbA.g) * clamped),
-    b: Math.round(rgbA.b + (rgbB.b - rgbA.b) * clamped),
-  };
-  return rgbToHex(mixed);
-}
+// 移除未使用的 mixHexColors 以通过构建
 
 function withAlpha(color: string, alpha: number): string {
   const rgb = hexToRgb(color);
@@ -1420,15 +1378,7 @@ function adjustHexSaturation(hex: string, saturation: number): string {
   return rgbToHex(adjusted);
 }
 
-function relativeLuminance(hex: string): number {
-  const rgb = hexToRgb(hex);
-  if (!rgb) return 0.5;
-  const srgb = [rgb.r, rgb.g, rgb.b].map((v) => {
-    const n = v / 255;
-    return n <= 0.03928 ? n / 12.92 : Math.pow((n + 0.055) / 1.055, 2.4);
-  });
-  return 0.2126 * (srgb[0] ?? 0) + 0.7152 * (srgb[1] ?? 0) + 0.0722 * (srgb[2] ?? 0);
-}
+// 移除未使用的 relativeLuminance 以通过构建
 
 function desaturateHex(hex: string, t: number): string {
   const rgb = hexToRgb(hex);
