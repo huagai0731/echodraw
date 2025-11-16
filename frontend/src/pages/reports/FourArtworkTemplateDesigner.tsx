@@ -1038,29 +1038,7 @@ function drawTileFooter(
 
 // 移除未使用的 drawGradientFooter 以通过构建
 
-function drawTagBadge(
-  context: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  text: string,
-  baseWidth: number,
-  textOpacity: number,
-  accentHex: string,
-) {
-  const paddingX = baseWidth * 0.012;
-  const textWidth = context.measureText(text).width;
-  const height = baseWidth * 0.034;
-  const width = textWidth + paddingX * 2;
-  drawRoundedRectPath(context, x, y, width, height, height / 2);
-  context.fillStyle = withAlpha(accentHex || "#98dbc6", 0.12);
-  context.fill();
-  context.strokeStyle = withAlpha(accentHex || "#98dbc6", 0.4);
-  context.stroke();
-  context.fillStyle = withAlpha(accentHex || "#98dbc6", clamp01(0.9 * textOpacity));
-  context.textAlign = "left";
-  context.textBaseline = "middle";
-  context.fillText(text, x + paddingX, y + Math.round(height * 0.52));
-}
+// 已移除未使用的 drawTagBadge 以通过构建
 
 function ellipsizeToWidth(context: CanvasRenderingContext2D, text: string, maxWidth: number): string {
   if (context.measureText(text).width <= maxWidth) {
@@ -1083,11 +1061,7 @@ function ellipsizeToWidth(context: CanvasRenderingContext2D, text: string, maxWi
   return best || ellipsis;
 }
 
-function measureTagBadgeWidth(context: CanvasRenderingContext2D, text: string, baseWidth: number): number {
-  const paddingX = baseWidth * 0.015;
-  const textWidth = context.measureText(text).width;
-  return textWidth + paddingX * 2;
-}
+// 已移除未使用的 measureTagBadgeWidth 以通过构建
 
 function drawRoundedRectPath(
   context: CanvasRenderingContext2D,
