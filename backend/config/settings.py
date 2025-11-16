@@ -115,6 +115,23 @@ if _db_engine in {"postgres", "postgresql", "psql"}:
             },
         }
     }
+elif _db_engine in {"mysql", "mariadb"}:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.mysql",
+            "HOST": os.getenv("DB_HOST", "127.0.0.1"),
+            "PORT": int(os.getenv("DB_PORT", "3306")),
+            "NAME": os.getenv("DB_NAME", "echo"),
+            "USER": os.getenv("DB_USER", "root"),
+            "PASSWORD": os.getenv("DB_PASSWORD", ""),
+            "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "60")),
+            "OPTIONS": {
+                "charset": "utf8mb4",
+                "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
+                "connect_timeout": int(os.getenv("DB_CONNECT_TIMEOUT", "5")),
+            },
+        }
+    }
 else:
     DATABASES = {
         "default": {

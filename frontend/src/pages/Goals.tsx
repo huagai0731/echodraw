@@ -512,7 +512,7 @@ function Goals() {
     setLocalUploadDates(next);
   }, []);
 
-  // 从日历数据中提取已打卡的日期并更新 localUploadDates
+  // 从日历数据中提取实际上传作品的日期并更新 localUploadDates
   const refreshCheckInDates = useCallback(async () => {
     if (!hasAuthToken()) {
       return;
@@ -526,24 +526,24 @@ function Goals() {
       // 获取当前月的打卡记录
       const data = await fetchGoalsCalendar({ year: currentYear, month: currentMonth });
       
-      // 从日历数据中提取已打卡的日期
-      const checkInDates = new Set<string>();
+      // 从日历数据中只提取实际上传了作品的日期（status === "upload"）
+      const uploadDates = new Set<string>();
       data.days.forEach((day) => {
-        if (day.status === "check" || day.status === "upload") {
-          checkInDates.add(day.date);
+        if (day.status === "upload") {
+          uploadDates.add(day.date);
         }
       });
       
-      // 合并本地存储的上传日期和API返回的打卡日期
+      // 合并本地存储的上传日期和API返回的上传日期
       const stored = loadStoredArtworks();
       stored.forEach((artwork) => {
         const dateKey = normalizeUploadedDate(artwork.uploadedDate ?? null, artwork.uploadedAt ?? null);
         if (dateKey) {
-          checkInDates.add(dateKey);
+          uploadDates.add(dateKey);
         }
       });
       
-      setLocalUploadDates(checkInDates);
+      setLocalUploadDates(uploadDates);
     } catch (error) {
       console.warn("[Goals] Failed to refresh check-in dates", error);
       // 如果API调用失败，至少使用本地存储的数据
@@ -553,7 +553,9 @@ function Goals() {
 
   useEffect(() => {
     refreshUploadData();
-  }, [refreshUploadData]);
+    // 同时从 API 刷新打卡记录，确保状态同步
+    refreshCheckInDates();
+  }, [refreshUploadData, refreshCheckInDates]);
 
   useEffect(() => {
     let active = true;
@@ -723,13 +725,14 @@ function Goals() {
     if (localUploadDates.size === 0) {
       return base;
     }
+    // 如果本地有上传日期但后端日历中没有标记为 upload，则标记为 upload
+    // 但不要覆盖已经明确标记为 check 的状态（只打卡没有上传的情况）
     return base.map((day) => {
-      if (localUploadDates.has(day.date)) {
-        if (day.status === "upload") {
-          return day;
-        }
+      if (localUploadDates.has(day.date) && day.status === "none") {
+        // 本地有上传但后端还没同步，标记为 upload
         return { ...day, status: "upload" as GoalsCalendarDay["status"] };
       }
+      // 保持后端的原始状态：check（只打卡）或 upload（有上传）
       return day;
     });
   }, [calendarDays, activeMonth, localUploadDates]);
@@ -810,6 +813,12 @@ function Goals() {
     setShortTermGoals((prev) => prev.filter((goal) => goal.id !== goalId));
     console.log("[Goals] Removed deleted goal from list", goalId);
   }, []);
+
+  const handleGoalOpen = useCallback((goal: ShortTermGoal) => {
+    // 打开详情页面时刷新打卡记录，确保显示最新状态
+    refreshCheckInDates();
+    setActiveGoalDetail(goal);
+  }, [refreshCheckInDates]);
 
   if (showLongTermMetaEdit && longTermGoal) {
     return (
@@ -1021,7 +1030,7 @@ function Goals() {
                   type="button"
                   className="goals-carousel__item goals-carousel__item--button"
                   key={goal.id}
-                  onClick={() => setActiveGoalDetail(goal)}
+                  onClick={() => handleGoalOpen(goal)}
                 >
                   <div
                     className="goals-carousel__cover goals-carousel__cover--fallback"

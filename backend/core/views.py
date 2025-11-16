@@ -6,7 +6,6 @@ import calendar
 import mimetypes
 import os
 from datetime import date, timedelta
-from zoneinfo import ZoneInfo
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -27,8 +26,17 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from core.email_utils import send_mail_async
 
-# 中国时区常量
-SHANGHAI_TZ = ZoneInfo("Asia/Shanghai")
+# 尝试导入时区库，优先使用 zoneinfo（Python 3.9+），否则使用 pytz
+try:
+    from zoneinfo import ZoneInfo
+    SHANGHAI_TZ = ZoneInfo("Asia/Shanghai")
+except ImportError:
+    try:
+        import pytz
+        SHANGHAI_TZ = pytz.timezone("Asia/Shanghai")
+    except ImportError:
+        # 如果都没有，使用 Django 的时区设置
+        SHANGHAI_TZ = None
 
 
 def get_today_shanghai() -> date:
@@ -36,11 +44,36 @@ def get_today_shanghai() -> date:
     获取中国时区（Asia/Shanghai）的今天日期。
     确保无论服务器系统时区如何，都能正确获取中国时区的日期。
     """
-    now_utc = timezone.now()
-    if timezone.is_naive(now_utc):
-        now_utc = timezone.make_aware(now_utc)
-    shanghai_time = now_utc.astimezone(SHANGHAI_TZ)
-    return shanghai_time.date()
+    # 如果有时区库，使用明确的时区转换
+    if SHANGHAI_TZ is not None:
+        # timezone.now() 在 USE_TZ=True 时返回 UTC 时间
+        now_utc = timezone.now()
+        if timezone.is_naive(now_utc):
+            # 如果 USE_TZ=False，需要手动转换为 UTC
+            now_utc = timezone.make_aware(now_utc)
+        shanghai_time = now_utc.astimezone(SHANGHAI_TZ)
+        return shanghai_time.date()
+    else:
+        # 回退：使用 Django 的 timezone.localtime()
+        # 这依赖于 settings.TIME_ZONE = "Asia/Shanghai"
+        # 但为了确保正确，我们手动计算
+        now = timezone.now()
+        if timezone.is_naive(now):
+            now = timezone.make_aware(now)
+        
+        # 如果 USE_TZ=True，now 是 UTC 时间，需要转换为中国时区（UTC+8）
+        # 如果 USE_TZ=False，now 已经是本地时间，但我们需要确保它是中国时区
+        if settings.USE_TZ:
+            # 手动计算 UTC+8
+            from datetime import timedelta
+            shanghai_offset = timedelta(hours=8)
+            shanghai_time = now + shanghai_offset
+        else:
+            # USE_TZ=False 时，now 已经是本地时间
+            # 如果 TIME_ZONE = "Asia/Shanghai"，应该已经是正确的
+            # 但为了安全，我们使用 timezone.localtime()
+            shanghai_time = timezone.localtime(now)
+        return shanghai_time.date()
 
 from core.models import (
     Achievement,
@@ -111,6 +144,46 @@ def health_check(_request):
     """Simple endpoint to verify the service is running."""
 
     return Response({"status": "ok"})
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])  # 允许不认证访问，方便调试
+def debug_timezone(request):
+    """调试端点：检查时区计算是否正确"""
+    import datetime
+    now_utc = timezone.now()
+    today_shanghai = get_today_shanghai()
+    
+    # 计算各种时区的当前时间
+    info = {
+        "timezone_now_utc": now_utc.isoformat() if now_utc else None,
+        "timezone_is_naive": timezone.is_naive(now_utc) if now_utc else None,
+        "today_shanghai": today_shanghai.isoformat() if today_shanghai else None,
+        "django_timezone": str(settings.TIME_ZONE),
+        "django_use_tz": settings.USE_TZ,
+        "shanghai_tz_available": SHANGHAI_TZ is not None,
+    }
+    
+    # 如果有时区库，显示转换后的时间
+    if SHANGHAI_TZ is not None:
+        try:
+            shanghai_time = now_utc.astimezone(SHANGHAI_TZ)
+            info["shanghai_time"] = shanghai_time.isoformat()
+            info["shanghai_date"] = shanghai_time.date().isoformat()
+        except Exception as e:
+            info["shanghai_time_error"] = str(e)
+    
+    # 如果用户已登录，显示用户打卡状态
+    if request.user.is_authenticated:
+        user = request.user
+        stats = _get_check_in_stats(user)
+        info["user_checkin_stats"] = stats
+        info["user_email"] = user.email
+    else:
+        info["user_checkin_stats"] = None
+        info["note"] = "未登录，无法显示用户打卡状态。请登录后访问或使用前端应用访问 /api/goals/check-in/"
+    
+    return Response(info)
 
 
 @api_view(["POST"])

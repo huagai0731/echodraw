@@ -121,6 +121,7 @@ router.register(
 
 urlpatterns = [
     path("health/", views.health_check, name="health-check"),
+    path("debug/timezone/", views.debug_timezone, name="debug-timezone"),
     path("auth/send-code/", views.send_verification_code, name="send-code"),
     path("auth/register/", views.register, name="register"),
     path("auth/reset-password/", views.reset_password, name="reset-password"),

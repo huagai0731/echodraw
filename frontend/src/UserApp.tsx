@@ -18,6 +18,7 @@ import {
   API_BASE_URL,
   AUTH_FORCED_LOGOUT_EVENT,
     AUTH_CHANGED_EVENT,
+  CHECK_IN_STATUS_CHANGED_EVENT,
   EXPLICIT_API_BASE_URL,
   createUserUpload,
   deleteUserUpload,
@@ -605,6 +606,7 @@ function UserApp() {
           window.localStorage.removeItem("echodraw-profile-preferences");
           // 清除打卡相关数据
           window.localStorage.removeItem(LOCAL_LAST_CHECKIN_KEY);
+          window.localStorage.removeItem("echo-last-checkin-status");
         } catch (error) {
           console.warn("[Echo] Failed to clear user data from localStorage:", error);
         }
@@ -873,6 +875,8 @@ function UserApp() {
           const chinaIso = getChinaDateIsoFrom(new Date(record.uploaded_at));
           if (typeof window !== "undefined") {
             window.localStorage.setItem(LOCAL_LAST_CHECKIN_KEY, chinaIso);
+            // 触发打卡状态刷新事件，让首页更新打卡状态
+            window.dispatchEvent(new CustomEvent(CHECK_IN_STATUS_CHANGED_EVENT));
           }
         } catch {
           // ignore storage errors

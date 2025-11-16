@@ -63,6 +63,7 @@ if (typeof window !== "undefined") {
 export const AUTH_STORAGE_KEY = "echodraw-auth";
 export const AUTH_CHANGED_EVENT = "echo.auth-changed";
 export const AUTH_FORCED_LOGOUT_EVENT = "echo.auth-forced-logout";
+export const CHECK_IN_STATUS_CHANGED_EVENT = "echo.check-in-status-changed";
 
 let currentAuthToken: string | null = null;
 let lastNotifiedAuthToken: string | null | undefined;

@@ -6,6 +6,7 @@ import MaterialIcon from "@/components/MaterialIcon";
 import TopNav from "@/components/TopNav";
 import {
   AUTH_CHANGED_EVENT,
+  CHECK_IN_STATUS_CHANGED_EVENT,
   fetchCheckInStatus,
   fetchHomeMessages,
   hasAuthToken,
@@ -113,11 +114,52 @@ function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomePr
       setCheckInStatusRequested(false);
       setCheckInError(null);
       setLoadingCopy(true);
+      // 清除 localStorage 中的打卡缓存
+      try {
+        if (typeof window !== "undefined") {
+          window.localStorage.removeItem(LOCAL_CHECKIN_STATUS_KEY);
+          window.localStorage.removeItem(LOCAL_LAST_CHECKIN_KEY);
+        }
+      } catch {
+        // ignore storage errors
+      }
+    };
+
+    const handleCheckInStatusChange = async () => {
+      // 刷新打卡状态
+      setCheckInStatusRequested(true);
+      try {
+        if (hasAuthToken()) {
+          const status = await fetchCheckInStatus();
+          setCheckInStatus(status);
+          setCheckInError(null);
+          try {
+            if (typeof window !== "undefined") {
+              window.localStorage.setItem(LOCAL_CHECKIN_STATUS_KEY, JSON.stringify(status));
+            }
+          } catch {
+            // ignore storage errors
+          }
+        } else {
+          setCheckInStatusRequested(false);
+        }
+      } catch (error) {
+        setCheckInStatusRequested(false);
+        const status = (error as AxiosError)?.response?.status;
+        if (status === 401 || status === 403) {
+          setCheckInError("请登录后查看打卡状态。");
+        } else {
+          console.warn("Failed to refresh check-in status", error);
+          setCheckInError("获取打卡状态失败，请稍后重试。");
+        }
+      }
     };
 
     window.addEventListener(AUTH_CHANGED_EVENT, handleAuthChange);
+    window.addEventListener(CHECK_IN_STATUS_CHANGED_EVENT, handleCheckInStatusChange);
     return () => {
       window.removeEventListener(AUTH_CHANGED_EVENT, handleAuthChange);
+      window.removeEventListener(CHECK_IN_STATUS_CHANGED_EVENT, handleCheckInStatusChange);
     };
   }, []);
 
@@ -182,6 +224,74 @@ function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomePr
       isMounted = false;
     };
   }, [authVersion]);
+
+  // 添加每天0点自动刷新打卡状态的机制
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    function getNextMidnightShanghai(): number {
+      const now = new Date();
+      const formatter = new Intl.DateTimeFormat("zh-CN", {
+        timeZone: "Asia/Shanghai",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+      const parts = formatter.formatToParts(now);
+      const year = parseInt(parts.find((p) => p.type === "year")?.value ?? "0", 10);
+      const month = parseInt(parts.find((p) => p.type === "month")?.value ?? "0", 10) - 1;
+      const day = parseInt(parts.find((p) => p.type === "day")?.value ?? "0", 10);
+      
+      // 创建上海时区的今天0点
+      const midnightShanghai = new Date(Date.UTC(year, month, day + 1, 0, 0, 0, 0));
+      // 计算UTC时间差（上海是UTC+8）
+      const shanghaiOffset = 8 * 60 * 60 * 1000;
+      const midnightLocal = new Date(midnightShanghai.getTime() - shanghaiOffset);
+      
+      // 如果已经过了今天0点，则设置为明天0点
+      if (midnightLocal <= now) {
+        midnightLocal.setDate(midnightLocal.getDate() + 1);
+      }
+      
+      return midnightLocal.getTime();
+    }
+
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    const scheduleNextRefresh = () => {
+      const nextMidnight = getNextMidnightShanghai();
+      const delay = nextMidnight - Date.now();
+
+      const timeoutId = setTimeout(() => {
+        // 触发打卡状态刷新事件
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent(CHECK_IN_STATUS_CHANGED_EVENT));
+        }
+        // 设置定时器，每24小时刷新一次
+        intervalId = setInterval(() => {
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent(CHECK_IN_STATUS_CHANGED_EVENT));
+          }
+        }, 24 * 60 * 60 * 1000);
+      }, delay);
+
+      return timeoutId;
+    };
+
+    const timeoutId = scheduleNextRefresh();
+
+    return () => {
+      clearTimeout(timeoutId);
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (checkInStatus || checkInStatusRequested) {
@@ -302,37 +412,26 @@ function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomePr
 
   const checkedIn = (() => {
     const serverChecked = checkInStatus?.checked_today ?? false;
+    // 优先使用服务器返回的状态
     if (serverChecked) {
       return true;
     }
-    try {
-      if (typeof window !== "undefined") {
-        const local = window.localStorage.getItem(LOCAL_LAST_CHECKIN_KEY);
-        return Boolean(local && local === (function getToday() {
-          try {
-            const formatter = new Intl.DateTimeFormat("zh-CN", {
-              timeZone: "Asia/Shanghai",
-              year: "numeric",
-              month: "2-digit",
-              day: "2-digit",
-            });
-            const parts = formatter.formatToParts(new Date());
-            const y = parts.find((p) => p.type === "year")?.value ?? "0000";
-            const m = parts.find((p) => p.type === "month")?.value ?? "01";
-            const d = parts.find((p) => p.type === "day")?.value ?? "01";
-            return `${y}-${m}-${d}`;
-          } catch {
-            const now = new Date();
-            const y = now.getFullYear();
-            const m = String(now.getMonth() + 1).padStart(2, "0");
-            const d = String(now.getDate()).padStart(2, "0");
-            return `${y}-${m}-${d}`;
+    // 如果服务器明确说今天没打卡，清除本地存储的打卡日期，避免缓存干扰
+    if (checkInStatus !== null && !serverChecked) {
+      try {
+        if (typeof window !== "undefined") {
+          const local = window.localStorage.getItem(LOCAL_LAST_CHECKIN_KEY);
+          const today = getTodayIso();
+          // 如果本地存储的日期是今天，但服务器说今天没打卡，清除本地存储
+          if (local === today) {
+            window.localStorage.removeItem(LOCAL_LAST_CHECKIN_KEY);
           }
-        })());
+        }
+      } catch {
+        // ignore storage errors
       }
-    } catch {
-      // ignore storage errors
     }
+    // 服务器状态优先，如果服务器说没打卡，就返回 false
     return false;
   })();
   const totalCheckins = checkInStatus?.total_checkins ?? 0;
@@ -382,7 +481,7 @@ function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomePr
               checkedIn && "home-screen__card--checked",
             )}
             onClick={handleCheckIn}
-            disabled={checkInLoading}
+            disabled={checkInLoading || checkedIn}
             aria-busy={checkInLoading ? "true" : undefined}
           >
             <MaterialIcon

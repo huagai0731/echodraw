@@ -115,8 +115,9 @@ function TestAccountDetailPage() {
           password: "",
           is_active: profile.is_active,
         });
-        setCheckins(checkinData);
-        setUploads(uploadData);
+        // 确保 checkinData 和 uploadData 始终是数组
+        setCheckins(Array.isArray(checkinData) ? checkinData : []);
+        setUploads(Array.isArray(uploadData) ? uploadData : []);
       } catch (err) {
         handleError(err, "加载测试账号详情失败。");
         setTimeout(() => navigate("/admin/test-accounts", { replace: true }), 800);
@@ -148,7 +149,9 @@ function TestAccountDetailPage() {
   };
 
   const calendarDays = useMemo<CalendarDisplayDay[]>(() => {
-    const checkinSet = new Set(checkins.map((entry) => entry.date));
+    // 确保 checkins 是数组
+    const safeCheckins = Array.isArray(checkins) ? checkins : [];
+    const checkinSet = new Set(safeCheckins.map((entry) => entry.date));
     return buildCalendarDays(calendarMonth).map((day) => ({
       ...day,
       checked: checkinSet.has(day.date),
@@ -495,7 +498,8 @@ function TestAccountDetailPage() {
   };
 
   const sortedCheckins = useMemo(() => {
-    return checkins.slice().sort((a, b) => (a.date > b.date ? -1 : 1));
+    const safeCheckins = Array.isArray(checkins) ? checkins : [];
+    return safeCheckins.slice().sort((a, b) => (a.date > b.date ? -1 : 1));
   }, [checkins]);
 
   const sortedUploads = useMemo(() => {

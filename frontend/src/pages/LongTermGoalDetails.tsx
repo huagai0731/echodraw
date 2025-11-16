@@ -1,7 +1,9 @@
-import { useMemo, type CSSProperties } from "react";
+import { useMemo, useState, useEffect, type CSSProperties } from "react";
 
 import MaterialIcon from "@/components/MaterialIcon";
 import type { LongTermGoal, LongTermGoalCheckpoint } from "@/services/api";
+import type { Artwork } from "@/types/artwork";
+import { loadStoredArtworks, USER_ARTWORKS_CHANGED_EVENT } from "@/services/artworkStorage";
 
 import "./LongTermGoalDetails.css";
 
@@ -22,6 +24,11 @@ function LongTermGoalDetails({
   onSelectShowcase,
   onEditCompletionNote,
 }: LongTermGoalDetailsProps) {
+  const [selectedCheckpoint, setSelectedCheckpoint] = useState<LongTermGoalCheckpoint | null>(null);
+  const [showArtworkModal, setShowArtworkModal] = useState(false);
+  const [showImageViewer, setShowImageViewer] = useState(false);
+  const [viewingImage, setViewingImage] = useState<string | null>(null);
+
   const progressPercent = clampPercent(goal.progress.progressRatio * 100);
   const timelineStyle = useMemo(() => {
     return {
@@ -35,6 +42,26 @@ function LongTermGoalDetails({
   const fallbackDescription = `累计投入 ${formatHours(goal.progress.spentHours)} 小时，目标为 ${
     goal.targetHours
   } 小时，共 ${goal.checkpointCount} 个检查点。`;
+
+  const handleSelectShowcase = (checkpoint: LongTermGoalCheckpoint) => {
+    setSelectedCheckpoint(checkpoint);
+    setShowArtworkModal(true);
+  };
+
+  const handleViewImage = (imageUrl: string) => {
+    setViewingImage(imageUrl);
+    setShowImageViewer(true);
+  };
+
+  const handleCloseArtworkModal = () => {
+    setShowArtworkModal(false);
+    setSelectedCheckpoint(null);
+  };
+
+  const handleCloseImageViewer = () => {
+    setShowImageViewer(false);
+    setViewingImage(null);
+  };
 
   return (
     <div className="long-term-details">
@@ -109,8 +136,9 @@ function LongTermGoalDetails({
                     checkpointHours={checkpointHours}
                     spentMinutes={goal.progress.spentMinutes}
                     stageStartedAt={stageStartedAt}
-                    onSelectShowcase={onSelectShowcase}
+                    onSelectShowcase={handleSelectShowcase}
                     onEditCompletionNote={onEditCompletionNote}
+                    onViewImage={handleViewImage}
                   />
                 </div>
               );
@@ -118,6 +146,22 @@ function LongTermGoalDetails({
           </div>
         </main>
       </div>
+
+      {showArtworkModal && selectedCheckpoint && (
+        <ArtworkSelectionModal
+          checkpoint={selectedCheckpoint}
+          goal={goal}
+          onClose={handleCloseArtworkModal}
+          onSelect={(artwork) => {
+            onSelectShowcase?.(selectedCheckpoint);
+            handleCloseArtworkModal();
+          }}
+        />
+      )}
+
+      {showImageViewer && viewingImage && (
+        <ImageViewerModal imageUrl={viewingImage} onClose={handleCloseImageViewer} />
+      )}
     </div>
   );
 }
@@ -148,6 +192,7 @@ type CheckpointCardProps = {
   stageStartedAt: string | null | undefined;
   onSelectShowcase?: (checkpoint: LongTermGoalCheckpoint) => void;
   onEditCompletionNote?: (checkpoint: LongTermGoalCheckpoint) => void;
+  onViewImage?: (imageUrl: string) => void;
 };
 
 function CheckpointCard({
@@ -157,6 +202,7 @@ function CheckpointCard({
   stageStartedAt,
   onSelectShowcase,
   onEditCompletionNote,
+  onViewImage,
 }: CheckpointCardProps) {
   const thresholdHours = checkpoint.thresholdMinutes / 60;
   const progressPercent =
@@ -190,43 +236,58 @@ function CheckpointCard({
           {onEditCompletionNote ? <MaterialIcon name="edit" /> : null}
         </button>
         <div className="timeline-card__showcase">
-          <button
-            type="button"
-            className={`timeline-card__showcase-trigger${
-              checkpoint.upload ? "" : " timeline-card__showcase-trigger--empty"
-            }`}
-            onClick={() => onSelectShowcase?.(checkpoint)}
-            disabled={!onSelectShowcase}
-            aria-label={checkpoint.upload ? "更换代表作" : "选择代表作"}
-          >
-            {checkpoint.upload?.image ? (
-              <img
-                src={checkpoint.upload.image}
-                alt={checkpoint.upload.title || "创作记录"}
-                className="timeline-card__showcase-image"
-              />
-            ) : (
+          {checkpoint.upload?.image ? (
+            <div className="timeline-card__showcase-container">
+              <button
+                type="button"
+                className="timeline-card__showcase-image-wrapper"
+                onClick={() => checkpoint.upload?.image && onViewImage?.(checkpoint.upload.image!)}
+                aria-label="查看大图"
+              >
+                <img
+                  src={checkpoint.upload.image}
+                  alt={checkpoint.upload.title || "创作记录"}
+                  className="timeline-card__showcase-image"
+                />
+              </button>
+              <div className="timeline-card__showcase-info">
+                <p className="timeline-card__showcase-title">
+                  {checkpoint.upload.title || `第 ${checkpoint.index} 次创作`}
+                </p>
+                {onSelectShowcase && (
+                  <button
+                    type="button"
+                    className="timeline-card__showcase-change-btn"
+                    onClick={() => onSelectShowcase(checkpoint)}
+                    aria-label="更换代表作"
+                  >
+                    <MaterialIcon name="edit" />
+                    <span>更换图片</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="timeline-card__showcase-trigger timeline-card__showcase-trigger--empty"
+              onClick={() => onSelectShowcase?.(checkpoint)}
+              disabled={!onSelectShowcase}
+              aria-label="选择代表作"
+            >
               <div className="timeline-card__showcase-placeholder" aria-hidden="true">
                 <MaterialIcon name="add_photo_alternate" />
               </div>
-            )}
-            <div className="timeline-card__showcase-copy">
-              <p className="timeline-card__showcase-title">
-                {checkpoint.upload
-                  ? checkpoint.upload.title || `第 ${checkpoint.index} 次创作`
-                  : "选择代表作"}
-              </p>
-              <span className="timeline-card__showcase-hint">
-                {checkpoint.upload
-                  ? onSelectShowcase
-                    ? "点击更换，展示本阶段代表作"
-                    : "代表作"
-                  : onSelectShowcase
-                  ? "仅显示本阶段已上传的作品"
-                  : "暂无可选作品"}
-              </span>
-            </div>
-          </button>
+              <div className="timeline-card__showcase-copy">
+                <p className="timeline-card__showcase-title">选择代表作</p>
+                <span className="timeline-card__showcase-hint">
+                  {onSelectShowcase
+                    ? "仅显示本阶段已上传的作品"
+                    : "暂无可选作品"}
+                </span>
+              </div>
+            </button>
+          )}
         </div>
         {checkpoint.upload?.description ? (
           <p className="timeline-card__note-description">{checkpoint.upload.description}</p>
@@ -357,6 +418,133 @@ function formatCompletionFallback(
     return targetLabel ? `完成时间未记录（${targetLabel}）` : "完成时间未记录";
   }
   return targetLabel ? `完成于 ${dateLabel}（${targetLabel}）` : `完成于 ${dateLabel}`;
+}
+
+type ArtworkSelectionModalProps = {
+  checkpoint: LongTermGoalCheckpoint;
+  goal: LongTermGoal;
+  onClose: () => void;
+  onSelect: (artwork: Artwork) => void;
+};
+
+function ArtworkSelectionModal({
+  checkpoint,
+  goal,
+  onClose,
+  onSelect,
+}: ArtworkSelectionModalProps) {
+  const [allArtworks, setAllArtworks] = useState<Artwork[]>(() => loadStoredArtworks());
+  
+  // 监听画作数据变化
+  useEffect(() => {
+    const handleArtworksChange = () => {
+      setAllArtworks(loadStoredArtworks());
+    };
+    
+    window.addEventListener(USER_ARTWORKS_CHANGED_EVENT, handleArtworksChange);
+    return () => {
+      window.removeEventListener(USER_ARTWORKS_CHANGED_EVENT, handleArtworksChange);
+    };
+  }, []);
+  
+  // 计算checkpoint的时间范围
+  const checkpointIndex = checkpoint.index;
+  const checkpoints = goal.checkpoints ?? [];
+  const previousCheckpoint = checkpointIndex > 1 
+    ? checkpoints.find(cp => cp.index === checkpointIndex - 1)
+    : null;
+  
+  const startDate = previousCheckpoint?.reachedAt 
+    ? new Date(previousCheckpoint.reachedAt)
+    : new Date(goal.startedAt);
+  const endDate = checkpoint.reachedAt 
+    ? new Date(checkpoint.reachedAt)
+    : new Date();
+
+  // 筛选在checkpoint时间段内的画作
+  const filteredArtworks = useMemo(() => {
+    return allArtworks.filter((artwork) => {
+      const artworkDate = artwork.uploadedAt 
+        ? new Date(artwork.uploadedAt)
+        : artwork.uploadedDate
+        ? new Date(`${artwork.uploadedDate}T00:00:00Z`)
+        : null;
+      
+      if (!artworkDate) return false;
+      
+      return artworkDate >= startDate && artworkDate <= endDate;
+    });
+  }, [allArtworks, startDate, endDate]);
+
+  return (
+    <div className="artwork-selection-modal" onClick={onClose}>
+      <div className="artwork-selection-modal__content" onClick={(e) => e.stopPropagation()}>
+        <div className="artwork-selection-modal__header">
+          <h3 className="artwork-selection-modal__title">选择代表作</h3>
+          <button
+            type="button"
+            className="artwork-selection-modal__close"
+            onClick={onClose}
+            aria-label="关闭"
+          >
+            <MaterialIcon name="close" />
+          </button>
+        </div>
+        <div className="artwork-selection-modal__body">
+          {filteredArtworks.length === 0 ? (
+            <div className="artwork-selection-modal__empty">
+              <MaterialIcon name="image_not_supported" />
+              <p>该时间段内没有上传的画作</p>
+            </div>
+          ) : (
+            <div className="artwork-selection-modal__grid">
+              {filteredArtworks.map((artwork) => (
+                <button
+                  key={artwork.id}
+                  type="button"
+                  className="artwork-selection-modal__item"
+                  onClick={() => onSelect(artwork)}
+                >
+                  <img
+                    src={artwork.imageSrc}
+                    alt={artwork.title}
+                    className="artwork-selection-modal__item-image"
+                  />
+                  <p className="artwork-selection-modal__item-title">{artwork.title}</p>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type ImageViewerModalProps = {
+  imageUrl: string;
+  onClose: () => void;
+};
+
+function ImageViewerModal({ imageUrl, onClose }: ImageViewerModalProps) {
+  return (
+    <div className="image-viewer-modal" onClick={onClose}>
+      <button
+        type="button"
+        className="image-viewer-modal__close"
+        onClick={onClose}
+        aria-label="关闭"
+      >
+        <MaterialIcon name="close" />
+      </button>
+      <img
+        src={imageUrl}
+        alt="查看大图"
+        className="image-viewer-modal__image"
+        onClick={(e) => e.stopPropagation()}
+      />
+    </div>
+  );
 }
 
 export default LongTermGoalDetails;
