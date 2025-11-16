@@ -1,0 +1,1416 @@
+[INFO] 2025-11-17 05:59:59 [django.utils.autoreload] [trace_id=unknown] Watching for file changes with StatReloader
+[INFO] 2025-11-17 06:00:03 [django.utils.autoreload] [trace_id=unknown] C:\Users\gai\Desktop\echo\backend\core\views.py changed, reloading.
+[INFO] 2025-11-17 06:00:06 [django.utils.autoreload] [trace_id=unknown] Watching for file changes with StatReloader
+[INFO] 2025-11-17 06:00:17 [django.utils.autoreload] [trace_id=unknown] C:\Users\gai\Desktop\echo\backend\core\views.py changed, reloading.
+[INFO] 2025-11-17 06:00:19 [django.utils.autoreload] [trace_id=unknown] Watching for file changes with StatReloader
+[INFO] 2025-11-17 06:00:43 [django.utils.autoreload] [trace_id=unknown] C:\Users\gai\Desktop\echo\backend\core\views.py changed, reloading.
+[INFO] 2025-11-17 06:00:46 [django.utils.autoreload] [trace_id=unknown] Watching for file changes with StatReloader
+[INFO] 2025-11-17 06:01:01 [django.utils.autoreload] [trace_id=unknown] C:\Users\gai\Desktop\echo\backend\core\views.py changed, reloading.
+[INFO] 2025-11-17 06:01:04 [django.utils.autoreload] [trace_id=unknown] Watching for file changes with StatReloader
+[INFO] 2025-11-17 06:02:58 [django.utils.autoreload] [trace_id=unknown] C:\Users\gai\Desktop\echo\backend\config\logging_filters.py changed, reloading.
+[INFO] 2025-11-17 06:03:00 [django.utils.autoreload] [trace_id=unknown] Watching for file changes with StatReloader
+[INFO] 2025-11-17 06:03:52 [django.utils.autoreload] [trace_id=unknown] C:\Users\gai\Desktop\echo\backend\config\settings.py changed, reloading.
+[INFO] 2025-11-17 06:03:54 [django.utils.autoreload] [trace_id=unknown] Watching for file changes with StatReloader
+[INFO] 2025-11-17 06:07:44 [django.utils.autoreload] [trace_id=unknown] C:\Users\gai\Desktop\echo\backend\config\settings.py changed, reloading.
+[INFO] 2025-11-17 06:07:47 [django.utils.autoreload] [trace_id=unknown] Watching for file changes with StatReloader
+[INFO] 2025-11-17 06:07:51 [django.utils.autoreload] [trace_id=unknown] C:\Users\gai\Desktop\echo\backend\config\settings.py changed, reloading.
+[INFO] 2025-11-17 06:07:54 [django.utils.autoreload] [trace_id=unknown] Watching for file changes with StatReloader
+[INFO] 2025-11-17 06:08:07 [django.utils.autoreload] [trace_id=unknown] C:\Users\gai\Desktop\echo\backend\core\models.py changed, reloading.
+[INFO] 2025-11-17 06:08:10 [django.utils.autoreload] [trace_id=unknown] Watching for file changes with StatReloader
+[INFO] 2025-11-17 06:08:15 [django.utils.autoreload] [trace_id=unknown] C:\Users\gai\Desktop\echo\backend\core\authentication.py changed, reloading.
+[INFO] 2025-11-17 06:08:17 [django.utils.autoreload] [trace_id=unknown] Watching for file changes with StatReloader
+[INFO] 2025-11-17 06:08:32 [django.utils.autoreload] [trace_id=unknown] C:\Users\gai\Desktop\echo\backend\core\serializers.py changed, reloading.
+[INFO] 2025-11-17 06:08:35 [django.utils.autoreload] [trace_id=unknown] Watching for file changes with StatReloader
+[INFO] 2025-11-17 06:08:44 [django.utils.autoreload] [trace_id=unknown] C:\Users\gai\Desktop\echo\backend\core\views.py changed, reloading.
+[INFO] 2025-11-17 06:08:47 [django.utils.autoreload] [trace_id=unknown] Watching for file changes with StatReloader
+[INFO] 2025-11-17 06:08:52 [django.utils.autoreload] [trace_id=unknown] C:\Users\gai\Desktop\echo\backend\core\views.py changed, reloading.
+[INFO] 2025-11-17 06:08:55 [django.utils.autoreload] [trace_id=unknown] Watching for file changes with StatReloader
+[INFO] 2025-11-17 06:09:00 [django.utils.autoreload] [trace_id=unknown] C:\Users\gai\Desktop\echo\backend\core\views.py changed, reloading.
+[INFO] 2025-11-17 06:09:03 [django.utils.autoreload] [trace_id=unknown] Watching for file changes with StatReloader
+[INFO] 2025-11-17 06:09:07 [django.utils.autoreload] [trace_id=unknown] C:\Users\gai\Desktop\echo\backend\core\views.py changed, reloading.
+[INFO] 2025-11-17 06:09:10 [django.utils.autoreload] [trace_id=unknown] Watching for file changes with StatReloader
+[INFO] 2025-11-17 06:09:14 [django.utils.autoreload] [trace_id=unknown] C:\Users\gai\Desktop\echo\backend\core\views.py changed, reloading.
+[INFO] 2025-11-17 06:09:17 [django.utils.autoreload] [trace_id=unknown] Watching for file changes with StatReloader
+[INFO] 2025-11-17 06:09:27 [django.utils.autoreload] [trace_id=unknown] C:\Users\gai\Desktop\echo\backend\core\views.py changed, reloading.
+[INFO] 2025-11-17 06:09:30 [django.utils.autoreload] [trace_id=unknown] Watching for file changes with StatReloader
+[INFO] 2025-11-17 06:12:56 [django.utils.autoreload] [trace_id=unknown] C:\Users\gai\Desktop\echo\backend\core\models.py changed, reloading.
+[INFO] 2025-11-17 06:12:59 [django.utils.autoreload] [trace_id=unknown] Watching for file changes with StatReloader
+[INFO] 2025-11-17 06:13:27 [django.utils.autoreload] [trace_id=unknown] C:\Users\gai\Desktop\echo\backend\core\serializers.py changed, reloading.
+[INFO] 2025-11-17 06:13:28 [django.utils.autoreload] [trace_id=unknown] Watching for file changes with StatReloader
+[INFO] 2025-11-17 06:18:35 [django.utils.autoreload] [trace_id=unknown] Watching for file changes with StatReloader
+[ERROR] 2025-11-17 06:19:01 [django.request] [trace_id=74c1fca1-2dfc-49c4-ae34-397cf47afbec] Internal Server Error: /api/homepage/messages/
+Traceback (most recent call last):
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\generic\base.py", line 105, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 497, in dispatch
+    self.initial(request, *args, **kwargs)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 414, in initial
+    self.perform_authentication(request)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 324, in perform_authentication
+    request.user
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 231, in user
+    self._authenticate()
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 384, in _authenticate
+    user_auth_tuple = authenticator.authenticate(self)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\authentication.py", line 38, in authenticate
+    if token.is_expired:
+       ^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\models.py", line 109, in is_expired
+    return timezone.now() >= self.expires_at
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '>=' not supported between instances of 'datetime.datetime' and 'NoneType'
+[ERROR] 2025-11-17 06:19:01 [django.request] [trace_id=a954bef0-da0f-4b62-84c3-47d3e6fbe447] Internal Server Error: /api/uploads/
+Traceback (most recent call last):
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\generic\base.py", line 105, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 497, in dispatch
+    self.initial(request, *args, **kwargs)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 414, in initial
+    self.perform_authentication(request)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 324, in perform_authentication
+    request.user
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 231, in user
+    self._authenticate()
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 384, in _authenticate
+    user_auth_tuple = authenticator.authenticate(self)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\authentication.py", line 38, in authenticate
+    if token.is_expired:
+       ^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\models.py", line 109, in is_expired
+    return timezone.now() >= self.expires_at
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '>=' not supported between instances of 'datetime.datetime' and 'NoneType'
+[ERROR] 2025-11-17 06:19:01 [django.request] [trace_id=8c96b512-aef3-40be-a11b-b3a2e3079e99] Internal Server Error: /api/profile/achievements/
+Traceback (most recent call last):
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\generic\base.py", line 105, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 497, in dispatch
+    self.initial(request, *args, **kwargs)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 414, in initial
+    self.perform_authentication(request)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 324, in perform_authentication
+    request.user
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 231, in user
+    self._authenticate()
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 384, in _authenticate
+    user_auth_tuple = authenticator.authenticate(self)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\authentication.py", line 38, in authenticate
+    if token.is_expired:
+       ^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\models.py", line 109, in is_expired
+    return timezone.now() >= self.expires_at
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '>=' not supported between instances of 'datetime.datetime' and 'NoneType'
+[ERROR] 2025-11-17 06:19:01 [django.request] [trace_id=ab3355f0-9895-4beb-a501-9415a26c7ffa] Internal Server Error: /api/goals/check-in/
+Traceback (most recent call last):
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\generic\base.py", line 105, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 497, in dispatch
+    self.initial(request, *args, **kwargs)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 414, in initial
+    self.perform_authentication(request)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 324, in perform_authentication
+    request.user
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 231, in user
+    self._authenticate()
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 384, in _authenticate
+    user_auth_tuple = authenticator.authenticate(self)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\authentication.py", line 38, in authenticate
+    if token.is_expired:
+       ^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\models.py", line 109, in is_expired
+    return timezone.now() >= self.expires_at
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '>=' not supported between instances of 'datetime.datetime' and 'NoneType'
+[ERROR] 2025-11-17 06:19:01 [django.request] [trace_id=e7fe3ebe-d6ae-4711-840b-c3439b9d3db7] Internal Server Error: /api/homepage/messages/
+Traceback (most recent call last):
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\generic\base.py", line 105, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 497, in dispatch
+    self.initial(request, *args, **kwargs)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 414, in initial
+    self.perform_authentication(request)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 324, in perform_authentication
+    request.user
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 231, in user
+    self._authenticate()
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 384, in _authenticate
+    user_auth_tuple = authenticator.authenticate(self)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\authentication.py", line 38, in authenticate
+    if token.is_expired:
+       ^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\models.py", line 109, in is_expired
+    return timezone.now() >= self.expires_at
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '>=' not supported between instances of 'datetime.datetime' and 'NoneType'
+[ERROR] 2025-11-17 06:19:01 [django.request] [trace_id=8cd7d603-e11e-445a-a14f-1eefb939acb7] Internal Server Error: /api/goals/check-in/
+Traceback (most recent call last):
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\generic\base.py", line 105, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 497, in dispatch
+    self.initial(request, *args, **kwargs)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 414, in initial
+    self.perform_authentication(request)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 324, in perform_authentication
+    request.user
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 231, in user
+    self._authenticate()
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 384, in _authenticate
+    user_auth_tuple = authenticator.authenticate(self)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\authentication.py", line 38, in authenticate
+    if token.is_expired:
+       ^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\models.py", line 109, in is_expired
+    return timezone.now() >= self.expires_at
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '>=' not supported between instances of 'datetime.datetime' and 'NoneType'
+[ERROR] 2025-11-17 06:19:01 [django.server] [trace_id=74c1fca1-2dfc-49c4-ae34-397cf47afbec] "GET /api/homepage/messages/ HTTP/1.1" 500 16295
+[ERROR] 2025-11-17 06:19:01 [django.server] [trace_id=a954bef0-da0f-4b62-84c3-47d3e6fbe447] "GET /api/uploads/ HTTP/1.1" 500 16273
+[ERROR] 2025-11-17 06:19:01 [django.server] [trace_id=8c96b512-aef3-40be-a11b-b3a2e3079e99] "GET /api/profile/achievements/ HTTP/1.1" 500 16365
+[ERROR] 2025-11-17 06:19:01 [django.server] [trace_id=ab3355f0-9895-4beb-a501-9415a26c7ffa] "GET /api/goals/check-in/ HTTP/1.1" 500 16301
+[ERROR] 2025-11-17 06:19:01 [django.server] [trace_id=e7fe3ebe-d6ae-4711-840b-c3439b9d3db7] "GET /api/homepage/messages/ HTTP/1.1" 500 16366
+[ERROR] 2025-11-17 06:19:01 [django.server] [trace_id=8cd7d603-e11e-445a-a14f-1eefb939acb7] "GET /api/goals/check-in/ HTTP/1.1" 500 16314
+[ERROR] 2025-11-17 06:19:01 [django.request] [trace_id=cc43322e-1a04-4c2f-b86c-8ef2ffb80402] Internal Server Error: /api/uploads/
+Traceback (most recent call last):
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\generic\base.py", line 105, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 497, in dispatch
+    self.initial(request, *args, **kwargs)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 414, in initial
+    self.perform_authentication(request)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 324, in perform_authentication
+    request.user
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 231, in user
+    self._authenticate()
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 384, in _authenticate
+    user_auth_tuple = authenticator.authenticate(self)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\authentication.py", line 38, in authenticate
+    if token.is_expired:
+       ^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\models.py", line 109, in is_expired
+    return timezone.now() >= self.expires_at
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '>=' not supported between instances of 'datetime.datetime' and 'NoneType'
+[ERROR] 2025-11-17 06:19:01 [django.request] [trace_id=c54e1aa2-6ed2-480a-b88e-4b420e286701] Internal Server Error: /api/profile/achievements/
+Traceback (most recent call last):
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\generic\base.py", line 105, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 497, in dispatch
+    self.initial(request, *args, **kwargs)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 414, in initial
+    self.perform_authentication(request)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 324, in perform_authentication
+    request.user
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 231, in user
+    self._authenticate()
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 384, in _authenticate
+    user_auth_tuple = authenticator.authenticate(self)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\authentication.py", line 38, in authenticate
+    if token.is_expired:
+       ^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\models.py", line 109, in is_expired
+    return timezone.now() >= self.expires_at
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '>=' not supported between instances of 'datetime.datetime' and 'NoneType'
+[ERROR] 2025-11-17 06:19:01 [django.server] [trace_id=cc43322e-1a04-4c2f-b86c-8ef2ffb80402] "GET /api/uploads/ HTTP/1.1" 500 16328
+[ERROR] 2025-11-17 06:19:01 [django.server] [trace_id=c54e1aa2-6ed2-480a-b88e-4b420e286701] "GET /api/profile/achievements/ HTTP/1.1" 500 16350
+[ERROR] 2025-11-17 06:19:02 [django.request] [trace_id=a08fa680-1f52-484e-a713-f2bc294b906f] Internal Server Error: /api/goals/check-in/
+Traceback (most recent call last):
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\generic\base.py", line 105, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 497, in dispatch
+    self.initial(request, *args, **kwargs)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 414, in initial
+    self.perform_authentication(request)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 324, in perform_authentication
+    request.user
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 231, in user
+    self._authenticate()
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 384, in _authenticate
+    user_auth_tuple = authenticator.authenticate(self)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\authentication.py", line 38, in authenticate
+    if token.is_expired:
+       ^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\models.py", line 109, in is_expired
+    return timezone.now() >= self.expires_at
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '>=' not supported between instances of 'datetime.datetime' and 'NoneType'
+[ERROR] 2025-11-17 06:19:02 [django.server] [trace_id=a08fa680-1f52-484e-a713-f2bc294b906f] "GET /api/goals/check-in/ HTTP/1.1" 500 16389
+[ERROR] 2025-11-17 06:19:02 [django.request] [trace_id=ba2e28a6-c946-4d6c-b2b7-7a690be5bf7c] Internal Server Error: /api/uploads/
+Traceback (most recent call last):
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\generic\base.py", line 105, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 497, in dispatch
+    self.initial(request, *args, **kwargs)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 414, in initial
+    self.perform_authentication(request)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 324, in perform_authentication
+    request.user
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 231, in user
+    self._authenticate()
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 384, in _authenticate
+    user_auth_tuple = authenticator.authenticate(self)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\authentication.py", line 38, in authenticate
+    if token.is_expired:
+       ^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\models.py", line 109, in is_expired
+    return timezone.now() >= self.expires_at
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '>=' not supported between instances of 'datetime.datetime' and 'NoneType'
+[ERROR] 2025-11-17 06:19:02 [django.server] [trace_id=ba2e28a6-c946-4d6c-b2b7-7a690be5bf7c] "GET /api/uploads/ HTTP/1.1" 500 16376
+[ERROR] 2025-11-17 06:19:02 [django.request] [trace_id=97c4590d-70e1-445f-8a9f-c91702097f5e] Internal Server Error: /api/uploads/
+Traceback (most recent call last):
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\generic\base.py", line 105, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 497, in dispatch
+    self.initial(request, *args, **kwargs)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 414, in initial
+    self.perform_authentication(request)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 324, in perform_authentication
+    request.user
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 231, in user
+    self._authenticate()
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 384, in _authenticate
+    user_auth_tuple = authenticator.authenticate(self)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\authentication.py", line 38, in authenticate
+    if token.is_expired:
+       ^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\models.py", line 109, in is_expired
+    return timezone.now() >= self.expires_at
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '>=' not supported between instances of 'datetime.datetime' and 'NoneType'
+[ERROR] 2025-11-17 06:19:02 [django.request] [trace_id=a9b26cda-aa49-415f-8fb7-64220041f6f9] Internal Server Error: /api/profile/achievements/
+Traceback (most recent call last):
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\generic\base.py", line 105, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 497, in dispatch
+    self.initial(request, *args, **kwargs)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 414, in initial
+    self.perform_authentication(request)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 324, in perform_authentication
+    request.user
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 231, in user
+    self._authenticate()
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 384, in _authenticate
+    user_auth_tuple = authenticator.authenticate(self)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\authentication.py", line 38, in authenticate
+    if token.is_expired:
+       ^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\models.py", line 109, in is_expired
+    return timezone.now() >= self.expires_at
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '>=' not supported between instances of 'datetime.datetime' and 'NoneType'
+[ERROR] 2025-11-17 06:19:02 [django.server] [trace_id=97c4590d-70e1-445f-8a9f-c91702097f5e] "GET /api/uploads/ HTTP/1.1" 500 16351
+[ERROR] 2025-11-17 06:19:02 [django.request] [trace_id=ab9d572e-63be-4298-b4e3-155580cafe8f] Internal Server Error: /api/goals/check-in/
+Traceback (most recent call last):
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\generic\base.py", line 105, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 497, in dispatch
+    self.initial(request, *args, **kwargs)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 414, in initial
+    self.perform_authentication(request)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 324, in perform_authentication
+    request.user
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 231, in user
+    self._authenticate()
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 384, in _authenticate
+    user_auth_tuple = authenticator.authenticate(self)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\authentication.py", line 38, in authenticate
+    if token.is_expired:
+       ^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\models.py", line 109, in is_expired
+    return timezone.now() >= self.expires_at
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '>=' not supported between instances of 'datetime.datetime' and 'NoneType'
+[ERROR] 2025-11-17 06:19:02 [django.request] [trace_id=4d76d422-31d2-402d-9c5a-0a43b1f6c4dc] Internal Server Error: /api/profile/preferences/
+Traceback (most recent call last):
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\generic\base.py", line 105, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 497, in dispatch
+    self.initial(request, *args, **kwargs)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 414, in initial
+    self.perform_authentication(request)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 324, in perform_authentication
+    request.user
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 231, in user
+    self._authenticate()
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 384, in _authenticate
+    user_auth_tuple = authenticator.authenticate(self)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\authentication.py", line 38, in authenticate
+    if token.is_expired:
+       ^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\models.py", line 109, in is_expired
+    return timezone.now() >= self.expires_at
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '>=' not supported between instances of 'datetime.datetime' and 'NoneType'
+[ERROR] 2025-11-17 06:19:02 [django.request] [trace_id=8f013178-f1d8-40f1-b478-39ca523fa1b2] Internal Server Error: /api/uploads/
+Traceback (most recent call last):
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\generic\base.py", line 105, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 497, in dispatch
+    self.initial(request, *args, **kwargs)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 414, in initial
+    self.perform_authentication(request)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 324, in perform_authentication
+    request.user
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 231, in user
+    self._authenticate()
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 384, in _authenticate
+    user_auth_tuple = authenticator.authenticate(self)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\authentication.py", line 38, in authenticate
+    if token.is_expired:
+       ^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\models.py", line 109, in is_expired
+    return timezone.now() >= self.expires_at
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '>=' not supported between instances of 'datetime.datetime' and 'NoneType'
+[ERROR] 2025-11-17 06:19:02 [django.server] [trace_id=a9b26cda-aa49-415f-8fb7-64220041f6f9] "GET /api/profile/achievements/ HTTP/1.1" 500 16333
+[ERROR] 2025-11-17 06:19:02 [django.server] [trace_id=ab9d572e-63be-4298-b4e3-155580cafe8f] "GET /api/goals/check-in/ HTTP/1.1" 500 16364
+[ERROR] 2025-11-17 06:19:02 [django.server] [trace_id=4d76d422-31d2-402d-9c5a-0a43b1f6c4dc] "GET /api/profile/preferences/ HTTP/1.1" 500 16383
+[ERROR] 2025-11-17 06:19:02 [django.server] [trace_id=8f013178-f1d8-40f1-b478-39ca523fa1b2] "GET /api/uploads/ HTTP/1.1" 500 16303
+[ERROR] 2025-11-17 06:19:02 [django.request] [trace_id=c62218b2-ba96-48b5-b22a-77af6753e917] Internal Server Error: /api/profile/preferences/
+Traceback (most recent call last):
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\generic\base.py", line 105, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 497, in dispatch
+    self.initial(request, *args, **kwargs)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 414, in initial
+    self.perform_authentication(request)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 324, in perform_authentication
+    request.user
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 231, in user
+    self._authenticate()
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 384, in _authenticate
+    user_auth_tuple = authenticator.authenticate(self)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\authentication.py", line 38, in authenticate
+    if token.is_expired:
+       ^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\models.py", line 109, in is_expired
+    return timezone.now() >= self.expires_at
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '>=' not supported between instances of 'datetime.datetime' and 'NoneType'
+[ERROR] 2025-11-17 06:19:02 [django.server] [trace_id=c62218b2-ba96-48b5-b22a-77af6753e917] "GET /api/profile/preferences/ HTTP/1.1" 500 16377
+[ERROR] 2025-11-17 06:19:05 [django.request] [trace_id=39711bcd-9b19-44d3-8ab8-4b1fead1df4c] Internal Server Error: /api/profile/achievements/
+Traceback (most recent call last):
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\generic\base.py", line 105, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 497, in dispatch
+    self.initial(request, *args, **kwargs)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 414, in initial
+    self.perform_authentication(request)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 324, in perform_authentication
+    request.user
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 231, in user
+    self._authenticate()
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 384, in _authenticate
+    user_auth_tuple = authenticator.authenticate(self)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\authentication.py", line 38, in authenticate
+    if token.is_expired:
+       ^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\models.py", line 109, in is_expired
+    return timezone.now() >= self.expires_at
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '>=' not supported between instances of 'datetime.datetime' and 'NoneType'
+[ERROR] 2025-11-17 06:19:05 [django.request] [trace_id=3494c2e9-2682-4d5e-8b4c-fb40936457fb] Internal Server Error: /api/uploads/
+Traceback (most recent call last):
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\generic\base.py", line 105, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 497, in dispatch
+    self.initial(request, *args, **kwargs)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 414, in initial
+    self.perform_authentication(request)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 324, in perform_authentication
+    request.user
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 231, in user
+    self._authenticate()
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 384, in _authenticate
+    user_auth_tuple = authenticator.authenticate(self)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\authentication.py", line 38, in authenticate
+    if token.is_expired:
+       ^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\models.py", line 109, in is_expired
+    return timezone.now() >= self.expires_at
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '>=' not supported between instances of 'datetime.datetime' and 'NoneType'
+[ERROR] 2025-11-17 06:19:05 [django.request] [trace_id=4dd508f6-7fa2-4b20-811e-468f6ba3d625] Internal Server Error: /api/profile/achievements/
+Traceback (most recent call last):
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\generic\base.py", line 105, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 497, in dispatch
+    self.initial(request, *args, **kwargs)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 414, in initial
+    self.perform_authentication(request)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 324, in perform_authentication
+    request.user
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 231, in user
+    self._authenticate()
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 384, in _authenticate
+    user_auth_tuple = authenticator.authenticate(self)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\authentication.py", line 38, in authenticate
+    if token.is_expired:
+       ^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\models.py", line 109, in is_expired
+    return timezone.now() >= self.expires_at
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '>=' not supported between instances of 'datetime.datetime' and 'NoneType'
+[ERROR] 2025-11-17 06:19:05 [django.request] [trace_id=c8867631-3cbb-44dc-935a-17889b8a9806] Internal Server Error: /api/uploads/
+Traceback (most recent call last):
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\generic\base.py", line 105, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 497, in dispatch
+    self.initial(request, *args, **kwargs)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 414, in initial
+    self.perform_authentication(request)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 324, in perform_authentication
+    request.user
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 231, in user
+    self._authenticate()
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\request.py", line 384, in _authenticate
+    user_auth_tuple = authenticator.authenticate(self)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\authentication.py", line 38, in authenticate
+    if token.is_expired:
+       ^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\models.py", line 109, in is_expired
+    return timezone.now() >= self.expires_at
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '>=' not supported between instances of 'datetime.datetime' and 'NoneType'
+[ERROR] 2025-11-17 06:19:05 [django.server] [trace_id=39711bcd-9b19-44d3-8ab8-4b1fead1df4c] "GET /api/profile/achievements/ HTTP/1.1" 500 16380
+[ERROR] 2025-11-17 06:19:05 [django.server] [trace_id=3494c2e9-2682-4d5e-8b4c-fb40936457fb] "GET /api/uploads/ HTTP/1.1" 500 16380
+[ERROR] 2025-11-17 06:19:05 [django.server] [trace_id=4dd508f6-7fa2-4b20-811e-468f6ba3d625] "GET /api/profile/achievements/ HTTP/1.1" 500 16325
+[ERROR] 2025-11-17 06:19:05 [django.server] [trace_id=c8867631-3cbb-44dc-935a-17889b8a9806] "GET /api/uploads/ HTTP/1.1" 500 16339
+[ERROR] 2025-11-17 06:19:07 [django.request] [trace_id=b69a7024-fe98-47e1-8cdc-09d936fb9bff] Internal Server Error: /api/auth/login/
+Traceback (most recent call last):
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\generic\base.py", line 105, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 506, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\decorators.py", line 50, in handler
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\views.py", line 567, in login
+    token_key = AuthToken.issue_for_user(user)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\models.py", line 124, in issue_for_user
+    if token.is_expired:
+       ^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\models.py", line 109, in is_expired
+    return timezone.now() >= self.expires_at
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '>=' not supported between instances of 'datetime.datetime' and 'NoneType'
+[ERROR] 2025-11-17 06:19:07 [django.server] [trace_id=b69a7024-fe98-47e1-8cdc-09d936fb9bff] "POST /api/auth/login/ HTTP/1.1" 500 15722
+[ERROR] 2025-11-17 06:19:09 [django.request] [trace_id=4060cdd7-0522-4e37-b592-1f625994f466] Internal Server Error: /api/auth/login/
+Traceback (most recent call last):
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\generic\base.py", line 105, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 506, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\decorators.py", line 50, in handler
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\views.py", line 567, in login
+    token_key = AuthToken.issue_for_user(user)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\models.py", line 124, in issue_for_user
+    if token.is_expired:
+       ^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\models.py", line 109, in is_expired
+    return timezone.now() >= self.expires_at
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '>=' not supported between instances of 'datetime.datetime' and 'NoneType'
+[ERROR] 2025-11-17 06:19:09 [django.server] [trace_id=4060cdd7-0522-4e37-b592-1f625994f466] "POST /api/auth/login/ HTTP/1.1" 500 15654
+[INFO] 2025-11-17 06:19:18 [core.views] [trace_id=287c3617-c2b3-4832-966e-85264f20eb42] profile_achievements request started
+[INFO] 2025-11-17 06:19:18 [core.views] [trace_id=287c3617-c2b3-4832-966e-85264f20eb42] profile_achievements request completed successfully
+[INFO] 2025-11-17 06:19:18 [core.views] [trace_id=c07a8586-6873-4004-9584-80b364832331] profile_achievements request started
+[INFO] 2025-11-17 06:19:18 [django.server] [trace_id=287c3617-c2b3-4832-966e-85264f20eb42] "GET /api/profile/achievements/ HTTP/1.1" 200 7410
+[INFO] 2025-11-17 06:19:18 [core.views] [trace_id=c07a8586-6873-4004-9584-80b364832331] profile_achievements request completed successfully
+[INFO] 2025-11-17 06:19:18 [django.server] [trace_id=c07a8586-6873-4004-9584-80b364832331] "GET /api/profile/achievements/ HTTP/1.1" 200 7325
+[ERROR] 2025-11-17 06:19:23 [django.request] [trace_id=4ea9b755-4bc9-454e-a557-f755a786f27a] Internal Server Error: /api/auth/login/
+Traceback (most recent call last):
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\core\handlers\base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\django\views\generic\base.py", line 105, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\views.py", line 506, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\AppData\Roaming\Python\Python312\site-packages\rest_framework\decorators.py", line 50, in handler
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\views.py", line 567, in login
+    token_key = AuthToken.issue_for_user(user)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\models.py", line 124, in issue_for_user
+    if token.is_expired:
+       ^^^^^^^^^^^^^^^^
+  File "C:\Users\gai\Desktop\echo\backend\core\models.py", line 109, in is_expired
+    return timezone.now() >= self.expires_at
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '>=' not supported between instances of 'datetime.datetime' and 'NoneType'
+[ERROR] 2025-11-17 06:19:23 [django.server] [trace_id=4ea9b755-4bc9-454e-a557-f755a786f27a] "POST /api/auth/login/ HTTP/1.1" 500 15645
+[INFO] 2025-11-17 06:19:54 [django.utils.autoreload] [trace_id=unknown] C:\Users\gai\Desktop\echo\backend\core\models.py changed, reloading.
+[INFO] 2025-11-17 06:19:57 [django.utils.autoreload] [trace_id=unknown] Watching for file changes with StatReloader
+[INFO] 2025-11-17 06:20:01 [django.utils.autoreload] [trace_id=unknown] C:\Users\gai\Desktop\echo\backend\core\models.py changed, reloading.
+[INFO] 2025-11-17 06:20:04 [django.utils.autoreload] [trace_id=unknown] Watching for file changes with StatReloader
+[INFO] 2025-11-17 06:20:09 [django.utils.autoreload] [trace_id=unknown] C:\Users\gai\Desktop\echo\backend\core\models.py changed, reloading.
+[INFO] 2025-11-17 06:20:11 [django.utils.autoreload] [trace_id=unknown] Watching for file changes with StatReloader
+[INFO] 2025-11-17 06:20:24 [django.server] [trace_id=df0c882b-1f91-480d-977f-5be97c2e03ec] "POST /api/auth/login/ HTTP/1.1" 200 163
+[INFO] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] profile_achievements request started
+[DEBUG] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] user_stats: {'total_uploads': 14, 'total_checkins': 8, 'current_streak': 8, 'checked_today': 1}
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: uploads_per_day
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: max_session_minutes
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: max_session_minutes
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: custom
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: custom
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: custom
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: custom
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: custom
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: custom
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: custom
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: custom
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: custom
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: custom
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: custom
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: upload_rating_with_mood
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: custom
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: upload_rating_with_mood
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: custom
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: custom
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: custom
+[DEBUG] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] achievement unlocked: world-trace-1 (level 1)
+[DEBUG] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] achievement unlocked: world-trace-2 (level 2)
+[DEBUG] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] achievement unlocked: steady-heart-1 (level 1)
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: total_duration_minutes
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: total_duration_minutes
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: total_duration_minutes
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: total_duration_minutes
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: total_duration_minutes
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: total_duration_minutes
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: total_duration_minutes
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: upload_self_rating
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: upload_self_rating
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: upload_self_rating
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: uploads_in_time_window
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: uploads_in_time_window
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: uploads_in_time_window
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: uploads_in_time_window
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: uploads_in_time_window
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: uploads_in_time_window
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: uploads_in_time_window
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: uploads_in_time_window
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: uploads_in_time_window
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: uploads_in_time_window
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: uploads_in_time_window
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: uploads_in_time_window
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: uploads_with_mood
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: uploads_with_mood
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: uploads_with_mood
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: uploads_with_mood
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: uploads_with_mood
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: uploads_with_mood
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: uploads_with_mood
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: uploads_with_mood
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: uploads_with_mood
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: uploads_with_mood
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: uploads_with_mood
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: uploads_with_mood
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: uploads_with_mood
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: uploads_with_mood
+[INFO] 2025-11-17 06:20:24 [django.server] [trace_id=dfa30c1a-04be-431a-b763-db10a9d317cb] "GET /api/goals/check-in/ HTTP/1.1" 200 90
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: uploads_with_mood
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: uploads_with_mood
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: consecutive_upload_days
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: consecutive_upload_days
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: consecutive_upload_days
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: consecutive_upload_days
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: consecutive_upload_days
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: consecutive_upload_days
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: tag_usage
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: tag_usage
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: tag_usage
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: tag_usage
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: tag_usage
+[INFO] 2025-11-17 06:20:24 [django.server] [trace_id=f68ebe24-3cbf-4294-9ac4-5951213d4b7b] "GET /api/profile/preferences/ HTTP/1.1" 200 132
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: tag_usage
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: tag_usage
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: tag_usage
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: tag_usage
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: tag_usage
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: tag_usage
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: tag_usage
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: tag_usage
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: tag_usage
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: tag_usage
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: tag_usage
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: custom
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: custom
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: custom
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: custom
+[WARNING] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] Unknown achievement metric: custom
+[INFO] 2025-11-17 06:20:24 [core.views] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] profile_achievements request completed successfully
+[INFO] 2025-11-17 06:20:24 [django.server] [trace_id=f43fc8f1-f446-46de-a99d-7b8d099ebbfb] "GET /api/profile/achievements/ HTTP/1.1" 200 7460
+[INFO] 2025-11-17 06:20:25 [django.server] [trace_id=fb5ed04e-4f2f-4176-9e50-a19dd18de604] "GET /api/uploads/ HTTP/1.1" 200 795
+[INFO] 2025-11-17 06:20:25 [django.server] [trace_id=95f4d451-4d32-4e3e-bb9c-af6d71710c68] "GET /api/uploads/ HTTP/1.1" 200 757
+[INFO] 2025-11-17 06:20:25 [django.server] [trace_id=ad70e78d-4b2a-4765-a630-96cb36a1f38e] "GET /api/uploads/ HTTP/1.1" 200 777
+[INFO] 2025-11-17 06:20:42 [core.views] [trace_id=9b59660e-c08e-4d8c-8795-2aa5c34d01ac] homepage_messages request started for user_id=7, today=2025-11-17
+[INFO] 2025-11-17 06:20:42 [django.server] [trace_id=dbd1afaf-ab36-4ee2-85e0-72765c3134e7] "GET /api/goals/check-in/ HTTP/1.1" 200 90
+[DEBUG] 2025-11-17 06:20:42 [core.views] [trace_id=9b59660e-c08e-4d8c-8795-2aa5c34d01ac] check_in_stats: {'checked_today': True, 'current_streak': 8, 'total_checkins': 8, 'latest_checkin': '2025-11-17'}, total_uploads: 14
+[INFO] 2025-11-17 06:20:42 [django.server] [trace_id=a2aa64f0-1b08-4461-8d63-db8c786b90ec] "GET /api/uploads/ HTTP/1.1" 200 818
+[DEBUG] 2025-11-17 06:20:42 [core.views] [trace_id=9b59660e-c08e-4d8c-8795-2aa5c34d01ac] selected general message: 随手画、慢慢画、想画就画。...
+[INFO] 2025-11-17 06:20:42 [core.views] [trace_id=9afdf7d7-ebd4-4840-abd1-feeca1f105c2] homepage_messages request started for user_id=7, today=2025-11-17
+[DEBUG] 2025-11-17 06:20:42 [core.views] [trace_id=9afdf7d7-ebd4-4840-abd1-feeca1f105c2] check_in_stats: {'checked_today': True, 'current_streak': 8, 'total_checkins': 8, 'latest_checkin': '2025-11-17'}, total_uploads: 14
+[DEBUG] 2025-11-17 06:20:42 [core.views] [trace_id=9afdf7d7-ebd4-4840-abd1-feeca1f105c2] selected general message: 让创作自有节律。...
+[INFO] 2025-11-17 06:20:42 [core.views] [trace_id=9b59660e-c08e-4d8c-8795-2aa5c34d01ac] homepage_messages request completed successfully
+[INFO] 2025-11-17 06:20:42 [django.server] [trace_id=9b59660e-c08e-4d8c-8795-2aa5c34d01ac] "GET /api/homepage/messages/ HTTP/1.1" 200 102
+[INFO] 2025-11-17 06:20:42 [core.views] [trace_id=9afdf7d7-ebd4-4840-abd1-feeca1f105c2] homepage_messages request completed successfully
+[INFO] 2025-11-17 06:20:42 [django.server] [trace_id=9afdf7d7-ebd4-4840-abd1-feeca1f105c2] "GET /api/homepage/messages/ HTTP/1.1" 200 87
+[INFO] 2025-11-17 06:20:42 [django.server] [trace_id=1c75f509-6d9f-46f1-9bd8-d71dd9d9c7ac] "GET /api/goals/check-in/ HTTP/1.1" 200 90
+[INFO] 2025-11-17 06:20:42 [django.server] [trace_id=82cc4730-b4ad-4cf1-95fd-888182c947c3] "GET /api/uploads/ HTTP/1.1" 200 729
+[INFO] 2025-11-17 06:20:47 [django.server] [trace_id=9ee9118a-70ae-4f50-9f31-8d6b35b7da21] "GET /api/uploads/32/image/?token=-xgQ42d90qdvsv2HasZgnvTYfmX6PTh0Tp6lokK1fIE HTTP/1.1" 200 84846
+[INFO] 2025-11-17 06:20:48 [django.server] [trace_id=f9bdd8ff-a761-4496-8e28-7ba492d74d62] "GET /api/uploads/22/image/?token=-xgQ42d90qdvsv2HasZgnvTYfmX6PTh0Tp6lokK1fIE HTTP/1.1" 200 101041
+[INFO] 2025-11-17 06:20:48 [django.server] [trace_id=65e90758-f728-49c4-9fe4-44ee781d8ec4] "GET /api/uploads/10/image/?token=-xgQ42d90qdvsv2HasZgnvTYfmX6PTh0Tp6lokK1fIE HTTP/1.1" 200 399509
+[INFO] 2025-11-17 06:20:49 [django.server] [trace_id=21a7e4a2-a4b5-4b05-a2fd-f19072dee76a] "GET /api/uploads/23/image/?token=-xgQ42d90qdvsv2HasZgnvTYfmX6PTh0Tp6lokK1fIE HTTP/1.1" 200 3786729
+[INFO] 2025-11-17 06:20:50 [django.server] [trace_id=c4ececa7-0c97-4773-9c55-40a3869e10cd] "GET /api/uploads/20/image/?token=-xgQ42d90qdvsv2HasZgnvTYfmX6PTh0Tp6lokK1fIE HTTP/1.1" 200 2108418
+[INFO] 2025-11-17 06:20:51 [django.server] [trace_id=6dce36c3-8e39-4161-852b-940445c7bd51] "GET /api/uploads/11/image/?token=-xgQ42d90qdvsv2HasZgnvTYfmX6PTh0Tp6lokK1fIE HTTP/1.1" 200 399493
+[INFO] 2025-11-17 06:20:51 [django.server] [trace_id=6c8f1b6f-7246-4cd0-abe4-7c44e6cc0a5f] "GET /api/uploads/9/image/?token=-xgQ42d90qdvsv2HasZgnvTYfmX6PTh0Tp6lokK1fIE HTTP/1.1" 200 94140
+[INFO] 2025-11-17 06:20:53 [django.server] [trace_id=4e423130-448a-40d0-bfc8-024b6cc69017] "GET /api/goals/calendar/?year=2025&month=11 HTTP/1.1" 200 442
+[INFO] 2025-11-17 06:20:53 [django.server] [trace_id=c9df140b-5813-421e-9f72-cb3a4a263af9] "GET /api/goals/long-term/ HTTP/1.1" 200 800
+[INFO] 2025-11-17 06:20:53 [django.server] [trace_id=3a6970fb-5a1a-43c7-9e18-3379b19667fa] "GET /api/goals/calendar/?year=2025&month=11 HTTP/1.1" 200 388
+[INFO] 2025-11-17 06:20:53 [django.server] [trace_id=c1ed6baf-5828-4335-8464-3e3339a0fc6c] "GET /api/goals/short-term/ HTTP/1.1" 200 303
+[INFO] 2025-11-17 06:20:53 [django.server] [trace_id=ae8568d7-976f-4cde-8e28-3f91e11c569d] "GET /api/goals/short-term/ HTTP/1.1" 200 337
+[INFO] 2025-11-17 06:20:53 [django.server] [trace_id=c50ef704-1f0c-40c5-bb66-fae68925da97] "GET /api/goals/calendar/?year=2025&month=11 HTTP/1.1" 200 458
+[INFO] 2025-11-17 06:20:53 [django.server] [trace_id=8a74dbfe-5e69-48d3-8c32-21dd9a672468] "GET /api/goals/calendar/?year=2025&month=11 HTTP/1.1" 200 420
+[INFO] 2025-11-17 06:20:53 [django.server] [trace_id=618c70b5-bdad-4dd4-92c1-c91650271f06] "GET /api/goals/long-term/ HTTP/1.1" 200 787
+[INFO] 2025-11-17 06:20:57 [django.server] [trace_id=5a0e1df4-b84f-451e-9063-466630f3bd65] "GET /api/uploads/ HTTP/1.1" 200 793
+[INFO] 2025-11-17 06:20:57 [django.server] [trace_id=4b1339e7-ae2f-4b1f-8cd0-aa0e868aaf3b] "GET /api/goals/check-in/ HTTP/1.1" 200 90
+[INFO] 2025-11-17 06:20:57 [django.server] [trace_id=fe76c6e0-86d6-4901-bbf7-222bc9e90a14] "GET /api/profile/preferences/ HTTP/1.1" 200 132
+[INFO] 2025-11-17 06:20:57 [django.server] [trace_id=70f9ef85-9e6d-4969-9c7c-e3eacbdb0b72] "GET /api/uploads/ HTTP/1.1" 200 751
+[INFO] 2025-11-17 06:20:57 [django.server] [trace_id=24759828-482a-477f-a244-68538706b6dc] "GET /api/uploads/ HTTP/1.1" 200 778
+[INFO] 2025-11-17 06:20:57 [django.server] [trace_id=1d2816cf-20dc-4a8a-aeea-11b4fee2862a] "GET /api/profile/preferences/ HTTP/1.1" 200 132
+[INFO] 2025-11-17 06:20:57 [django.server] [trace_id=43e7428e-ec20-46fb-a966-0acd7c2f409c] "GET /api/goals/check-in/ HTTP/1.1" 200 90
+[INFO] 2025-11-17 06:20:59 [django.server] [trace_id=69dc4459-8655-4dc8-a123-1e0dbb89489c] "GET /api/goals/calendar/?year=2025&month=11 HTTP/1.1" 200 455
+[INFO] 2025-11-17 06:20:59 [django.server] [trace_id=b0c7f9e3-843c-4e46-81be-e5fe45efd6be] "GET /api/goals/long-term/ HTTP/1.1" 200 840
+[INFO] 2025-11-17 06:20:59 [django.server] [trace_id=fe06de05-c0a7-4142-b93a-a68e526dfe14] "GET /api/goals/calendar/?year=2025&month=11 HTTP/1.1" 200 396
+[INFO] 2025-11-17 06:20:59 [django.server] [trace_id=986e2e7a-9343-4f7e-a6cf-7f3165237f64] "GET /api/goals/short-term/ HTTP/1.1" 200 281
+[INFO] 2025-11-17 06:20:59 [django.server] [trace_id=2560434a-6912-40e5-924a-007a531f19a1] "GET /api/goals/short-term/ HTTP/1.1" 200 294
+[INFO] 2025-11-17 06:20:59 [django.server] [trace_id=6774b926-9932-42da-88cf-3e3d9e9013c9] "GET /api/goals/long-term/ HTTP/1.1" 200 852
+[INFO] 2025-11-17 06:20:59 [django.server] [trace_id=cf9a8745-deac-4103-be02-a38dae2dc635] "GET /api/goals/calendar/?year=2025&month=11 HTTP/1.1" 200 457
+[INFO] 2025-11-17 06:20:59 [django.server] [trace_id=3545fa90-212d-4ec5-9c08-d42bd75d5691] "GET /api/goals/calendar/?year=2025&month=11 HTTP/1.1" 200 420
+[INFO] 2025-11-17 06:21:02 [django.server] [trace_id=c396ad32-c9db-4f77-a563-bb5cb513bd9a] "GET /api/goals/calendar/?year=2025&month=11 HTTP/1.1" 200 442
+[INFO] 2025-11-17 06:21:02 [django.server] [trace_id=784ea61e-d00e-4dd5-95c1-ca9fd18cc65f] "GET /api/goals/long-term/ HTTP/1.1" 200 804
+[INFO] 2025-11-17 06:21:02 [django.server] [trace_id=68e7547b-ddd5-4e9f-82a3-2270cabd601c] "GET /api/goals/calendar/?year=2025&month=11 HTTP/1.1" 200 409
+[INFO] 2025-11-17 06:21:02 [django.server] [trace_id=db25d205-8977-4324-9981-90b613ecd684] "GET /api/goals/short-term/ HTTP/1.1" 200 297
+[INFO] 2025-11-17 06:21:02 [django.server] [trace_id=8a39beec-41d5-4612-8eb5-0aca3829cfb6] "GET /api/goals/short-term/ HTTP/1.1" 200 309
+[INFO] 2025-11-17 06:21:02 [django.server] [trace_id=688f8c97-3ae7-4239-bd84-8cdf1fc9d6a3] "GET /api/goals/calendar/?year=2025&month=11 HTTP/1.1" 200 420
+[INFO] 2025-11-17 06:21:02 [django.server] [trace_id=bc57c868-8b6a-4d0b-9f22-c9bc266de533] "GET /api/goals/calendar/?year=2025&month=11 HTTP/1.1" 200 429
+[INFO] 2025-11-17 06:21:02 [django.server] [trace_id=6c34ca6e-0b4d-4fa4-abdb-7e235172de1e] "GET /api/goals/long-term/ HTTP/1.1" 200 777
+[INFO] 2025-11-17 06:21:03 [django.server] [trace_id=3d98e3bb-1ec7-4475-8a6d-153a8830f71f] "GET /api/uploads/28/image/?token=-xgQ42d90qdvsv2HasZgnvTYfmX6PTh0Tp6lokK1fIE HTTP/1.1" 200 50571848
+[INFO] 2025-11-17 06:21:04 [django.server] [trace_id=2cd96938-6d92-4e74-82d6-199272cd6fbe] "GET /api/uploads/27/image/?token=-xgQ42d90qdvsv2HasZgnvTYfmX6PTh0Tp6lokK1fIE HTTP/1.1" 200 50571895
+[INFO] 2025-11-17 06:21:05 [django.server] [trace_id=708eb4bd-ce70-4afe-9b35-e8bdabdb14ea] "GET /api/uploads/29/image/?token=-xgQ42d90qdvsv2HasZgnvTYfmX6PTh0Tp6lokK1fIE HTTP/1.1" 200 50571860
+[INFO] 2025-11-17 06:21:07 [core.views] [trace_id=d8dbb579-fcac-4702-8601-f1681a74ed04] homepage_messages request started for user_id=7, today=2025-11-17
+[INFO] 2025-11-17 06:21:07 [django.server] [trace_id=c5cf59f5-b2b1-46b7-ab36-bb5cebd2458b] "GET /api/goals/check-in/ HTTP/1.1" 200 90
+[INFO] 2025-11-17 06:21:07 [django.server] [trace_id=28ea8021-3209-412d-9bf2-b0c95bbb0d46] "GET /api/goals/check-in/ HTTP/1.1" 200 90
+[DEBUG] 2025-11-17 06:21:07 [core.views] [trace_id=d8dbb579-fcac-4702-8601-f1681a74ed04] check_in_stats: {'checked_today': True, 'current_streak': 8, 'total_checkins': 8, 'latest_checkin': '2025-11-17'}, total_uploads: 14
+[DEBUG] 2025-11-17 06:21:07 [core.views] [trace_id=d8dbb579-fcac-4702-8601-f1681a74ed04] selected general message: 坚持的轨迹，会比你想象得更好看。...
+[INFO] 2025-11-17 06:21:07 [core.views] [trace_id=f2a9ee1b-c3e5-41c9-8875-266e9dd38906] homepage_messages request started for user_id=7, today=2025-11-17
+[DEBUG] 2025-11-17 06:21:07 [core.views] [trace_id=f2a9ee1b-c3e5-41c9-8875-266e9dd38906] check_in_stats: {'checked_today': True, 'current_streak': 8, 'total_checkins': 8, 'latest_checkin': '2025-11-17'}, total_uploads: 14
+[INFO] 2025-11-17 06:21:07 [core.views] [trace_id=d8dbb579-fcac-4702-8601-f1681a74ed04] homepage_messages request completed successfully
+[INFO] 2025-11-17 06:21:07 [django.server] [trace_id=d8dbb579-fcac-4702-8601-f1681a74ed04] "GET /api/homepage/messages/ HTTP/1.1" 200 111
+[DEBUG] 2025-11-17 06:21:07 [core.views] [trace_id=f2a9ee1b-c3e5-41c9-8875-266e9dd38906] selected general message: 把散乱的练习放成一条线。...
+[INFO] 2025-11-17 06:21:07 [core.views] [trace_id=f2a9ee1b-c3e5-41c9-8875-266e9dd38906] homepage_messages request completed successfully
+[INFO] 2025-11-17 06:21:07 [django.server] [trace_id=f2a9ee1b-c3e5-41c9-8875-266e9dd38906] "GET /api/homepage/messages/ HTTP/1.1" 200 99
+[INFO] 2025-11-17 06:21:10 [core.views] [trace_id=b2fbad7e-3af8-412e-96fa-7971e0d918a4] homepage_messages request started for user_id=7, today=2025-11-17
+[DEBUG] 2025-11-17 06:21:10 [core.views] [trace_id=b2fbad7e-3af8-412e-96fa-7971e0d918a4] check_in_stats: {'checked_today': True, 'current_streak': 8, 'total_checkins': 8, 'latest_checkin': '2025-11-17'}, total_uploads: 14
+[INFO] 2025-11-17 06:21:10 [django.server] [trace_id=d2c3bf11-9135-4815-ba73-3b2f2efe5d6d] "GET /api/goals/check-in/ HTTP/1.1" 200 90
+[INFO] 2025-11-17 06:21:10 [core.views] [trace_id=3113dc77-c1b8-4610-8294-f5047dd78df8] homepage_messages request started for user_id=7, today=2025-11-17
+[DEBUG] 2025-11-17 06:21:10 [core.views] [trace_id=b2fbad7e-3af8-412e-96fa-7971e0d918a4] selected general message: 随手画、慢慢画、想画就画。...
+[INFO] 2025-11-17 06:21:10 [django.server] [trace_id=cf084435-06ae-4e1a-b11f-5c16efcd0024] "GET /api/goals/check-in/ HTTP/1.1" 200 90
+[DEBUG] 2025-11-17 06:21:10 [core.views] [trace_id=3113dc77-c1b8-4610-8294-f5047dd78df8] check_in_stats: {'checked_today': True, 'current_streak': 8, 'total_checkins': 8, 'latest_checkin': '2025-11-17'}, total_uploads: 14
+[INFO] 2025-11-17 06:21:10 [core.views] [trace_id=b2fbad7e-3af8-412e-96fa-7971e0d918a4] homepage_messages request completed successfully
+[INFO] 2025-11-17 06:21:10 [django.server] [trace_id=b2fbad7e-3af8-412e-96fa-7971e0d918a4] "GET /api/homepage/messages/ HTTP/1.1" 200 102
+[DEBUG] 2025-11-17 06:21:10 [core.views] [trace_id=3113dc77-c1b8-4610-8294-f5047dd78df8] selected general message: 从落笔到存档，是完整的一次呼吸。...
+[INFO] 2025-11-17 06:21:10 [core.views] [trace_id=3113dc77-c1b8-4610-8294-f5047dd78df8] homepage_messages request completed successfully
+[INFO] 2025-11-17 06:21:10 [django.server] [trace_id=3113dc77-c1b8-4610-8294-f5047dd78df8] "GET /api/homepage/messages/ HTTP/1.1" 200 111
+[INFO] 2025-11-17 06:21:12 [core.views] [trace_id=e143a698-fcee-4d5e-a0e1-70d05b0823da] homepage_messages request started for user_id=7, today=2025-11-17
+[INFO] 2025-11-17 06:21:12 [django.server] [trace_id=61683028-901e-4d30-af3d-d55c7170aadc] "GET /api/goals/check-in/ HTTP/1.1" 200 90
+[INFO] 2025-11-17 06:21:12 [django.server] [trace_id=4fa668bf-d5b6-4f9a-bf2f-81de25047b5f] "GET /api/goals/check-in/ HTTP/1.1" 200 90
+[INFO] 2025-11-17 06:21:12 [core.views] [trace_id=5a8aa134-8784-4593-b71b-863cf7125152] homepage_messages request started for user_id=7, today=2025-11-17
+[DEBUG] 2025-11-17 06:21:12 [core.views] [trace_id=e143a698-fcee-4d5e-a0e1-70d05b0823da] check_in_stats: {'checked_today': True, 'current_streak': 8, 'total_checkins': 8, 'latest_checkin': '2025-11-17'}, total_uploads: 14
+[DEBUG] 2025-11-17 06:21:12 [core.views] [trace_id=5a8aa134-8784-4593-b71b-863cf7125152] check_in_stats: {'checked_today': True, 'current_streak': 8, 'total_checkins': 8, 'latest_checkin': '2025-11-17'}, total_uploads: 14
+[DEBUG] 2025-11-17 06:21:12 [core.views] [trace_id=e143a698-fcee-4d5e-a0e1-70d05b0823da] selected general message: 简单记录，稳稳沉淀。...
+[DEBUG] 2025-11-17 06:21:12 [core.views] [trace_id=5a8aa134-8784-4593-b71b-863cf7125152] selected general message: 保持一个固定的开始，让创作更容易继续。...
+[INFO] 2025-11-17 06:21:12 [core.views] [trace_id=e143a698-fcee-4d5e-a0e1-70d05b0823da] homepage_messages request completed successfully
+[INFO] 2025-11-17 06:21:12 [django.server] [trace_id=e143a698-fcee-4d5e-a0e1-70d05b0823da] "GET /api/homepage/messages/ HTTP/1.1" 200 93
+[INFO] 2025-11-17 06:21:12 [core.views] [trace_id=5a8aa134-8784-4593-b71b-863cf7125152] homepage_messages request completed successfully
+[INFO] 2025-11-17 06:21:12 [django.server] [trace_id=5a8aa134-8784-4593-b71b-863cf7125152] "GET /api/homepage/messages/ HTTP/1.1" 200 120
+[INFO] 2025-11-17 06:21:14 [core.views] [trace_id=d682f611-bdc1-4c2b-9297-190e8277abf1] homepage_messages request started for user_id=7, today=2025-11-17
+[INFO] 2025-11-17 06:21:14 [django.server] [trace_id=d84550d6-8fc1-41f9-a5f6-4ff8eb5f7044] "GET /api/goals/check-in/ HTTP/1.1" 200 90
+[INFO] 2025-11-17 06:21:14 [django.server] [trace_id=12181127-4fc9-4eaf-88d7-6a631a76c660] "GET /api/goals/check-in/ HTTP/1.1" 200 90
+[INFO] 2025-11-17 06:21:14 [core.views] [trace_id=c9f2de07-2d27-4764-8d0b-b2da5d0f6c93] homepage_messages request started for user_id=7, today=2025-11-17
+[DEBUG] 2025-11-17 06:21:14 [core.views] [trace_id=d682f611-bdc1-4c2b-9297-190e8277abf1] check_in_stats: {'checked_today': True, 'current_streak': 8, 'total_checkins': 8, 'latest_checkin': '2025-11-17'}, total_uploads: 14
+[DEBUG] 2025-11-17 06:21:14 [core.views] [trace_id=d682f611-bdc1-4c2b-9297-190e8277abf1] selected general message: 不用准备，只要开始。...
+[DEBUG] 2025-11-17 06:21:14 [core.views] [trace_id=c9f2de07-2d27-4764-8d0b-b2da5d0f6c93] check_in_stats: {'checked_today': True, 'current_streak': 8, 'total_checkins': 8, 'latest_checkin': '2025-11-17'}, total_uploads: 14
+[INFO] 2025-11-17 06:21:14 [core.views] [trace_id=d682f611-bdc1-4c2b-9297-190e8277abf1] homepage_messages request completed successfully
+[DEBUG] 2025-11-17 06:21:14 [core.views] [trace_id=c9f2de07-2d27-4764-8d0b-b2da5d0f6c93] selected general message: 坚持的轨迹，会比你想象得更好看。...
+[INFO] 2025-11-17 06:21:14 [django.server] [trace_id=d682f611-bdc1-4c2b-9297-190e8277abf1] "GET /api/homepage/messages/ HTTP/1.1" 200 93
+[INFO] 2025-11-17 06:21:14 [core.views] [trace_id=c9f2de07-2d27-4764-8d0b-b2da5d0f6c93] homepage_messages request completed successfully
+[INFO] 2025-11-17 06:21:14 [django.server] [trace_id=c9f2de07-2d27-4764-8d0b-b2da5d0f6c93] "GET /api/homepage/messages/ HTTP/1.1" 200 111
+[INFO] 2025-11-17 06:21:15 [core.views] [trace_id=5c81ad23-da8e-4fea-b9e9-14f5b31dd870] homepage_messages request started for user_id=7, today=2025-11-17
+[DEBUG] 2025-11-17 06:21:15 [core.views] [trace_id=5c81ad23-da8e-4fea-b9e9-14f5b31dd870] check_in_stats: {'checked_today': True, 'current_streak': 8, 'total_checkins': 8, 'latest_checkin': '2025-11-17'}, total_uploads: 14
+[INFO] 2025-11-17 06:21:15 [django.server] [trace_id=2f81ad84-9a25-427f-815b-8432e56ce127] "GET /api/goals/check-in/ HTTP/1.1" 200 90
+[INFO] 2025-11-17 06:21:15 [django.server] [trace_id=514d45cf-5856-4bba-83cb-dde27a0a476f] "GET /api/goals/check-in/ HTTP/1.1" 200 90
+[DEBUG] 2025-11-17 06:21:15 [core.views] [trace_id=5c81ad23-da8e-4fea-b9e9-14f5b31dd870] selected general message: 简单记录，稳稳沉淀。...
+[INFO] 2025-11-17 06:21:15 [core.views] [trace_id=5c81ad23-da8e-4fea-b9e9-14f5b31dd870] homepage_messages request completed successfully
+[INFO] 2025-11-17 06:21:15 [django.server] [trace_id=5c81ad23-da8e-4fea-b9e9-14f5b31dd870] "GET /api/homepage/messages/ HTTP/1.1" 200 93
+[INFO] 2025-11-17 06:21:15 [core.views] [trace_id=8d658aba-1803-4aec-a4c5-04168871f77e] homepage_messages request started for user_id=7, today=2025-11-17
+[DEBUG] 2025-11-17 06:21:15 [core.views] [trace_id=8d658aba-1803-4aec-a4c5-04168871f77e] check_in_stats: {'checked_today': True, 'current_streak': 8, 'total_checkins': 8, 'latest_checkin': '2025-11-17'}, total_uploads: 14
+[DEBUG] 2025-11-17 06:21:15 [core.views] [trace_id=8d658aba-1803-4aec-a4c5-04168871f77e] selected general message: 不用准备，只要开始。...
+[INFO] 2025-11-17 06:21:15 [core.views] [trace_id=8d658aba-1803-4aec-a4c5-04168871f77e] homepage_messages request completed successfully
+[INFO] 2025-11-17 06:21:15 [django.server] [trace_id=8d658aba-1803-4aec-a4c5-04168871f77e] "GET /api/homepage/messages/ HTTP/1.1" 200 93
+[INFO] 2025-11-17 06:21:22 [django.server] [trace_id=2066ae2e-9a8c-45b9-8c06-fd6357e87099] "GET /api/profile/preferences/ HTTP/1.1" 200 132
+[INFO] 2025-11-17 06:21:22 [django.server] [trace_id=3feb6beb-9151-454b-9a37-33660892a6a7] "GET /api/uploads/32/image/?token=-xgQ42d90qdvsv2HasZgnvTYfmX6PTh0Tp6lokK1fIE HTTP/1.1" 200 84853
+[INFO] 2025-11-17 06:21:39 [django.server] [trace_id=14d4ec9e-eb25-44df-98e6-dd9fabbab627] "GET /api/uploads/28/image/?token=-xgQ42d90qdvsv2HasZgnvTYfmX6PTh0Tp6lokK1fIE HTTP/1.1" 200 50571883
+[INFO] 2025-11-17 06:21:40 [django.server] [trace_id=e5353f86-475f-401d-a71f-42830aa30ac8] "GET /api/uploads/29/image/?token=-xgQ42d90qdvsv2HasZgnvTYfmX6PTh0Tp6lokK1fIE HTTP/1.1" 200 50571873
+[INFO] 2025-11-17 06:21:41 [django.server] [trace_id=58bcaa71-960b-4c3b-80aa-bc4c3ac3509a] "GET /api/uploads/27/image/?token=-xgQ42d90qdvsv2HasZgnvTYfmX6PTh0Tp6lokK1fIE HTTP/1.1" 200 50571920
+[INFO] 2025-11-17 06:21:41 [django.server] [trace_id=6487cccd-0e6d-413d-a735-8f05b09a7644] "GET /api/profile/preferences/ HTTP/1.1" 200 132
+[INFO] 2025-11-17 06:21:43 [django.server] [trace_id=1c33b86c-0a09-4e3b-a3fb-4569df186c56] "GET /api/profile/preferences/ HTTP/1.1" 200 132
+[INFO] 2025-11-17 06:21:45 [django.server] [trace_id=9268eca9-8c22-482b-bb6c-9e7f5fd4aa45] "GET /api/profile/preferences/ HTTP/1.1" 200 132
+[INFO] 2025-11-17 06:21:55 [django.server] [trace_id=b0ef0253-b65c-4867-b346-36468a348ce0] "GET /api/goals/check-in/ HTTP/1.1" 200 90
+[INFO] 2025-11-17 06:21:55 [django.server] [trace_id=453bddfe-8dd3-418d-8419-b0df7f3a907d] "GET /api/uploads/ HTTP/1.1" 200 771
+[INFO] 2025-11-17 06:21:55 [django.server] [trace_id=b3ff2795-8d62-4e14-b73b-48e2b70b9228] "GET /api/profile/preferences/ HTTP/1.1" 200 132
+[INFO] 2025-11-17 06:21:55 [django.server] [trace_id=acde4444-6092-4988-ab62-63b8bca354b4] "GET /api/profile/preferences/ HTTP/1.1" 200 132
+[INFO] 2025-11-17 06:21:55 [django.server] [trace_id=56bb1e2f-9bec-462f-8501-5056b976ed9d] "GET /api/uploads/ HTTP/1.1" 200 775
+[INFO] 2025-11-17 06:21:55 [django.server] [trace_id=91bdf304-213e-4dcd-8d88-419c088fd97c] "GET /api/goals/check-in/ HTTP/1.1" 200 90
+[INFO] 2025-11-17 06:22:13 [django.server] [trace_id=b8726b86-916c-4a92-8946-a5d6804d767f] "GET /api/uploads/ HTTP/1.1" 200 812
+[INFO] 2025-11-17 06:22:13 [django.server] [trace_id=841f9735-ba92-493e-bc5c-9679cd8809c2] "GET /api/profile/preferences/ HTTP/1.1" 200 132
+[INFO] 2025-11-17 06:22:13 [django.server] [trace_id=ec1bc6be-b1a7-4350-9036-63f919580de6] "GET /api/goals/check-in/ HTTP/1.1" 200 90
+[INFO] 2025-11-17 06:22:13 [django.server] [trace_id=c5a1e929-dba1-4898-9020-116b583184f2] "GET /api/profile/preferences/ HTTP/1.1" 200 132
+[INFO] 2025-11-17 06:22:13 [django.server] [trace_id=4885f927-bcea-40b4-91f7-7fd8c8c735f8] "GET /api/goals/check-in/ HTTP/1.1" 200 90
+[INFO] 2025-11-17 06:22:13 [django.server] [trace_id=17f22ebf-361a-484e-a764-f717daf42091] "GET /api/uploads/ HTTP/1.1" 200 764
+[INFO] 2025-11-17 06:22:16 [django.server] [trace_id=5b6b7ae6-a999-419e-9a51-1ad4cf0d403a] "GET /api/goals/short-term/ HTTP/1.1" 200 313
+[INFO] 2025-11-17 06:22:16 [django.server] [trace_id=04f0bd37-0d21-4d97-893b-195ceb2feba2] "GET /api/goals/long-term/ HTTP/1.1" 200 786
+[INFO] 2025-11-17 06:22:16 [django.server] [trace_id=acba2cdf-faa5-400e-82cc-e0e60c4d94d9] "GET /api/goals/calendar/?year=2025&month=11 HTTP/1.1" 200 472
+[INFO] 2025-11-17 06:22:16 [django.server] [trace_id=01dfa303-1b95-43e2-95e5-693fec75bd92] "GET /api/goals/calendar/?year=2025&month=11 HTTP/1.1" 200 446
+[INFO] 2025-11-17 06:22:16 [django.server] [trace_id=e84fe491-eab9-4044-ba23-46c662bea7d8] "GET /api/goals/short-term/ HTTP/1.1" 200 313
+[INFO] 2025-11-17 06:22:16 [django.server] [trace_id=0ca38afa-b733-444d-9488-dfc71fc7d780] "GET /api/goals/calendar/?year=2025&month=11 HTTP/1.1" 200 445
+[INFO] 2025-11-17 06:22:16 [django.server] [trace_id=c08c2d0c-1c8d-40c5-96b2-1417fc3af017] "GET /api/goals/long-term/ HTTP/1.1" 200 782
+[INFO] 2025-11-17 06:22:16 [django.server] [trace_id=50bc06e4-1ec6-4871-aaab-1e0a2807d08c] "GET /api/goals/calendar/?year=2025&month=11 HTTP/1.1" 200 428
+[INFO] 2025-11-17 06:22:17 [django.server] [trace_id=393016ba-6939-4d5b-90b7-4903bb5c61fb] "GET /api/uploads/22/image/?token=-xgQ42d90qdvsv2HasZgnvTYfmX6PTh0Tp6lokK1fIE HTTP/1.1" 200 101032
+[INFO] 2025-11-17 06:22:17 [django.server] [trace_id=db5610df-fcbe-4ba1-911f-d2ab77edf349] "GET /api/uploads/9/image/?token=-xgQ42d90qdvsv2HasZgnvTYfmX6PTh0Tp6lokK1fIE HTTP/1.1" 200 94186
+[INFO] 2025-11-17 06:22:17 [django.server] [trace_id=b923e756-04c8-4756-99c2-871d803199f0] "GET /api/uploads/11/image/?token=-xgQ42d90qdvsv2HasZgnvTYfmX6PTh0Tp6lokK1fIE HTTP/1.1" 200 399532
+[INFO] 2025-11-17 06:22:17 [django.server] [trace_id=864b7250-1cf2-432a-865b-0853da508ed7] "GET /api/uploads/10/image/?token=-xgQ42d90qdvsv2HasZgnvTYfmX6PTh0Tp6lokK1fIE HTTP/1.1" 200 399481
+[INFO] 2025-11-17 06:22:18 [django.server] [trace_id=a46d89f0-4bef-4af9-953d-b0500a575f41] "GET /api/uploads/20/image/?token=-xgQ42d90qdvsv2HasZgnvTYfmX6PTh0Tp6lokK1fIE HTTP/1.1" 200 2108489
+[INFO] 2025-11-17 06:22:18 [django.server] [trace_id=c74391e8-60ba-476c-926c-b7f2b867f922] "GET /api/uploads/23/image/?token=-xgQ42d90qdvsv2HasZgnvTYfmX6PTh0Tp6lokK1fIE HTTP/1.1" 200 3786767
+[INFO] 2025-11-17 06:22:19 [django.server] [trace_id=a3eaec5e-4226-4169-ad8a-f9d4dbba8750] "GET /api/goals/calendar/?year=2025&month=11 HTTP/1.1" 200 429
+[INFO] 2025-11-17 06:22:19 [django.server] [trace_id=4aa4c75e-05ad-4c48-aa41-7afcbdbe1ac1] "GET /api/goals/calendar/?year=2025&month=11 HTTP/1.1" 200 479
+[INFO] 2025-11-17 06:22:19 [django.server] [trace_id=e07eb067-d0b1-48c7-bbb9-a0eb45f4c454] "GET /api/goals/short-term/ HTTP/1.1" 200 319
+[INFO] 2025-11-17 06:22:19 [django.server] [trace_id=942b344c-e0d5-448b-bbbf-69af477539f6] "GET /api/goals/calendar/?year=2025&month=11 HTTP/1.1" 200 484
+[INFO] 2025-11-17 06:22:19 [django.server] [trace_id=c3f3d6d4-5f80-4a12-a935-80e5cc81e4e0] "GET /api/goals/long-term/ HTTP/1.1" 200 836
+[INFO] 2025-11-17 06:22:19 [django.server] [trace_id=7b8ac810-053d-4461-8512-d9abed1079f8] "GET /api/goals/long-term/ HTTP/1.1" 200 795
+[INFO] 2025-11-17 06:22:19 [django.server] [trace_id=c432acd4-198a-4514-a1b3-a892a3270925] "GET /api/goals/short-term/ HTTP/1.1" 200 362
+[INFO] 2025-11-17 06:22:19 [django.server] [trace_id=61f3638e-ae02-4968-b259-7809be3371ba] "GET /api/goals/calendar/?year=2025&month=11 HTTP/1.1" 200 420
+[INFO] 2025-11-17 06:22:40 [django.utils.autoreload] [trace_id=unknown] C:\Users\gai\Desktop\echo\backend\core\serializers.py changed, reloading.
+[INFO] 2025-11-17 06:22:43 [django.utils.autoreload] [trace_id=unknown] Watching for file changes with StatReloader
+[INFO] 2025-11-17 06:24:00 [django.utils.autoreload] [trace_id=unknown] C:\Users\gai\Desktop\echo\backend\core\serializers.py changed, reloading.
+[INFO] 2025-11-17 06:24:03 [django.utils.autoreload] [trace_id=unknown] Watching for file changes with StatReloader
+[INFO] 2025-11-17 06:27:47 [core.views] [trace_id=ede97418-d8c3-4f0b-905d-720f1e05d5a0] homepage_messages request started for user_id=7, today=2025-11-17
+[INFO] 2025-11-17 06:27:47 [core.views] [trace_id=0f0fbf73-e1be-463c-8acd-a0ab85096a50] homepage_messages request started for user_id=7, today=2025-11-17
+[INFO] 2025-11-17 06:27:47 [django.server] [trace_id=15889f79-ec48-4984-81bc-837d37885228] "GET /api/goals/check-in/ HTTP/1.1" 200 90
+[DEBUG] 2025-11-17 06:27:47 [core.views] [trace_id=ede97418-d8c3-4f0b-905d-720f1e05d5a0] check_in_stats: {'checked_today': True, 'current_streak': 8, 'total_checkins': 8, 'latest_checkin': '2025-11-17'}, total_uploads: 14
+[DEBUG] 2025-11-17 06:27:47 [core.views] [trace_id=ede97418-d8c3-4f0b-905d-720f1e05d5a0] selected general message: 随手画、慢慢画、想画就画。...
+[INFO] 2025-11-17 06:27:47 [django.server] [trace_id=96c40a25-fd7b-4bc5-a9e0-f76a0d64d570] "GET /api/goals/check-in/ HTTP/1.1" 200 90
+[DEBUG] 2025-11-17 06:27:47 [core.views] [trace_id=0f0fbf73-e1be-463c-8acd-a0ab85096a50] check_in_stats: {'checked_today': True, 'current_streak': 8, 'total_checkins': 8, 'latest_checkin': '2025-11-17'}, total_uploads: 14
+[INFO] 2025-11-17 06:27:47 [core.views] [trace_id=ede97418-d8c3-4f0b-905d-720f1e05d5a0] homepage_messages request completed successfully
+[INFO] 2025-11-17 06:27:47 [django.server] [trace_id=ede97418-d8c3-4f0b-905d-720f1e05d5a0] "GET /api/homepage/messages/ HTTP/1.1" 200 102
+[DEBUG] 2025-11-17 06:27:47 [core.views] [trace_id=0f0fbf73-e1be-463c-8acd-a0ab85096a50] selected general message: 留住每一次落笔的意义。...
+[INFO] 2025-11-17 06:27:47 [core.views] [trace_id=0f0fbf73-e1be-463c-8acd-a0ab85096a50] homepage_messages request completed successfully
+[INFO] 2025-11-17 06:27:47 [django.server] [trace_id=0f0fbf73-e1be-463c-8acd-a0ab85096a50] "GET /api/homepage/messages/ HTTP/1.1" 200 96
+[INFO] 2025-11-17 06:27:50 [django.server] [trace_id=f6a7a971-789b-44cd-8e2d-509211bd7c94] "GET /api/goals/calendar/?year=2025&month=11 HTTP/1.1" 200 483
+[INFO] 2025-11-17 06:27:50 [django.server] [trace_id=c170e6b6-bf64-488a-ab30-e92d8a52a0c8] "GET /api/goals/long-term/ HTTP/1.1" 200 797
+[INFO] 2025-11-17 06:27:50 [django.server] [trace_id=6eabf58f-3eb9-4d3f-b9fa-3401db3be0a0] "GET /api/goals/short-term/ HTTP/1.1" 200 324
+[INFO] 2025-11-17 06:27:50 [django.server] [trace_id=6b01ae51-2527-4d23-bc6c-cc2205274cd9] "GET /api/goals/calendar/?year=2025&month=11 HTTP/1.1" 200 418
+[INFO] 2025-11-17 06:27:50 [django.server] [trace_id=39bcc706-5404-45e8-b4e9-4317bc39d4fc] "GET /api/goals/long-term/ HTTP/1.1" 200 823
+[INFO] 2025-11-17 06:27:50 [django.server] [trace_id=dc190b6c-f04d-4112-a86e-2b68977d74d3] "GET /api/goals/calendar/?year=2025&month=11 HTTP/1.1" 200 428
+[INFO] 2025-11-17 06:27:50 [django.server] [trace_id=c5a92410-447d-4370-b0fe-be1cb0c011df] "GET /api/goals/short-term/ HTTP/1.1" 200 294
+[INFO] 2025-11-17 06:27:50 [django.server] [trace_id=579d78f0-3e9c-4b58-96cc-d77658c1c77d] "GET /api/goals/calendar/?year=2025&month=11 HTTP/1.1" 200 420
+[INFO] 2025-11-17 06:27:52 [django.server] [trace_id=40ac84b9-9dcc-42f9-9ec8-d395cd230b10] "GET /api/goals/long-term/ HTTP/1.1" 200 828
+[INFO] 2025-11-17 06:27:52 [django.server] [trace_id=4dd2d6b8-0208-4300-908e-117d90f4c5bc] "GET /api/goals/calendar/?year=2025&month=11 HTTP/1.1" 200 487
+[INFO] 2025-11-17 06:27:52 [django.server] [trace_id=c8c89dde-9ba9-4592-bc6a-e11dcf45d2d7] "GET /api/goals/calendar/?year=2025&month=11 HTTP/1.1" 200 477
+[INFO] 2025-11-17 06:27:52 [django.server] [trace_id=7492faba-ecfc-4dc5-94c2-cee5c914a53d] "GET /api/goals/long-term/ HTTP/1.1" 200 845
+[INFO] 2025-11-17 06:27:52 [django.server] [trace_id=a6df19f6-555f-4cdb-9dd5-96a448f8c620] "GET /api/goals/short-term/ HTTP/1.1" 200 314
+[INFO] 2025-11-17 06:27:52 [django.server] [trace_id=f3f38f2f-baef-4b42-9851-4ef484ead9ff] "GET /api/goals/calendar/?year=2025&month=11 HTTP/1.1" 200 398
+[INFO] 2025-11-17 06:27:52 [django.server] [trace_id=337e9ed7-4b81-4061-a0ff-7c7fcadeb9cb] "GET /api/goals/short-term/ HTTP/1.1" 200 332
+[INFO] 2025-11-17 06:27:52 [django.server] [trace_id=af3445cb-7eec-4261-9b4f-de7cbdf375bd] "GET /api/goals/calendar/?year=2025&month=11 HTTP/1.1" 200 404
+[INFO] 2025-11-17 06:27:53 [django.server] [trace_id=5bdeb228-f9a2-4370-8f88-d19887db94f0] "GET /api/goals/check-in/ HTTP/1.1" 200 90
+[INFO] 2025-11-17 06:27:53 [django.server] [trace_id=042fd3f1-7941-45bc-8fc5-cd2c60984861] "GET /api/uploads/ HTTP/1.1" 200 746
+[INFO] 2025-11-17 06:27:53 [django.server] [trace_id=cded9fb4-ba4d-4842-8ec5-7314991d1205] "GET /api/profile/preferences/ HTTP/1.1" 200 132
+[INFO] 2025-11-17 06:27:53 [django.server] [trace_id=5231103c-97b5-465f-8418-c0f8cda3f2e5] "GET /api/uploads/ HTTP/1.1" 200 757
+[INFO] 2025-11-17 06:27:53 [django.server] [trace_id=f76603e3-0f5c-4ec3-b626-e238d5135042] "GET /api/profile/preferences/ HTTP/1.1" 200 132
+[INFO] 2025-11-17 06:27:53 [django.server] [trace_id=89a8b16d-49c1-41ab-bf99-bd6e624651f5] "GET /api/goals/check-in/ HTTP/1.1" 200 90
+[INFO] 2025-11-17 06:27:56 [django.server] [trace_id=19779070-d4b0-46d6-a701-4d2baabcc693] "GET /api/uploads/32/image/?token=-xgQ42d90qdvsv2HasZgnvTYfmX6PTh0Tp6lokK1fIE HTTP/1.1" 200 84875
+[INFO] 2025-11-17 06:28:15 [django.server] [trace_id=dbe0362f-4bfc-49d0-9403-60eefdea63b2] "GET /api/uploads/29/image/?token=-xgQ42d90qdvsv2HasZgnvTYfmX6PTh0Tp6lokK1fIE HTTP/1.1" 200 50571862
+[INFO] 2025-11-17 06:28:17 [django.server] [trace_id=d263cc2d-0524-4562-a995-7f63d8c3d161] "GET /api/uploads/28/image/?token=-xgQ42d90qdvsv2HasZgnvTYfmX6PTh0Tp6lokK1fIE HTTP/1.1" 200 50571849
+[INFO] 2025-11-17 06:28:18 [django.server] [trace_id=53d46b48-9b26-41d5-a396-67e9e52cfc68] "GET /api/uploads/27/image/?token=-xgQ42d90qdvsv2HasZgnvTYfmX6PTh0Tp6lokK1fIE HTTP/1.1" 200 50571860
+[INFO] 2025-11-17 06:28:19 [django.utils.autoreload] [trace_id=unknown] C:\Users\gai\Desktop\echo\backend\core\models.py changed, reloading.
+[INFO] 2025-11-17 06:28:23 [django.utils.autoreload] [trace_id=unknown] Watching for file changes with StatReloader
+[INFO] 2025-11-17 06:28:35 [django.utils.autoreload] [trace_id=unknown] C:\Users\gai\Desktop\echo\backend\core\serializers.py changed, reloading.
+[INFO] 2025-11-17 06:28:40 [django.utils.autoreload] [trace_id=unknown] Watching for file changes with StatReloader
+[INFO] 2025-11-17 06:28:47 [django.utils.autoreload] [trace_id=unknown] C:\Users\gai\Desktop\echo\backend\core\serializers.py changed, reloading.
+[INFO] 2025-11-17 06:28:50 [django.utils.autoreload] [trace_id=unknown] Watching for file changes with StatReloader
+[INFO] 2025-11-17 06:28:59 [django.utils.autoreload] [trace_id=unknown] C:\Users\gai\Desktop\echo\backend\core\admin_views.py changed, reloading.
+[INFO] 2025-11-17 06:29:02 [django.utils.autoreload] [trace_id=unknown] Watching for file changes with StatReloader
+[WARNING] 2025-11-17 06:32:00 [django.request] [trace_id=4f5a43ff-9391-4c15-9ad6-4d7ff24e4cb2] Forbidden: /api/homepage/messages/
+[WARNING] 2025-11-17 06:32:00 [django.request] [trace_id=8eaddab5-de87-445a-8cc0-d49eeb0361be] Forbidden: /api/uploads/
+[WARNING] 2025-11-17 06:32:00 [django.request] [trace_id=2b7156b7-e483-42c3-9562-4eabff2b6a2a] Forbidden: /api/profile/achievements/
+[WARNING] 2025-11-17 06:32:00 [django.request] [trace_id=568e5ba8-578d-459e-92ad-f2f2516105a5] Forbidden: /api/goals/check-in/
+[WARNING] 2025-11-17 06:32:00 [django.server] [trace_id=4f5a43ff-9391-4c15-9ad6-4d7ff24e4cb2] "GET /api/homepage/messages/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:32:00 [django.server] [trace_id=8eaddab5-de87-445a-8cc0-d49eeb0361be] "GET /api/uploads/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:32:00 [django.server] [trace_id=2b7156b7-e483-42c3-9562-4eabff2b6a2a] "GET /api/profile/achievements/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:32:00 [django.server] [trace_id=568e5ba8-578d-459e-92ad-f2f2516105a5] "GET /api/goals/check-in/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:32:04 [django.request] [trace_id=59f729b2-517a-4594-bd42-661cf1994d71] Forbidden: /api/goals/calendar/
+[WARNING] 2025-11-17 06:32:04 [django.request] [trace_id=e77820e8-68ce-4545-8047-ec965f5ebd9a] Forbidden: /api/goals/long-term/
+[WARNING] 2025-11-17 06:32:04 [django.server] [trace_id=59f729b2-517a-4594-bd42-661cf1994d71] "GET /api/goals/calendar/?year=2025&month=11 HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:32:04 [django.request] [trace_id=72c52ce6-3bf2-47b1-8701-ccb9d7c704a7] Forbidden: /api/goals/short-term/
+[WARNING] 2025-11-17 06:32:04 [django.server] [trace_id=e77820e8-68ce-4545-8047-ec965f5ebd9a] "GET /api/goals/long-term/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:32:04 [django.server] [trace_id=72c52ce6-3bf2-47b1-8701-ccb9d7c704a7] "GET /api/goals/short-term/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:32:06 [django.request] [trace_id=cce8f9e3-7a68-4e2d-8f8b-79d127448d3d] Forbidden: /api/goals/calendar/
+[WARNING] 2025-11-17 06:32:06 [django.request] [trace_id=77c5a6b0-6aae-489d-be1d-31ba1061b3d4] Forbidden: /api/goals/long-term/
+[WARNING] 2025-11-17 06:32:06 [django.server] [trace_id=cce8f9e3-7a68-4e2d-8f8b-79d127448d3d] "GET /api/goals/calendar/?year=2025&month=11 HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:32:06 [django.request] [trace_id=0a0bb0c4-b213-4144-b2b3-e72041344dac] Forbidden: /api/goals/short-term/
+[WARNING] 2025-11-17 06:32:06 [django.server] [trace_id=77c5a6b0-6aae-489d-be1d-31ba1061b3d4] "GET /api/goals/long-term/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:32:06 [django.server] [trace_id=0a0bb0c4-b213-4144-b2b3-e72041344dac] "GET /api/goals/short-term/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:32:08 [django.request] [trace_id=bc9d0493-4b1c-4000-a22e-1a1dff67a056] Forbidden: /api/homepage/messages/
+[WARNING] 2025-11-17 06:32:08 [django.request] [trace_id=22979cdb-c61f-4a29-bcde-1f619fc9baa1] Forbidden: /api/goals/check-in/
+[WARNING] 2025-11-17 06:32:08 [django.server] [trace_id=bc9d0493-4b1c-4000-a22e-1a1dff67a056] "GET /api/homepage/messages/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:32:08 [django.server] [trace_id=22979cdb-c61f-4a29-bcde-1f619fc9baa1] "GET /api/goals/check-in/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:32:10 [django.request] [trace_id=4c5756fa-e90c-4dbb-b54a-cd6a06c76f2d] Forbidden: /api/homepage/messages/
+[WARNING] 2025-11-17 06:32:10 [django.request] [trace_id=07be8a2a-950a-408a-a7e8-4fa64cb3852f] Forbidden: /api/goals/check-in/
+[WARNING] 2025-11-17 06:32:10 [django.server] [trace_id=4c5756fa-e90c-4dbb-b54a-cd6a06c76f2d] "GET /api/homepage/messages/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:32:10 [django.server] [trace_id=07be8a2a-950a-408a-a7e8-4fa64cb3852f] "GET /api/goals/check-in/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:32:13 [django.request] [trace_id=ab5a1024-cbea-4a34-a668-84c29cbfe35f] Forbidden: /api/goals/calendar/
+[WARNING] 2025-11-17 06:32:13 [django.request] [trace_id=8d006f0f-1525-41b3-a1d7-5369a6e0fc33] Forbidden: /api/goals/long-term/
+[WARNING] 2025-11-17 06:32:13 [django.server] [trace_id=ab5a1024-cbea-4a34-a668-84c29cbfe35f] "GET /api/goals/calendar/?year=2025&month=11 HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:32:13 [django.request] [trace_id=01b84110-71e5-4654-975f-2d943728a754] Forbidden: /api/goals/short-term/
+[WARNING] 2025-11-17 06:32:13 [django.server] [trace_id=8d006f0f-1525-41b3-a1d7-5369a6e0fc33] "GET /api/goals/long-term/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:32:13 [django.server] [trace_id=01b84110-71e5-4654-975f-2d943728a754] "GET /api/goals/short-term/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:32:16 [django.request] [trace_id=f37df208-d214-4606-8f02-83ce9c884987] Forbidden: /api/profile/preferences/
+[WARNING] 2025-11-17 06:32:16 [django.server] [trace_id=f37df208-d214-4606-8f02-83ce9c884987] "GET /api/profile/preferences/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:32:35 [django.request] [trace_id=b0473645-5e1b-4885-8670-d3c5cb186d6c] Forbidden: /api/profile/preferences/
+[WARNING] 2025-11-17 06:32:35 [django.server] [trace_id=b0473645-5e1b-4885-8670-d3c5cb186d6c] "GET /api/profile/preferences/ HTTP/1.1" 403 34
+[INFO] 2025-11-17 06:32:43 [django.utils.autoreload] [trace_id=unknown] C:\Users\gai\Desktop\echo\backend\core\admin.py changed, reloading.
+[INFO] 2025-11-17 06:32:47 [django.utils.autoreload] [trace_id=unknown] Watching for file changes with StatReloader
+[WARNING] 2025-11-17 06:32:55 [django.request] [trace_id=ff81ef3a-34d1-485c-940c-06e23c3b702c] Forbidden: /api/profile/preferences/
+[WARNING] 2025-11-17 06:32:55 [django.server] [trace_id=ff81ef3a-34d1-485c-940c-06e23c3b702c] "GET /api/profile/preferences/ HTTP/1.1" 403 34
+[INFO] 2025-11-17 06:33:03 [django.utils.autoreload] [trace_id=unknown] C:\Users\gai\Desktop\echo\backend\core\models.py changed, reloading.
+[INFO] 2025-11-17 06:33:07 [django.utils.autoreload] [trace_id=unknown] Watching for file changes with StatReloader
+[INFO] 2025-11-17 06:35:35 [django.utils.autoreload] [trace_id=unknown] Watching for file changes with StatReloader
+[WARNING] 2025-11-17 06:35:45 [django.request] [trace_id=6c0225b8-ba0d-4908-aba1-71e584488647] Forbidden: /api/goals/check-in/
+[WARNING] 2025-11-17 06:35:45 [django.request] [trace_id=f19d453d-96f3-40ec-af1c-7f4c8eb73af9] Forbidden: /api/uploads/
+[WARNING] 2025-11-17 06:35:45 [django.request] [trace_id=5f74e077-e964-4702-b53f-28426e59662a] Forbidden: /api/homepage/messages/
+[WARNING] 2025-11-17 06:35:45 [django.request] [trace_id=41eaf811-f364-4b04-a5a2-f4bb45f93004] Forbidden: /api/profile/achievements/
+[WARNING] 2025-11-17 06:35:45 [django.server] [trace_id=6c0225b8-ba0d-4908-aba1-71e584488647] "GET /api/goals/check-in/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:35:45 [django.server] [trace_id=f19d453d-96f3-40ec-af1c-7f4c8eb73af9] "GET /api/uploads/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:35:45 [django.server] [trace_id=5f74e077-e964-4702-b53f-28426e59662a] "GET /api/homepage/messages/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:35:45 [django.server] [trace_id=41eaf811-f364-4b04-a5a2-f4bb45f93004] "GET /api/profile/achievements/ HTTP/1.1" 403 34
+[INFO] 2025-11-17 06:35:47 [django.server] [trace_id=57fbb78e-d82b-4916-b5e6-65e29ad9e170] "POST /api/auth/login/ HTTP/1.1" 200 163
+[INFO] 2025-11-17 06:35:47 [django.server] [trace_id=1ba2368e-cc06-4efc-b967-2e051e0b4e95] "GET /api/auth/me/ HTTP/1.1" 200 100
+[INFO] 2025-11-17 06:35:47 [django.server] [trace_id=22a6ef26-302f-4563-a428-a1f8c767764d] "GET /api/auth/me/ HTTP/1.1" 200 100
+[INFO] 2025-11-17 06:35:47 [django.server] [trace_id=2d98396a-2c7a-4425-8fae-e3e3f9e01b06] "GET /api/admin/home/history/ HTTP/1.1" 200 2686
+[INFO] 2025-11-17 06:35:47 [django.server] [trace_id=e324741a-12c2-4e44-9381-61b245e4bd78] "GET /api/admin/home/encouragements/ HTTP/1.1" 200 1911
+[INFO] 2025-11-17 06:35:47 [django.server] [trace_id=2f77cac9-be3e-4665-a5e7-ae064b61465b] "GET /api/admin/home/encouragements/ HTTP/1.1" 200 1910
+[INFO] 2025-11-17 06:35:47 [django.server] [trace_id=7174e95b-4378-4d13-8009-b0a2a628509c] "GET /api/admin/home/conditionals/ HTTP/1.1" 200 1009
+[INFO] 2025-11-17 06:35:47 [django.server] [trace_id=416c312a-e160-4d2b-8e32-8cf80cc71a22] "GET /api/admin/home/history/ HTTP/1.1" 200 2625
+[INFO] 2025-11-17 06:35:47 [django.server] [trace_id=f7a24eb8-b5be-487c-b6c1-30ed2c9b010d] "GET /api/admin/home/conditionals/ HTTP/1.1" 200 987
+[INFO] 2025-11-17 06:35:50 [django.server] [trace_id=e2ce5613-4198-4d3a-a5ee-94b00a090878] "GET /api/admin/reports/monthly-templates/ HTTP/1.1" 200 2
+[INFO] 2025-11-17 06:35:50 [django.server] [trace_id=11ee0e1d-a722-4f6c-abd3-af7b6078f4ff] "GET /api/admin/reports/monthly-templates/ HTTP/1.1" 200 2
+[INFO] 2025-11-17 06:35:50 [django.server] [trace_id=3485ac62-a673-4700-ba1e-9ef4b6b3d10d] "GET /api/auth/me/ HTTP/1.1" 200 100
+[INFO] 2025-11-17 06:35:50 [django.server] [trace_id=734fc91c-1155-4ccc-8063-ff53767ded01] "GET /api/admin/reports/monthly-templates/ HTTP/1.1" 200 2
+[INFO] 2025-11-17 06:35:50 [django.server] [trace_id=072f3cd2-7977-4ab1-b2f4-7f587569b60f] "GET /api/admin/reports/monthly-templates/ HTTP/1.1" 200 2
+[INFO] 2025-11-17 06:36:07 [django.server] [trace_id=375d95a5-496d-403b-9bbd-ae9e5b3823f3] "GET /api/auth/me/ HTTP/1.1" 200 100
+[INFO] 2025-11-17 06:36:07 [django.server] [trace_id=b708a05e-6267-49b5-95a1-c96925617e17] "GET /api/auth/me/ HTTP/1.1" 200 100
+[INFO] 2025-11-17 06:36:07 [django.server] [trace_id=6fb80ff4-11ef-4cb1-b9c4-82f250b7580f] "GET /api/admin/reports/monthly-templates/ HTTP/1.1" 200 2
+[INFO] 2025-11-17 06:36:07 [django.server] [trace_id=92b42527-5b62-4a31-8dc3-24b44f1ff21b] "GET /api/admin/reports/monthly-templates/ HTTP/1.1" 200 2
+[INFO] 2025-11-17 06:36:09 [django.utils.autoreload] [trace_id=unknown] C:\Users\gai\Desktop\echo\backend\core\serializers.py changed, reloading.
+[INFO] 2025-11-17 06:36:11 [django.utils.autoreload] [trace_id=unknown] Watching for file changes with StatReloader
+[WARNING] 2025-11-17 06:36:19 [django.request] [trace_id=1be10748-bba0-4001-93e8-18d76665d285] Forbidden: /api/profile/preferences/
+[WARNING] 2025-11-17 06:36:19 [django.server] [trace_id=1be10748-bba0-4001-93e8-18d76665d285] "GET /api/profile/preferences/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:36:23 [django.request] [trace_id=ece48e78-048d-4651-96ce-6e715fff5abf] Forbidden: /api/profile/preferences/
+[WARNING] 2025-11-17 06:36:23 [django.server] [trace_id=ece48e78-048d-4651-96ce-6e715fff5abf] "GET /api/profile/preferences/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:36:25 [django.request] [trace_id=d00bee24-7287-4f9d-920e-69ade1bc5435] Forbidden: /api/profile/preferences/
+[WARNING] 2025-11-17 06:36:25 [django.server] [trace_id=d00bee24-7287-4f9d-920e-69ade1bc5435] "GET /api/profile/preferences/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:37:26 [django.request] [trace_id=92ef328e-bd00-4531-9b87-4b3e9e85c763] Forbidden: /api/homepage/messages/
+[WARNING] 2025-11-17 06:37:26 [django.server] [trace_id=92ef328e-bd00-4531-9b87-4b3e9e85c763] "GET /api/homepage/messages/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:37:26 [django.request] [trace_id=353910fb-ba3e-4274-9c61-833e68a96881] Forbidden: /api/goals/check-in/
+[WARNING] 2025-11-17 06:37:26 [django.server] [trace_id=353910fb-ba3e-4274-9c61-833e68a96881] "GET /api/goals/check-in/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:37:43 [django.request] [trace_id=412f3d0a-bc86-48e7-8c75-ff1b578f62ba] Forbidden: /api/goals/calendar/
+[WARNING] 2025-11-17 06:37:43 [django.server] [trace_id=412f3d0a-bc86-48e7-8c75-ff1b578f62ba] "GET /api/goals/calendar/?year=2025&month=11 HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:37:43 [django.request] [trace_id=3168124e-1a40-4fb8-b868-f88522946ac4] Forbidden: /api/goals/long-term/
+[WARNING] 2025-11-17 06:37:43 [django.request] [trace_id=cdc4f524-39f8-41eb-850e-8f21ff4407b3] Forbidden: /api/goals/short-term/
+[WARNING] 2025-11-17 06:37:43 [django.server] [trace_id=3168124e-1a40-4fb8-b868-f88522946ac4] "GET /api/goals/long-term/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:37:43 [django.server] [trace_id=cdc4f524-39f8-41eb-850e-8f21ff4407b3] "GET /api/goals/short-term/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:38:01 [django.request] [trace_id=e8692ed3-2555-4da5-9917-f0327f2f7ca6] Forbidden: /api/homepage/messages/
+[WARNING] 2025-11-17 06:38:01 [django.request] [trace_id=55acc48f-929e-4ef8-a889-b8a9962bf20f] Forbidden: /api/goals/check-in/
+[WARNING] 2025-11-17 06:38:01 [django.server] [trace_id=e8692ed3-2555-4da5-9917-f0327f2f7ca6] "GET /api/homepage/messages/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:38:01 [django.server] [trace_id=55acc48f-929e-4ef8-a889-b8a9962bf20f] "GET /api/goals/check-in/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:38:01 [django.request] [trace_id=26331120-ecf9-4fa8-86e1-77f32f4c6b3c] Forbidden: /api/uploads/
+[WARNING] 2025-11-17 06:38:01 [django.server] [trace_id=26331120-ecf9-4fa8-86e1-77f32f4c6b3c] "GET /api/uploads/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:38:01 [django.request] [trace_id=083b00e0-b25e-46c9-85b1-3b39bebdedb9] Forbidden: /api/profile/achievements/
+[WARNING] 2025-11-17 06:38:01 [django.server] [trace_id=083b00e0-b25e-46c9-85b1-3b39bebdedb9] "GET /api/profile/achievements/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:38:04 [django.request] [trace_id=cb55f94d-0db4-445e-9036-7e1e3b2617e0] Forbidden: /api/goals/calendar/
+[WARNING] 2025-11-17 06:38:04 [django.request] [trace_id=3f9aadd0-5a11-41fd-9404-b37847122fe7] Forbidden: /api/goals/short-term/
+[WARNING] 2025-11-17 06:38:04 [django.request] [trace_id=433b9adc-ce5f-4fe4-b5b7-f221f35a1e44] Forbidden: /api/goals/long-term/
+[WARNING] 2025-11-17 06:38:04 [django.server] [trace_id=cb55f94d-0db4-445e-9036-7e1e3b2617e0] "GET /api/goals/calendar/?year=2025&month=11 HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:38:04 [django.server] [trace_id=3f9aadd0-5a11-41fd-9404-b37847122fe7] "GET /api/goals/short-term/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:38:04 [django.server] [trace_id=433b9adc-ce5f-4fe4-b5b7-f221f35a1e44] "GET /api/goals/long-term/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:38:06 [django.request] [trace_id=46c673c8-c4b4-42e0-a947-ae3cc190f1d3] Forbidden: /api/profile/preferences/
+[WARNING] 2025-11-17 06:38:06 [django.server] [trace_id=46c673c8-c4b4-42e0-a947-ae3cc190f1d3] "GET /api/profile/preferences/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:38:11 [django.request] [trace_id=f55490bd-f053-4de9-b8c5-ff7a47f91746] Forbidden: /api/profile/preferences/
+[WARNING] 2025-11-17 06:38:11 [django.server] [trace_id=f55490bd-f053-4de9-b8c5-ff7a47f91746] "GET /api/profile/preferences/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:40:07 [django.request] [trace_id=45f01df0-7298-4484-8d76-532b5b3d77dc] Forbidden: /api/homepage/messages/
+[WARNING] 2025-11-17 06:40:07 [django.server] [trace_id=45f01df0-7298-4484-8d76-532b5b3d77dc] "GET /api/homepage/messages/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:40:07 [django.request] [trace_id=1314e840-f587-47c5-9139-84968eda18c9] Forbidden: /api/goals/check-in/
+[WARNING] 2025-11-17 06:40:07 [django.server] [trace_id=1314e840-f587-47c5-9139-84968eda18c9] "GET /api/goals/check-in/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:40:08 [django.request] [trace_id=a33c9c56-ec3b-45b7-8838-800dbc506805] Forbidden: /api/goals/long-term/
+[WARNING] 2025-11-17 06:40:08 [django.request] [trace_id=50a52be5-88fd-461e-b3ec-04a82604033f] Forbidden: /api/goals/calendar/
+[WARNING] 2025-11-17 06:40:08 [django.server] [trace_id=a33c9c56-ec3b-45b7-8838-800dbc506805] "GET /api/goals/long-term/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:40:08 [django.request] [trace_id=b8300c9c-5bbe-47de-8928-6d2d5cfb82c0] Forbidden: /api/goals/short-term/
+[WARNING] 2025-11-17 06:40:08 [django.server] [trace_id=50a52be5-88fd-461e-b3ec-04a82604033f] "GET /api/goals/calendar/?year=2025&month=11 HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:40:08 [django.server] [trace_id=b8300c9c-5bbe-47de-8928-6d2d5cfb82c0] "GET /api/goals/short-term/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:40:11 [django.request] [trace_id=9cfd8fb8-4efc-4bee-b35d-f653fa82a20f] Forbidden: /api/profile/preferences/
+[WARNING] 2025-11-17 06:40:11 [django.server] [trace_id=9cfd8fb8-4efc-4bee-b35d-f653fa82a20f] "GET /api/profile/preferences/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:42:59 [django.request] [trace_id=d886c9b1-407d-4bdb-9d6f-6f195e29fd03] Forbidden: /api/homepage/messages/
+[WARNING] 2025-11-17 06:42:59 [django.request] [trace_id=48d1a1c5-1617-4ec4-8409-425d93a9cbb3] Forbidden: /api/goals/check-in/
+[WARNING] 2025-11-17 06:42:59 [django.server] [trace_id=d886c9b1-407d-4bdb-9d6f-6f195e29fd03] "GET /api/homepage/messages/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:42:59 [django.server] [trace_id=48d1a1c5-1617-4ec4-8409-425d93a9cbb3] "GET /api/goals/check-in/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:43:10 [django.request] [trace_id=940a3076-9d11-49ef-af0e-30e743507d54] Forbidden: /api/profile/preferences/
+[WARNING] 2025-11-17 06:43:10 [django.server] [trace_id=940a3076-9d11-49ef-af0e-30e743507d54] "GET /api/profile/preferences/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:43:39 [django.request] [trace_id=fcda2bd9-e192-4206-816a-829ae70e06cb] Forbidden: /api/profile/preferences/
+[WARNING] 2025-11-17 06:43:39 [django.server] [trace_id=fcda2bd9-e192-4206-816a-829ae70e06cb] "GET /api/profile/preferences/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:43:44 [django.request] [trace_id=2f4072c9-22ed-4737-b73c-7e67d2305a48] Forbidden: /api/profile/preferences/
+[WARNING] 2025-11-17 06:43:44 [django.server] [trace_id=2f4072c9-22ed-4737-b73c-7e67d2305a48] "GET /api/profile/preferences/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:44:29 [django.request] [trace_id=eb60d7b8-d1ce-4cc0-89eb-d98d91bbaf62] Forbidden: /api/goals/calendar/
+[WARNING] 2025-11-17 06:44:29 [django.request] [trace_id=8cf73866-a44c-4bf1-a404-856ebd722eb6] Forbidden: /api/goals/long-term/
+[WARNING] 2025-11-17 06:44:29 [django.server] [trace_id=eb60d7b8-d1ce-4cc0-89eb-d98d91bbaf62] "GET /api/goals/calendar/?year=2025&month=11 HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:44:29 [django.server] [trace_id=8cf73866-a44c-4bf1-a404-856ebd722eb6] "GET /api/goals/long-term/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:44:29 [django.request] [trace_id=496d87aa-d1b1-4e61-a5a5-ffce5524cf2e] Forbidden: /api/goals/short-term/
+[WARNING] 2025-11-17 06:44:29 [django.server] [trace_id=496d87aa-d1b1-4e61-a5a5-ffce5524cf2e] "GET /api/goals/short-term/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:45:01 [django.request] [trace_id=e6fd3b05-f7bd-40ca-ada3-d07963d56e7b] Forbidden: /api/profile/preferences/
+[WARNING] 2025-11-17 06:45:01 [django.server] [trace_id=e6fd3b05-f7bd-40ca-ada3-d07963d56e7b] "GET /api/profile/preferences/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:45:27 [django.request] [trace_id=a36da79c-d003-433f-a554-4729bae3f611] Forbidden: /api/goals/calendar/
+[WARNING] 2025-11-17 06:45:27 [django.server] [trace_id=a36da79c-d003-433f-a554-4729bae3f611] "GET /api/goals/calendar/?year=2025&month=11 HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:45:27 [django.request] [trace_id=68765100-98a0-40b0-8c43-89d85cc9888f] Forbidden: /api/goals/long-term/
+[WARNING] 2025-11-17 06:45:27 [django.request] [trace_id=2bb42c12-e857-4a74-be6b-8e222a9c40c6] Forbidden: /api/goals/short-term/
+[WARNING] 2025-11-17 06:45:27 [django.server] [trace_id=68765100-98a0-40b0-8c43-89d85cc9888f] "GET /api/goals/long-term/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:45:27 [django.server] [trace_id=2bb42c12-e857-4a74-be6b-8e222a9c40c6] "GET /api/goals/short-term/ HTTP/1.1" 403 34
+[WARNING] 2025-11-17 06:45:35 [django.request] [trace_id=1504033a-445a-431b-bc3f-be66160a9937] Forbidden: /api/profile/preferences/
+[WARNING] 2025-11-17 06:45:35 [django.server] [trace_id=1504033a-445a-431b-bc3f-be66160a9937] "GET /api/profile/preferences/ HTTP/1.1" 403 34

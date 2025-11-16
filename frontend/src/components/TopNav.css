@@ -30,6 +30,10 @@
   gap: 0.5rem;
 }
 
+.top-nav__actions {
+  justify-content: flex-end;
+}
+
 .top-nav__placeholder {
   display: inline-flex;
   width: var(--top-nav-action-size, 44px);
@@ -58,9 +62,6 @@
   opacity: 0.72;
 }
 
-.top-nav__actions {
-  justify-content: flex-end;
-}
 
 .top-nav__action-button {
   width: var(--top-nav-action-size, 44px);

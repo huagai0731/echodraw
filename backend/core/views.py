@@ -5,6 +5,7 @@ import secrets
 import calendar
 import mimetypes
 import os
+import logging
 from datetime import date, timedelta
 
 from django.conf import settings
@@ -25,6 +26,9 @@ from rest_framework.views import APIView
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from core.email_utils import send_mail_async
+
+# 配置日志记录器
+logger = logging.getLogger(__name__)
 
 # 尝试导入时区库，优先使用 zoneinfo（Python 3.9+），否则使用 pytz
 try:
@@ -107,6 +111,10 @@ from core.serializers import (
 
 CODE_EXPIRY_MINUTES = 10
 RESEND_INTERVAL_SECONDS = 60
+# IP级别限流：每个IP每小时最多发送10次
+IP_RATE_LIMIT_PER_HOUR = 10
+# 邮箱级别限流：每个邮箱每天最多发送20次
+EMAIL_DAILY_LIMIT = 20
 ALLOWED_CODE_PURPOSES = {
     EmailVerification.PURPOSE_REGISTER,
     EmailVerification.PURPOSE_RESET_PASSWORD,
@@ -238,7 +246,19 @@ def send_verification_code(request):
             "如果这不是您的操作，请忽略此邮件。"
         )
 
+    # 获取客户端IP地址
+    def get_client_ip(request):
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            ip = x_forwarded_for.split(',')[0].strip()
+        else:
+            ip = request.META.get('REMOTE_ADDR', 'unknown')
+        return ip
+    
+    client_ip = get_client_ip(request)
     now = timezone.now()
+    
+    # 1. 检查邮箱级别的发送频率限制（60秒间隔）
     latest_record = (
         EmailVerification.objects.filter(email__iexact=email, purpose=purpose)
         .order_by("-created_at")
@@ -256,15 +276,51 @@ def send_verification_code(request):
             },
             status=status.HTTP_429_TOO_MANY_REQUESTS,
         )
+    
+    # 2. 检查IP级别的发送频率限制（每小时最多10次）
+    one_hour_ago = now - timedelta(hours=1)
+    ip_send_count = EmailVerification.objects.filter(
+        metadata__ip=client_ip,
+        created_at__gte=one_hour_ago
+    ).count()
+    
+    if ip_send_count >= IP_RATE_LIMIT_PER_HOUR:
+        return Response(
+            {
+                "detail": f"该IP地址发送验证码过于频繁，请1小时后再试",
+            },
+            status=status.HTTP_429_TOO_MANY_REQUESTS,
+        )
+    
+    # 3. 检查邮箱每日发送上限（每天最多20次）
+    from datetime import datetime
+    today_start = get_today_shanghai()
+    today_start_dt = timezone.make_aware(
+        datetime.combine(today_start, datetime.min.time())
+    )
+    email_send_count_today = EmailVerification.objects.filter(
+        email__iexact=email,
+        created_at__gte=today_start_dt
+    ).count()
+    
+    if email_send_count_today >= EMAIL_DAILY_LIMIT:
+        return Response(
+            {
+                "detail": f"该邮箱今日发送验证码次数已达上限（{EMAIL_DAILY_LIMIT}次），请明天再试",
+            },
+            status=status.HTTP_429_TOO_MANY_REQUESTS,
+        )
 
     code = f"{secrets.randbelow(1_000_000):06d}"
     expires_at = now + timedelta(minutes=CODE_EXPIRY_MINUTES)
 
+    # 在metadata中记录IP地址，用于IP级别限流
     verification = EmailVerification.objects.create(
         email=email,
         purpose=purpose,
         code=code,
         expires_at=expires_at,
+        metadata={"ip": client_ip},
     )
 
     from_email = getattr(settings, "DEFAULT_FROM_EMAIL", None) or getattr(
@@ -288,9 +344,14 @@ def send_verification_code(request):
         send_mail_async(subject, message, from_email, [email])
     except Exception as exc:  # 极少数情况下线程池提交失败
         verification.delete()
+        # 记录详细错误到日志，但不返回给客户端
+        logger.error(
+            f"验证码发送失败: {_extract_error_message(exc, '邮件发送失败')}",
+            extra={"email": email, "purpose": purpose},
+            exc_info=True
+        )
+        # 生产环境不返回详细错误信息
         payload = {"detail": "验证码发送失败，请稍后重试"}
-        if settings.DEBUG:
-            payload["error"] = _extract_error_message(exc, "邮件发送失败")
         return Response(payload, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     return Response({"detail": "验证码已发送"}, status=status.HTTP_200_OK)
@@ -575,79 +636,237 @@ def _build_achievement_payload(achievement: Achievement, *, unlocked_at=None) ->
     }
 
 
+def _evaluate_achievement_condition(user, condition: dict, user_stats: dict | None = None) -> bool:
+    """
+    评估成就条件是否满足。
+    
+    Args:
+        user: 用户对象
+        condition: 成就条件字典，格式如 {"metric": "total_uploads", "operator": ">=", "threshold": 10}
+        user_stats: 用户统计数据缓存，如果为 None 则实时计算
+    
+    Returns:
+        bool: 条件是否满足
+    """
+    if not isinstance(condition, dict) or not condition:
+        return False
+    
+    metric = condition.get("metric", "").strip()
+    operator = condition.get("operator", ">=").strip()
+    threshold = condition.get("threshold", 0)
+    
+    if not metric:
+        return False
+    
+    try:
+        threshold = float(threshold)
+    except (ValueError, TypeError):
+        return False
+    
+    # 如果提供了缓存统计，优先使用
+    if user_stats is not None:
+        user_value = user_stats.get(metric)
+        if user_value is not None:
+            return _compare_values(user_value, operator, threshold)
+    
+    # 否则实时计算
+    if metric == "total_uploads":
+        user_value = UserUpload.objects.filter(user=user).count()
+    elif metric == "total_checkins":
+        # 使用打卡统计函数
+        stats = _get_check_in_stats(user)
+        user_value = stats.get("total_checkins", 0)
+    elif metric == "current_streak":
+        stats = _get_check_in_stats(user)
+        user_value = stats.get("current_streak", 0)
+    elif metric == "checked_today":
+        stats = _get_check_in_stats(user)
+        user_value = 1 if stats.get("checked_today", False) else 0
+    else:
+        logger.warning(f"Unknown achievement metric: {metric}", extra={"metric": metric})
+        return False
+    
+    return _compare_values(user_value, operator, threshold)
+
+
+def _compare_values(actual_value, operator: str, threshold: float) -> bool:
+    """
+    比较实际值与阈值。
+    
+    Args:
+        actual_value: 实际值（数字）
+        operator: 操作符（">=", ">", "<=", "<", "==", "!="）
+        threshold: 阈值（数字）
+    
+    Returns:
+        bool: 比较结果
+    """
+    try:
+        actual_value = float(actual_value)
+        threshold = float(threshold)
+    except (ValueError, TypeError):
+        return False
+    
+    if operator == ">=":
+        return actual_value >= threshold
+    elif operator == ">":
+        return actual_value > threshold
+    elif operator == "<=":
+        return actual_value <= threshold
+    elif operator == "<":
+        return actual_value < threshold
+    elif operator == "==":
+        return abs(actual_value - threshold) < 1e-6  # 浮点数比较
+    elif operator == "!=":
+        return abs(actual_value - threshold) >= 1e-6
+    else:
+        logger.warning(f"Unknown operator: {operator}", extra={"operator": operator})
+        return False
+
+
+def _get_user_achievement_stats(user) -> dict:
+    """
+    获取用户的成就判定所需的统计数据。
+    
+    返回字典，键为指标名称，值为对应的统计值。
+    """
+    check_in_stats = _get_check_in_stats(user)
+    total_uploads = UserUpload.objects.filter(user=user).count()
+    
+    return {
+        "total_uploads": total_uploads,
+        "total_checkins": check_in_stats.get("total_checkins", 0),
+        "current_streak": check_in_stats.get("current_streak", 0),
+        "checked_today": 1 if check_in_stats.get("checked_today", False) else 0,
+    }
+
+
 @api_view(["GET"])
 @permission_classes([AllowAny])
 @cache_page(600)
 def profile_achievements(request):
     """
     返回当前用户的成就概览。
-
-    目前尚未实现成就判定逻辑，因此所有配置成就默认视为“未解锁”。
-    后续可在此处根据用户数据计算已解锁等级并补充 unlocked_at 字段。
+    
+    根据成就条件计算用户已解锁的成就等级。
     """
-
-    achievements = (
-        Achievement.objects.filter(is_active=True)
-        .select_related("group")
-        .order_by(
-            "group__display_order",
-            "group__id",
-            "display_order",
-            "level",
-            "slug",
-        )
+    trace_id = getattr(request, "trace_id", "unknown")
+    user = getattr(request, "user", None)
+    user_id = user.id if user and user.is_authenticated else None
+    
+    logger.info(
+        f"profile_achievements request started",
+        extra={"trace_id": trace_id, "user_id": user_id}
     )
 
-    group_map: dict[int, dict] = {}
-    standalone: list[dict] = []
+    try:
+        achievements = (
+            Achievement.objects.filter(is_active=True)
+            .select_related("group")
+            .order_by(
+                "group__display_order",
+                "group__id",
+                "display_order",
+                "level",
+                "slug",
+            )
+        )
 
-    for achievement in achievements:
-        payload = _build_achievement_payload(achievement)
-        if achievement.group_id:
-            group = achievement.group
-            group_payload = group_map.get(group.id)
-            if not group_payload:
-                group_payload = {
-                    "id": group.id,
-                    "slug": group.slug,
-                    "name": group.name,
-                    "description": group.description,
-                    "category": group.category,
-                    "icon": group.icon,
-                    "display_order": group.display_order,
-                    "metadata": group.metadata if isinstance(group.metadata, dict) else {},
-                    "levels": [],
-                    "summary": {
-                        "level_count": 0,
-                        "highest_unlocked_level": 0,
-                        "unlocked_levels": [],
-                    },
-                }
-                group_map[group.id] = group_payload
-            group_payload["levels"].append(payload)
-            group_payload["summary"]["level_count"] += 1
-        else:
-            standalone.append(payload)
+        # 如果用户已登录，获取统计数据并评估成就
+        user_stats = None
+        if user and user.is_authenticated:
+            user_stats = _get_user_achievement_stats(user)
+            logger.debug(
+                f"user_stats: {user_stats}",
+                extra={"trace_id": trace_id, "user_id": user_id}
+            )
 
-    groups: list[dict] = []
-    for group_payload in group_map.values():
-        levels = group_payload.get("levels") or []
-        if len(levels) <= 1:
-            if levels:
-                standalone.append(levels[0])
-            continue
-        group_payload["summary"]["level_count"] = len(levels)
-        groups.append(group_payload)
+        group_map: dict[int, dict] = {}
+        standalone: list[dict] = []
+        today = timezone.now().isoformat()
 
-    summary = {
-        "group_count": len(groups),
-        "standalone_count": len(standalone),
-        "achievement_count": len(standalone) + sum(
-            group["summary"]["level_count"] for group in groups
-        ),
-    }
+        for achievement in achievements:
+            unlocked_at = None
+            
+            # 如果用户已登录，评估成就条件
+            if user and user.is_authenticated:
+                condition = achievement.condition or {}
+                if condition and _evaluate_achievement_condition(user, condition, user_stats):
+                    unlocked_at = today
+                    logger.debug(
+                        f"achievement unlocked: {achievement.slug} (level {achievement.level})",
+                        extra={"trace_id": trace_id, "user_id": user_id, "achievement_slug": achievement.slug}
+                    )
+            
+            payload = _build_achievement_payload(achievement, unlocked_at=unlocked_at)
+            
+            if achievement.group_id:
+                group = achievement.group
+                group_payload = group_map.get(group.id)
+                if not group_payload:
+                    group_payload = {
+                        "id": group.id,
+                        "slug": group.slug,
+                        "name": group.name,
+                        "description": group.description,
+                        "category": group.category,
+                        "icon": group.icon,
+                        "display_order": group.display_order,
+                        "metadata": group.metadata if isinstance(group.metadata, dict) else {},
+                        "levels": [],
+                        "summary": {
+                            "level_count": 0,
+                            "highest_unlocked_level": 0,
+                            "unlocked_levels": [],
+                        },
+                    }
+                    group_map[group.id] = group_payload
+                group_payload["levels"].append(payload)
+                group_payload["summary"]["level_count"] += 1
+                
+                # 如果成就已解锁，更新组的统计信息
+                if unlocked_at:
+                    level = achievement.level
+                    group_payload["summary"]["unlocked_levels"].append(level)
+                    current_highest = group_payload["summary"]["highest_unlocked_level"]
+                    if level > current_highest:
+                        group_payload["summary"]["highest_unlocked_level"] = level
+            else:
+                standalone.append(payload)
 
-    return Response({"summary": summary, "groups": groups, "standalone": standalone})
+        groups: list[dict] = []
+        for group_payload in group_map.values():
+            levels = group_payload.get("levels") or []
+            if len(levels) <= 1:
+                if levels:
+                    standalone.append(levels[0])
+                continue
+            group_payload["summary"]["level_count"] = len(levels)
+            # 对已解锁的等级进行排序
+            group_payload["summary"]["unlocked_levels"].sort()
+            groups.append(group_payload)
+
+        summary = {
+            "group_count": len(groups),
+            "standalone_count": len(standalone),
+            "achievement_count": len(standalone) + sum(
+                group["summary"]["level_count"] for group in groups
+            ),
+        }
+
+        logger.info(
+            f"profile_achievements request completed successfully",
+            extra={"trace_id": trace_id, "user_id": user_id}
+        )
+
+        return Response({"summary": summary, "groups": groups, "standalone": standalone})
+    except Exception as exc:
+        logger.error(
+            f"profile_achievements request failed: {exc}",
+            extra={"trace_id": trace_id, "user_id": user_id},
+            exc_info=True
+        )
+        raise
 
 
 class UserUploadListCreateView(generics.ListCreateAPIView):
@@ -675,6 +894,7 @@ class UserUploadListCreateView(generics.ListCreateAPIView):
             .order_by("-uploaded_at")
         )
 
+    @transaction.atomic
     def perform_create(self, serializer: UserUploadSerializer):
         upload = serializer.save(user=self.request.user)
 
@@ -746,6 +966,21 @@ class UserUploadImageView(APIView):
         AuthToken.objects.filter(pk=token.pk).update(last_used_at=timezone.now())
         return token.user
 
+    def options(self, request, pk: int):
+        """处理 CORS 预检请求"""
+        response = Response()
+        origin = request.headers.get("Origin")
+        if origin:
+            response["Access-Control-Allow-Origin"] = origin
+            response["Access-Control-Allow-Credentials"] = "true"
+        else:
+            response["Access-Control-Allow-Origin"] = "*"
+        response["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+        response["Access-Control-Allow-Headers"] = "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+        response["Access-Control-Max-Age"] = "86400"
+        response["Vary"] = "Origin"
+        return response
+
     def get(self, request, pk: int):
         user = self._resolve_authenticated_user(request)
         if user is None:
@@ -770,6 +1005,7 @@ class UserUploadImageView(APIView):
         response["Cache-Control"] = "public, max-age=86400"
         response["Cross-Origin-Resource-Policy"] = "cross-origin"
 
+        # 设置 CORS 头以支持跨域访问
         origin = request.headers.get("Origin")
         auth_token = request.query_params.get("token")
         if origin:
@@ -781,6 +1017,11 @@ class UserUploadImageView(APIView):
             response["Vary"] = "Origin"
         else:
             response["Access-Control-Allow-Origin"] = "*"
+        
+        # 添加额外的 CORS 头以支持更多场景
+        response["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+        response["Access-Control-Allow-Headers"] = "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+        response["Access-Control-Expose-Headers"] = "Content-Type, Content-Disposition, Cache-Control"
 
         return response
 
@@ -856,51 +1097,96 @@ def homepage_messages(request):
     2. 条件文案 - 当用户达成某些条件时显示（如打卡满7天）
     3. 节日文案 - 特定日期显示特定文案
     """
+    trace_id = getattr(request, "trace_id", "unknown")
     user = request.user
     today = get_today_shanghai()
-
-    # 第二块：条件文案（基于用户条件，优先检查）
-    check_in_stats = _get_check_in_stats(user)
-    total_uploads = UserUpload.objects.filter(user=user).count()
-    last_upload = UserUpload.objects.filter(user=user).order_by("-uploaded_at").first()
-    conditional_text = _resolve_conditional_message(
-        user,
-        check_in_stats=check_in_stats,
-        total_uploads=total_uploads,
-        last_upload=last_upload,
+    
+    logger.info(
+        f"homepage_messages request started for user_id={user.id}, today={today.isoformat()}",
+        extra={"trace_id": trace_id, "user_id": user.id}
     )
 
-    # 第一块：通用文案（随机展示，仅在不是特殊打卡日期时显示）
-    # 如果匹配到条件文案（特殊打卡日期），则不显示通用文案
-    general_text = None
-    if not conditional_text:
-        general_text = _resolve_general_message()
+    try:
+        # 第二块：条件文案（基于用户条件，优先检查）
+        check_in_stats = _get_check_in_stats(user)
+        total_uploads = UserUpload.objects.filter(user=user).count()
+        last_upload = UserUpload.objects.filter(user=user).order_by("-uploaded_at").first()
+        
+        logger.debug(
+            f"check_in_stats: {check_in_stats}, total_uploads: {total_uploads}",
+            extra={"trace_id": trace_id, "user_id": user.id}
+        )
+        
+        conditional_text = _resolve_conditional_message(
+            user,
+            check_in_stats=check_in_stats,
+            total_uploads=total_uploads,
+            last_upload=last_upload,
+        )
+        
+        if conditional_text:
+            logger.debug(
+                f"matched conditional message: {conditional_text[:50]}...",
+                extra={"trace_id": trace_id, "user_id": user.id}
+            )
 
-    # 第三块：节日文案和历史文案（基于日期）
-    holiday_message = HolidayMessage.get_for_date(today)
-    holiday_payload = None
-    if holiday_message:
-        holiday_payload = {
-            "headline": holiday_message.headline or None,
-            "text": holiday_message.text,
-        }
-    
-    # 历史文案（历史上的今天）
-    history_message = DailyHistoryMessage.get_for_date(today)
-    history_payload = None
-    if history_message:
-        history_payload = {
-            "headline": history_message.headline or None,
-            "text": history_message.text,
-        }
+        # 第一块：通用文案（随机展示，仅在不是特殊打卡日期时显示）
+        # 如果匹配到条件文案（特殊打卡日期），则不显示通用文案
+        general_text = None
+        if not conditional_text:
+            general_text = _resolve_general_message()
+            if general_text:
+                logger.debug(
+                    f"selected general message: {general_text[:50]}...",
+                    extra={"trace_id": trace_id, "user_id": user.id}
+                )
 
-    response_payload = {
-        "general": general_text,  # 通用文案（当不是特殊打卡日期时）
-        "conditional": conditional_text,  # 条件文案（特殊打卡日期等）
-        "holiday": holiday_payload,  # 节日文案
-        "history": history_payload,  # 历史文案（历史上的今天）
-    }
-    return Response(response_payload)
+        # 第三块：节日文案和历史文案（基于日期）
+        holiday_message = HolidayMessage.get_for_date(today)
+        holiday_payload = None
+        if holiday_message:
+            holiday_payload = {
+                "headline": holiday_message.headline or None,
+                "text": holiday_message.text,
+            }
+            logger.debug(
+                f"matched holiday message for date {today.isoformat()}",
+                extra={"trace_id": trace_id, "user_id": user.id}
+            )
+        
+        # 历史文案（历史上的今天）
+        history_message = DailyHistoryMessage.get_for_date(today)
+        history_payload = None
+        if history_message:
+            history_payload = {
+                "headline": history_message.headline or None,
+                "text": history_message.text,
+            }
+            logger.debug(
+                f"matched history message for date {today.isoformat()}",
+                extra={"trace_id": trace_id, "user_id": user.id}
+            )
+
+        response_payload = {
+            "general": general_text,  # 通用文案（当不是特殊打卡日期时）
+            "conditional": conditional_text,  # 条件文案（特殊打卡日期等）
+            "holiday": holiday_payload,  # 节日文案
+            "history": history_payload,  # 历史文案（历史上的今天）
+        }
+        
+        logger.info(
+            f"homepage_messages request completed successfully",
+            extra={"trace_id": trace_id, "user_id": user.id}
+        )
+        
+        return Response(response_payload)
+    except Exception as exc:
+        logger.error(
+            f"homepage_messages request failed: {exc}",
+            extra={"trace_id": trace_id, "user_id": user.id},
+            exc_info=True
+        )
+        raise
 
 
 @api_view(["GET"])
@@ -1034,10 +1320,14 @@ def goals_calendar(request):
         ).values_list("date", flat=True)
     )
 
+    # 优化：批量查询上传记录，避免循环中的多次时区转换
     uploads = set()
-    for uploaded_at in UserUpload.objects.filter(
-        user=user, uploaded_at__date__range=(display_start, display_end)
-    ).values_list("uploaded_at", flat=True):
+    uploaded_at_list = list(
+        UserUpload.objects.filter(
+            user=user, uploaded_at__date__range=(display_start, display_end)
+        ).values_list("uploaded_at", flat=True)
+    )
+    for uploaded_at in uploaded_at_list:
         # 明确转换为中国时区，确保日期计算正确
         if timezone.is_naive(uploaded_at):
             uploaded_at = timezone.make_aware(uploaded_at)
@@ -1115,12 +1405,13 @@ def check_in(request):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        checkin, created = DailyCheckIn.objects.get_or_create(
-            user=user, date=target_date, defaults={"source": source}
-        )
-        if not created and source and not checkin.source:
-            checkin.source = source
-            checkin.save(update_fields=["source"])
+        with transaction.atomic():
+            checkin, created = DailyCheckIn.objects.get_or_create(
+                user=user, date=target_date, defaults={"source": source}
+            )
+            if not created and source and not checkin.source:
+                checkin.source = source
+                checkin.save(update_fields=["source"])
 
         stats = _get_check_in_stats(user)
         payload = {
@@ -1150,10 +1441,13 @@ def _get_check_in_stats(user):
         DailyCheckIn.objects.filter(user=user).values_list("date", flat=True)
     )
     # 2) 收集上传记录日期（本地化为上海时区的"日"）
+    # 优化：批量查询所有上传时间，避免循环中的多次时区转换
     upload_dates = set()
-    for uploaded_at in UserUpload.objects.filter(user=user).values_list("uploaded_at", flat=True):
-        if uploaded_at is None:
-            continue
+    uploaded_at_list = list(
+        UserUpload.objects.filter(user=user, uploaded_at__isnull=False)
+        .values_list("uploaded_at", flat=True)
+    )
+    for uploaded_at in uploaded_at_list:
         # 明确转换为中国时区，确保日期计算正确
         if timezone.is_naive(uploaded_at):
             uploaded_at = timezone.make_aware(uploaded_at)

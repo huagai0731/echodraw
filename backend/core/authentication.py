@@ -34,6 +34,10 @@ class AuthTokenAuthentication(BaseAuthentication):
         except AuthToken.DoesNotExist as exc:
             raise exceptions.AuthenticationFailed("无效的认证令牌") from exc
 
+        # 检查token是否过期
+        if token.is_expired:
+            raise exceptions.AuthenticationFailed("认证令牌已过期，请重新登录")
+
         # 更新最近使用时间
         AuthToken.objects.filter(pk=token.pk).update(last_used_at=timezone.now())
 

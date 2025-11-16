@@ -2,11 +2,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import MaterialIcon from "@/components/MaterialIcon";
 import TopNav from "@/components/TopNav";
+import ImageCropper, { type CropData } from "@/components/ImageCropper";
 import type { Artwork } from "@/types/artwork";
 import { fetchProfilePreferences } from "@/services/api";
 import { getActiveUserEmail } from "@/services/authStorage";
+import { getOrLoadImages } from "@/utils/imageCache";
 
-import "./FourArtworkTemplateDesigner.css";
+import "./SingleArtworkTemplateDesigner.css";
 
 type FourArtworkTemplateDesignerProps = {
   open: boolean;
@@ -80,12 +82,23 @@ function FourArtworkTemplateDesigner({ open, artworks, onClose }: FourArtworkTem
   const [imageStatus, setImageStatus] = useState<ImageStatus>("idle");
   const [loadedImages, setLoadedImages] = useState<Record<string, HTMLImageElement>>({});
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [cropData, setCropData] = useState<Record<string, CropData>>({});
+  const [cropperOpen, setCropperOpen] = useState(false);
+  const [croppingArtworkId, setCroppingArtworkId] = useState<string | null>(null);
+  // 模式切换：紧凑 or 详细
+  const [displayMode, setDisplayMode] = useState<"compact" | "detailed">("compact");
+  // 紧凑模式：每张图显示的信息类型（标题/时长/日期）
+  const [compactInfoType, setCompactInfoType] = useState<Record<string, "title" | "duration" | "date">>({});
+  // 详细模式：底部小条颜色
+  const [detailBarColor, setDetailBarColor] = useState<string>("#98dbc6");
 
   const hasArtworks = artworks.length > 0;
 
   useEffect(() => {
     if (!open) {
       setPickerOpen(false);
+      setCropperOpen(false);
+      setCroppingArtworkId(null);
     }
   }, [open]);
 
@@ -182,7 +195,7 @@ function FourArtworkTemplateDesigner({ open, artworks, onClose }: FourArtworkTem
 
   useEffect(() => {
     if (!open) {
-      setLoadedImages({});
+      // 不清空 loadedImages，保留缓存以便下次快速加载
       setImageStatus("idle");
       return;
     }
@@ -193,26 +206,35 @@ function FourArtworkTemplateDesigner({ open, artworks, onClose }: FourArtworkTem
     }
     let isCancelled = false;
     setImageStatus("loading");
-    const loaders = selectedArtworks.map(
-      (artwork) =>
-        new Promise<{ id: string; image: HTMLImageElement }>((resolve, reject) => {
-          const img = new Image();
-          img.crossOrigin = "anonymous";
-          const handleLoad = () => resolve({ id: artwork.id, image: img });
-          const handleError = () => reject(new Error(`Failed to load image ${artwork.id}`));
-          img.addEventListener("load", handleLoad);
-          img.addEventListener("error", handleError);
-          img.src = artwork.imageSrc;
-        }),
-    );
-    Promise.all(loaders)
-      .then((results) => {
+    
+    // 使用共享的图片缓存工具加载图片
+    const imageSrcs = selectedArtworks.map((artwork) => artwork.imageSrc);
+    getOrLoadImages(imageSrcs)
+      .then((imageMap) => {
         if (isCancelled) return;
         const next: Record<string, HTMLImageElement> = {};
-        results.forEach(({ id, image }) => {
-          next[id] = image;
+        selectedArtworks.forEach((artwork) => {
+          const img = imageMap.get(artwork.imageSrc);
+          if (img) {
+            next[artwork.id] = img;
+          }
         });
-        setLoadedImages(next);
+        // 只在图片真正变化时才更新状态，避免不必要的重新绘制
+        setLoadedImages((prev) => {
+          const prevKeys = Object.keys(prev).sort();
+          const nextKeys = Object.keys(next).sort();
+          if (prevKeys.length !== nextKeys.length) {
+            return next;
+          }
+          // 检查是否有图片变化
+          for (const key of prevKeys) {
+            if (prev[key] !== next[key]) {
+              return next;
+            }
+          }
+          // 如果图片没有变化，返回之前的对象，避免触发重新绘制
+          return prev;
+        });
         setImageStatus("ready");
       })
       .catch(() => {
@@ -297,8 +319,14 @@ function FourArtworkTemplateDesigner({ open, artworks, onClose }: FourArtworkTem
       canvas.width = canvasSize.width;
       canvas.height = canvasSize.height;
     }
-    drawTemplate(context, canvasSize.width, canvasSize.height, tileSize.width, tileSize.height, templateData, loadedImages);
-  }, [loadedImages, open, templateData, canvasSize.height, canvasSize.width]);
+    // 使用 requestAnimationFrame 优化绘制性能
+    const rafId = requestAnimationFrame(() => {
+      drawTemplate(context, canvasSize.width, canvasSize.height, tileSize.width, tileSize.height, templateData, loadedImages, cropData, displayMode, compactInfoType, detailBarColor, showUsername ? normalizeUsername(username) : "");
+    });
+    return () => {
+      cancelAnimationFrame(rafId);
+    };
+  }, [loadedImages, open, templateData, canvasSize.height, canvasSize.width, cropData, displayMode, compactInfoType, detailBarColor, username, showUsername, tileSize.width, tileSize.height]);
 
   const handleToggleSelection = (artworkId: string) => {
     setSelectedIds((prev) => {
@@ -333,9 +361,12 @@ function FourArtworkTemplateDesigner({ open, artworks, onClose }: FourArtworkTem
 
   return (
     <>
-      <div className="quad-template-designer" role="dialog" aria-modal="true">
-        <div className="quad-template-designer__backdrop" onClick={onClose} />
-        <div className="quad-template-designer__panel">
+      <div className="single-template-designer" role="dialog" aria-modal="true">
+        <div className="single-template-designer__background" aria-hidden="true">
+          <div className="single-template-designer__glow single-template-designer__glow--left" />
+          <div className="single-template-designer__glow single-template-designer__glow--right" />
+        </div>
+        <div className="single-template-designer__content">
           <TopNav
             title="模版"
             subtitle="Templates"
@@ -347,28 +378,90 @@ function FourArtworkTemplateDesigner({ open, artworks, onClose }: FourArtworkTem
             }}
           />
           <div style={{ height: "var(--top-nav-height, 64px)" }} />
-          <div className="quad-template-designer__preview">
-            <canvas ref={canvasRef} className="quad-template-designer__canvas" />
-            {imageStatus === "loading" ? (
-              <div className="quad-template-designer__status">正在加载作品…</div>
-            ) : null}
-            {imageStatus === "error" ? (
-              <div className="quad-template-designer__status quad-template-designer__status--error">
-                图片加载失败，请选择其他作品或稍后重试。
-              </div>
-            ) : null}
-          </div>
 
-          <aside className="quad-template-designer__sidebar">
-            <div className="quad-template-designer__heading">
-              <h2>四张图模板</h2>
-              <p>挑选四幅作品，2×2 网格；信息展示与单图导出一致。</p>
-            </div>
+          <div className="single-template-designer__layout" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <section className="single-template-designer__mockup">
+              {hasArtworks ? (
+                <div className="single-template-designer__device">
+                  <div className="single-template-designer__device-screen" style={{ aspectRatio: canvasSize.width / canvasSize.height }}>
+                    <canvas ref={canvasRef} className="single-template-designer__canvas" />
+                    {imageStatus === "loading" ? (
+                      <div className="single-template-designer__status">正在加载作品…</div>
+                    ) : null}
+                    {imageStatus === "error" ? (
+                      <div className="single-template-designer__status single-template-designer__status--error">
+                        图片加载失败，请选择其他作品或稍后重试。
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              ) : (
+                <div className="single-template-designer__preview-empty">
+                  <MaterialIcon name="photo_library" />
+                  <p>你还没有上传作品</p>
+                  <span>请先在「画集」里完成一次上传，再体验展板模板。</span>
+                  <button type="button" onClick={onClose}>
+                    返回画集
+                  </button>
+                </div>
+              )}
+            </section>
 
             {hasArtworks ? (
-              <>
-                <div className="quad-template-designer__group">
-                  <h3>导出尺寸</h3>
+              <section className="single-template-designer__controls">
+                <div className="single-template-designer__group single-template-designer__group--hero">
+                  <div className="single-template-designer__group-header">
+                    <h2>四张图模板</h2>
+                    <p>挑选四幅作品，2×2 网格；信息展示与单图导出一致。</p>
+                  </div>
+                </div>
+
+                <div className="single-template-designer__group">
+                  <div className="single-template-designer__group-header">
+                    <h3>显示模式</h3>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      onClick={() => setDisplayMode("compact")}
+                      style={{
+                        padding: "6px 10px",
+                        borderRadius: 999,
+                        border: displayMode === "compact" ? "1px solid rgba(152,219,198,0.6)" : "1px solid rgba(255,255,255,0.18)",
+                        background: displayMode === "compact" ? "rgba(152,219,198,0.16)" : "rgba(255,255,255,0.03)",
+                        color: displayMode === "compact" ? "#98dbc6" : "rgba(255,255,255,0.8)",
+                        cursor: "pointer",
+                        fontFamily: "inherit",
+                        fontSize: "0.75rem",
+                        letterSpacing: "0.12em",
+                      }}
+                    >
+                      紧凑
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDisplayMode("detailed")}
+                      style={{
+                        padding: "6px 10px",
+                        borderRadius: 999,
+                        border: displayMode === "detailed" ? "1px solid rgba(152,219,198,0.6)" : "1px solid rgba(255,255,255,0.18)",
+                        background: displayMode === "detailed" ? "rgba(152,219,198,0.16)" : "rgba(255,255,255,0.03)",
+                        color: displayMode === "detailed" ? "#98dbc6" : "rgba(255,255,255,0.8)",
+                        cursor: "pointer",
+                        fontFamily: "inherit",
+                        fontSize: "0.75rem",
+                        letterSpacing: "0.12em",
+                      }}
+                    >
+                      详细
+                    </button>
+                  </div>
+                </div>
+
+                <div className="single-template-designer__group">
+                  <div className="single-template-designer__group-header">
+                    <h3>导出尺寸</h3>
+                  </div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     {(["1080x1080", "1080x1350", "1440x1800"] as SizePresetKey[]).map((key) => (
                       <button
@@ -378,10 +471,13 @@ function FourArtworkTemplateDesigner({ open, artworks, onClose }: FourArtworkTem
                         style={{
                           padding: "6px 10px",
                           borderRadius: 999,
-                          border: sizePreset === key ? "1px solid rgba(152,219,198,0.6)" : "1px solid rgba(239,234,231,0.18)",
-                          background: sizePreset === key ? "rgba(152,219,198,0.16)" : "rgba(239,234,231,0.06)",
-                          color: sizePreset === key ? "#98dbc6" : "rgba(239,234,231,0.85)",
+                          border: sizePreset === key ? "1px solid rgba(152,219,198,0.6)" : "1px solid rgba(255,255,255,0.18)",
+                          background: sizePreset === key ? "rgba(152,219,198,0.16)" : "rgba(255,255,255,0.03)",
+                          color: sizePreset === key ? "#98dbc6" : "rgba(255,255,255,0.8)",
                           cursor: "pointer",
+                          fontFamily: "inherit",
+                          fontSize: "0.75rem",
+                          letterSpacing: "0.12em",
                         }}
                       >
                         {key.replace("x", " × ")}
@@ -390,41 +486,200 @@ function FourArtworkTemplateDesigner({ open, artworks, onClose }: FourArtworkTem
                   </div>
                 </div>
 
-                <div className="quad-template-designer__group">
-                  <h3>已选作品</h3>
+                <div className="single-template-designer__group">
+                  <div className="single-template-designer__group-header">
+                    <h3>已选作品</h3>
+                  </div>
                   <button
                     type="button"
-                    className="quad-template-designer__selected"
+                    className="single-template-designer__selection"
                     onClick={() => setPickerOpen(true)}
                   >
-                    <div className="quad-template-designer__selected-grid" aria-hidden="true">
-                      {Array.from({ length: MAX_ITEMS }).map((_, index) => {
-                        const artwork = selectedArtworks[index] ?? null;
-                        if (!artwork) {
-                          return <span key={index} className="quad-template-designer__slot-placeholder" />;
-                        }
-                        return (
+                    {selectedArtworks.length > 0 ? (
+                      <>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 60px)", gridTemplateRows: "repeat(2, 60px)", gap: "0.35rem", flexShrink: 0 }}>
+                          {Array.from({ length: MAX_ITEMS }).map((_, index) => {
+                            const artwork = selectedArtworks[index] ?? null;
+                            if (!artwork) {
+                              return <div key={index} style={{ width: 60, height: 60, borderRadius: "0.85rem", border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,0.4)", fontSize: "1.4rem" }}>+</div>;
+                            }
+                            return (
+                              <div key={artwork.id} style={{ position: "relative" }}>
+                                <img
+                                  src={artwork.imageSrc}
+                                  alt={artwork.alt}
+                                  loading="lazy"
+                                  style={{ width: 60, height: 60, borderRadius: "0.85rem", border: "1px solid rgba(255,255,255,0.18)", objectFit: "cover" }}
+                                />
+                                {cropData[artwork.id] && (
+                                  <div
+                                    style={{
+                                      position: "absolute",
+                                      top: 2,
+                                      right: 2,
+                                      width: 16,
+                                      height: 16,
+                                      borderRadius: "50%",
+                                      background: "#98dbc6",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      fontSize: "0.7rem",
+                                    }}
+                                    title="已裁剪"
+                                  >
+                                    <MaterialIcon name="crop" style={{ fontSize: "0.7rem", color: "#221b1b" }} />
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div>
+                          <p>当前选中 {selectedArtworks.length} / 4</p>
+                          <h4>{selectedArtworks[0]?.title || "尚未选择作品"}</h4>
+                          <small>点击更换或调整顺序（超出 4 张自动替换最早选择）</small>
+                        </div>
+                        <MaterialIcon name="chevron_right" />
+                      </>
+                    ) : (
+                      <div>
+                        <p>当前作品</p>
+                        <h4>尚未选择</h4>
+                        <small>点击打开作品库</small>
+                      </div>
+                    )}
+                  </button>
+                  {selectedArtworks.length > 0 && (
+                    <div style={{ marginTop: "0.75rem", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                      {selectedArtworks.map((artwork) => (
+                        <button
+                          key={artwork.id}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCroppingArtworkId(artwork.id);
+                            setCropperOpen(true);
+                          }}
+                          style={{
+                            padding: "0.5rem 0.75rem",
+                            borderRadius: "0.5rem",
+                            border: "1px solid rgba(152,219,198,0.3)",
+                            background: cropData[artwork.id] ? "rgba(152,219,198,0.15)" : "rgba(255,255,255,0.05)",
+                            color: cropData[artwork.id] ? "#98dbc6" : "rgba(255,255,255,0.8)",
+                            fontSize: "0.75rem",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.375rem",
+                            transition: "all 0.2s",
+                          }}
+                          onMouseEnter={(e) => {
+                            if (!cropData[artwork.id]) {
+                              e.currentTarget.style.background = "rgba(152,219,198,0.1)";
+                              e.currentTarget.style.borderColor = "rgba(152,219,198,0.5)";
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!cropData[artwork.id]) {
+                              e.currentTarget.style.background = "rgba(255,255,255,0.05)";
+                              e.currentTarget.style.borderColor = "rgba(152,219,198,0.3)";
+                            }
+                          }}
+                        >
+                          <MaterialIcon name="crop" style={{ fontSize: "1rem" }} />
+                          <span>{artwork.title || "未命名"}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {displayMode === "compact" && selectedArtworks.length > 0 && (
+                  <div className="single-template-designer__group">
+                    <div className="single-template-designer__group-header">
+                      <h3>每张图显示信息（紧凑模式）</h3>
+                      <small>每张图右下角只显示一个信息</small>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                      {selectedArtworks.map((artwork) => (
+                        <div key={artwork.id} style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.5rem", borderRadius: "0.5rem", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.1)" }}>
                           <img
-                            key={artwork.id}
                             src={artwork.imageSrc}
                             alt={artwork.alt}
                             loading="lazy"
+                            style={{ width: 40, height: 40, borderRadius: "0.5rem", objectFit: "cover", flexShrink: 0 }}
+                          />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <p style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.9)", marginBottom: "0.25rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {artwork.title || "未命名"}
+                            </p>
+                            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                              {(["title", "duration", "date"] as const).map((type) => {
+                                const currentType = compactInfoType[artwork.id] || "title";
+                                const isActive = currentType === type;
+                                const labels = { title: "标题", duration: "时长", date: "日期" };
+                                return (
+                                  <button
+                                    key={type}
+                                    type="button"
+                                    onClick={() => setCompactInfoType((prev) => ({ ...prev, [artwork.id]: type }))}
+                                    style={{
+                                      padding: "0.25rem 0.5rem",
+                                      borderRadius: "0.375rem",
+                                      border: isActive ? "1px solid rgba(152,219,198,0.6)" : "1px solid rgba(255,255,255,0.2)",
+                                      background: isActive ? "rgba(152,219,198,0.16)" : "rgba(255,255,255,0.05)",
+                                      color: isActive ? "#98dbc6" : "rgba(255,255,255,0.7)",
+                                      fontSize: "0.7rem",
+                                      cursor: "pointer",
+                                      transition: "all 0.2s",
+                                    }}
+                                  >
+                                    {labels[type]}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {displayMode === "detailed" && (
+                  <div className="single-template-designer__group">
+                    <div className="single-template-designer__group-header">
+                      <h3>底部小条颜色（详细模式）</h3>
+                    </div>
+                    <div className="single-template-designer__swatches" style={{ display: "flex", gap: 8, flexWrap: "wrap", padding: "4px 0" }}>
+                      {PRESET_ACCENT_COLORS.map((hex) => {
+                        const active = detailBarColor.toLowerCase() === hex.toLowerCase();
+                        return (
+                          <button
+                            key={hex}
+                            type="button"
+                            aria-label={`选择颜色 ${hex}`}
+                            onClick={() => setDetailBarColor(hex)}
+                            style={{
+                              width: 22,
+                              height: 22,
+                              borderRadius: "50%",
+                              border: active ? "2px solid #98dbc6" : "1px solid rgba(255,255,255,0.25)",
+                              background: hex,
+                              boxShadow: active ? "0 0 0 2px rgba(152,219,198,0.35)" : "none",
+                            }}
                           />
                         );
                       })}
                     </div>
-                    <div className="quad-template-designer__selected-info">
-                      <span>当前选中 {selectedArtworks.length} / 4</span>
-                      <h4>{selectedArtworks[0]?.title || "尚未选择作品"}</h4>
-                      <p>点击更换或调整顺序（超出 4 张自动替换最早选择）</p>
-                    </div>
-                  </button>
-                </div>
+                  </div>
+                )}
 
-                <div className="quad-template-designer__group">
-                  <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                    <label htmlFor="quad-title" style={{ flex: 1 }}>
-                      <span style={{ display: "block", fontSize: 12, opacity: 0.75, marginBottom: 4 }}>标题</span>
+                <div className="single-template-designer__group">
+                  <div className="single-template-designer__field-row single-template-designer__field-row--inline">
+                    <label htmlFor="quad-title">
+                      <span>标题</span>
                       <input
                         id="quad-title"
                         type="text"
@@ -432,14 +687,13 @@ function FourArtworkTemplateDesigner({ open, artworks, onClose }: FourArtworkTem
                         maxLength={40}
                         onChange={(e) => setTitle(e.target.value)}
                         placeholder="请输入作品名称"
-                        style={{ width: "100%" }}
                       />
                     </label>
                     {renderToggle(showTitle, () => setShowTitle((prev) => !prev), "标题")}
                   </div>
-                  <div style={{ display: "flex", gap: 10, alignItems: "flex-start", marginTop: 8 }}>
-                    <label htmlFor="quad-subtitle" style={{ flex: 1 }}>
-                      <span style={{ display: "block", fontSize: 12, opacity: 0.75, marginBottom: 4 }}>简介</span>
+                  <div className="single-template-designer__field-row single-template-designer__field-row--textarea single-template-designer__field-row--inline">
+                    <label htmlFor="quad-subtitle">
+                      <span>简介</span>
                       <textarea
                         id="quad-subtitle"
                         rows={3}
@@ -447,17 +701,16 @@ function FourArtworkTemplateDesigner({ open, artworks, onClose }: FourArtworkTem
                         maxLength={160}
                         onChange={(e) => setSubtitle(e.target.value)}
                         placeholder="为作品写一句陈列说明"
-                        style={{ width: "100%" }}
                       />
                     </label>
                     {renderToggle(showSubtitle, () => setShowSubtitle((prev) => !prev), "简介")}
                   </div>
                 </div>
 
-                <div className="quad-template-designer__group">
-                  <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                    <label htmlFor="quad-username" style={{ flex: 1 }}>
-                      <span style={{ display: "block", fontSize: 12, opacity: 0.75, marginBottom: 4 }}>署名</span>
+                <div className="single-template-designer__group">
+                  <div className="single-template-designer__field-row single-template-designer__field-row--inline">
+                    <label htmlFor="quad-username">
+                      <span>署名</span>
                       <input
                         id="quad-username"
                         type="text"
@@ -465,25 +718,24 @@ function FourArtworkTemplateDesigner({ open, artworks, onClose }: FourArtworkTem
                         maxLength={32}
                         onChange={(e) => setUsername(e.target.value)}
                         placeholder="将呈现在右下角"
-                        style={{ width: "100%" }}
                       />
                     </label>
                     {renderToggle(showUsername, () => setShowUsername((prev) => !prev), "署名")}
                   </div>
-                  <div style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "space-between" }}>
+                  <div className="single-template-designer__field-row single-template-designer__field-row--meta single-template-designer__field-row--inline">
                     <div>
-                      <p style={{ margin: "6px 0 0 0", opacity: 0.75, fontSize: 12 }}>日期与时长</p>
-                      <span style={{ fontSize: 12, opacity: 0.7 }}>{timestampLabel}</span>
+                      <p>日期与时长</p>
+                      <small>{timestampLabel}</small>
                     </div>
-                    <div style={{ display: "inline-flex", gap: 6 }}>
+                    <div className="single-template-designer__meta-toggles">
                       {renderToggle(showDate, () => setShowDate((prev) => !prev), "日期")}
                       {renderToggle(showDuration, () => setShowDuration((prev) => !prev), "时长")}
                     </div>
                   </div>
                 </div>
 
-                <div className="quad-template-designer__group">
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div className="single-template-designer__group">
+                  <div className="single-template-designer__group-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     <h3>标签陈列</h3>
                     <button
                       type="button"
@@ -526,16 +778,18 @@ function FourArtworkTemplateDesigner({ open, artworks, onClose }: FourArtworkTem
                   </div>
                 </div>
 
-                <div className="quad-template-designer__group">
-                  <h3>阴影区与主题</h3>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", padding: "4px 0" }}>
+                <div className="single-template-designer__group" style={{ marginTop: 0, paddingTop: 8, paddingBottom: 8 }}>
+                  <div className="single-template-designer__group-header" style={{ marginBottom: 6 }}>
+                    <h3>阴影区设置</h3>
+                  </div>
+                  <div className="single-template-designer__swatches" style={{ display: "flex", gap: 8, flexWrap: "wrap", padding: "4px 0" }}>
                     {PRESET_SHADOW_COLORS.map((hex) => {
                       const active = shadowBaseHex.toLowerCase() === hex.toLowerCase();
                       return (
                         <button
                           key={hex}
                           type="button"
-                          aria-label={`选择阴影色 ${hex}`}
+                          aria-label={`选择颜色 ${hex}`}
                           onClick={() => setShadowBaseHex(hex)}
                           style={{
                             width: 22,
@@ -654,10 +908,10 @@ function FourArtworkTemplateDesigner({ open, artworks, onClose }: FourArtworkTem
                   </div>
                 </div>
 
-                <div className="quad-template-designer__actions">
+                <div className="single-template-designer__actions">
                   <button
                     type="button"
-                    className="quad-template-designer__download"
+                    className="single-template-designer__download"
                     onClick={() => {
                       const canvas = canvasRef.current;
                       if (!canvas) {
@@ -675,39 +929,30 @@ function FourArtworkTemplateDesigner({ open, artworks, onClose }: FourArtworkTem
                     <MaterialIcon name="download" />
                     保存为图片
                   </button>
-                  <p className="quad-template-designer__fineprint">导出 PNG · 合成尺寸 {canvasSize.width} × {canvasSize.height}（每张 {tileSize.width} × {tileSize.height}）</p>
+                  <p>导出 PNG · 合成尺寸 {canvasSize.width} × {canvasSize.height}（每张 {tileSize.width} × {tileSize.height}）</p>
                 </div>
-              </>
-            ) : (
-              <div className="quad-template-designer__empty">
-                <MaterialIcon name="photo_library" />
-                <p>你还没有上传作品，无法生成模版。</p>
-                <p>请先前往「画集」上传至少一张作品，再回来尝试。</p>
-                <button type="button" onClick={onClose}>
-                  好的
-                </button>
-              </div>
-            )}
-          </aside>
+              </section>
+            ) : null}
+          </div>
         </div>
       </div>
 
       {pickerOpen && hasArtworks ? (
-        <div className="quad-template-picker" role="dialog" aria-modal="true">
-          <div className="quad-template-picker__backdrop" onClick={() => setPickerOpen(false)} />
-          <div className="quad-template-picker__panel">
-            <div className="quad-template-picker__header">
+        <div className="single-template-designer__picker" role="dialog" aria-modal="true">
+          <div className="single-template-designer__picker-backdrop" onClick={() => setPickerOpen(false)} />
+          <div className="single-template-designer__picker-panel">
+            <div className="single-template-designer__picker-header">
               <h3>选择作品（最多 4 张）</h3>
               <button
                 type="button"
-                className="quad-template-picker__close"
+                className="single-template-designer__picker-close"
                 aria-label="关闭作品选择"
                 onClick={() => setPickerOpen(false)}
               >
                 <MaterialIcon name="close" />
               </button>
             </div>
-            <div className="quad-template-picker__grid" role="listbox" aria-label="可套用的作品">
+            <div className="single-template-designer__artwork-grid" role="listbox" aria-label="可套用的作品">
               {artworks.map((artwork) => {
                 const isActive = selectedIds.includes(artwork.id);
                 const orderIndex = selectedIds.indexOf(artwork.id);
@@ -717,24 +962,45 @@ function FourArtworkTemplateDesigner({ open, artworks, onClose }: FourArtworkTem
                     type="button"
                     role="option"
                     aria-selected={isActive}
-                    className={`quad-template-picker__item${isActive ? " quad-template-picker__item--active" : ""}`}
+                    className={`single-template-designer__artwork-button${isActive ? " single-template-designer__artwork-button--active" : ""}`}
                     onClick={() => handleToggleSelection(artwork.id)}
                   >
                     <img src={artwork.imageSrc} alt={artwork.alt} loading="lazy" />
                     <span>{artwork.title || "未命名"}</span>
                     {isActive ? (
-                      <span className="quad-template-picker__badge">{orderIndex + 1}</span>
+                      <span style={{ position: "absolute", top: "0.5rem", right: "0.5rem", width: "1.8rem", height: "1.8rem", borderRadius: "50%", background: "rgba(152,219,198,0.9)", color: "#1d1111", fontSize: "0.9rem", fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{orderIndex + 1}</span>
                     ) : null}
                   </button>
                 );
               })}
             </div>
-            <div className="quad-template-picker__hint">
-              <p>再次点击已选作品可取消选择。超过 4 张时会替换最早选中的作品。</p>
-            </div>
           </div>
         </div>
       ) : null}
+
+      {cropperOpen && croppingArtworkId && (() => {
+        const artwork = selectedArtworks.find((a) => a.id === croppingArtworkId);
+        if (!artwork) return null;
+        return (
+          <ImageCropper
+            open={cropperOpen}
+            imageSrc={artwork.imageSrc}
+            targetWidth={tileSize.width}
+            targetHeight={tileSize.height}
+            initialCrop={cropData[croppingArtworkId]}
+            onClose={() => {
+              setCropperOpen(false);
+              setCroppingArtworkId(null);
+            }}
+            onConfirm={(crop) => {
+              setCropData((prev) => ({
+                ...prev,
+                [croppingArtworkId]: crop,
+              }));
+            }}
+          />
+        );
+      })()}
     </>
   );
 }
@@ -880,6 +1146,11 @@ function drawTemplate(
   tileHeight: number,
   data: TemplateViewModel,
   images: Record<string, HTMLImageElement>,
+  cropData: Record<string, CropData>,
+  displayMode: "compact" | "detailed",
+  compactInfoType: Record<string, "title" | "duration" | "date">,
+  detailBarColor: string,
+  username: string,
 ) {
   context.save();
   context.clearRect(0, 0, width, height);
@@ -887,7 +1158,7 @@ function drawTemplate(
   const startX = 0;
   const startY = 0;
   const gap = 0;
-  drawGridFrames(context, startX, startY, tileWidth, tileHeight, gap, width, height, data, images);
+  drawGridFrames(context, startX, startY, tileWidth, tileHeight, gap, width, height, data, images, cropData, displayMode, compactInfoType, detailBarColor, username);
   context.restore();
 }
 
@@ -904,38 +1175,71 @@ function drawGridFrames(
   _height: number,
   data: TemplateViewModel,
   images: Record<string, HTMLImageElement>,
+  cropData: Record<string, CropData>,
+  displayMode: "compact" | "detailed",
+  compactInfoType: Record<string, "title" | "duration" | "date">,
+  detailBarColor: string,
+  username: string,
 ) {
   const radius = Math.min(frameWidth, frameHeight) * 0.035;
+  const shadowBlur = Math.min(frameWidth, frameHeight) * 0.05;
+  const shadowOffsetX = Math.min(frameWidth, frameHeight) * 0.02;
+  const shadowOffsetY = Math.min(frameWidth, frameHeight) * 0.03;
+  const offset = Math.min(frameWidth, frameHeight) * 0.01;
+  
+  // 预先计算一些常用值，避免在循环中重复计算
+  const clipRadius = radius * 0.8;
+  const borderWidth = Math.min(frameWidth, frameHeight) * 0.02;
+  
   data.items.forEach((item, index) => {
     const row = Math.floor(index / 2);
     const col = index % 2;
     const frameX = startX + col * (frameWidth + gap);
     const frameY = startY + row * (frameHeight + gap);
+    
+    // 绘制阴影（合并到一个 save/restore 中）
     context.save();
     context.shadowColor = "rgba(0, 0, 0, 0.42)";
-    context.shadowBlur = Math.min(frameWidth, frameHeight) * 0.05;
-    context.shadowOffsetX = Math.min(frameWidth, frameHeight) * 0.02;
-    context.shadowOffsetY = Math.min(frameWidth, frameHeight) * 0.03;
-    drawRoundedRectPath(context, frameX + Math.min(frameWidth, frameHeight) * 0.01, frameY + Math.min(frameWidth, frameHeight) * 0.01, frameWidth, frameHeight, radius);
+    context.shadowBlur = shadowBlur;
+    context.shadowOffsetX = shadowOffsetX;
+    context.shadowOffsetY = shadowOffsetY;
+    drawRoundedRectPath(context, frameX + offset, frameY + offset, frameWidth, frameHeight, radius);
     context.fillStyle = "rgba(0, 0, 0, 0.4)";
     context.fill();
     context.restore();
 
+    // 绘制图片（合并裁剪和绘制操作）
     context.save();
-    // 当前格即为图片+文案的承载区
     const tileRect = { x: frameX, y: frameY, width: frameWidth, height: frameHeight };
-
-    drawRoundedRectPath(context, tileRect.x, tileRect.y, tileRect.width, tileRect.height, radius * 0.8);
+    drawRoundedRectPath(context, tileRect.x, tileRect.y, tileRect.width, tileRect.height, clipRadius);
     context.clip();
+    
     const image = images[item.id];
     if (image && image.width > 0 && image.height > 0) {
-      const scale = Math.max(tileRect.width / image.width, tileRect.height / image.height);
-      const drawWidth = image.width * scale;
-      const drawHeight = image.height * scale;
-      const dx = tileRect.x + (tileRect.width - drawWidth) / 2;
-      const dy = tileRect.y + (tileRect.height - drawHeight) / 2;
-      context.drawImage(image, dx, dy, drawWidth, drawHeight);
+      const crop = cropData[item.id];
+      if (crop) {
+        // 使用裁剪数据
+        const sourceX = crop.x * image.width;
+        const sourceY = crop.y * image.height;
+        const sourceWidth = crop.width * image.width;
+        const sourceHeight = crop.height * image.height;
+        const scale = Math.max(tileRect.width / sourceWidth, tileRect.height / sourceHeight);
+        const drawWidth = sourceWidth * scale;
+        const drawHeight = sourceHeight * scale;
+        const dx = tileRect.x + (tileRect.width - drawWidth) / 2;
+        const dy = tileRect.y + (tileRect.height - drawHeight) / 2;
+        context.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, dx, dy, drawWidth, drawHeight);
+      } else {
+        // 没有裁剪数据，使用原来的逻辑
+        const scale = Math.max(tileRect.width / image.width, tileRect.height / image.height);
+        const drawWidth = image.width * scale;
+        const drawHeight = image.height * scale;
+        const dx = tileRect.x + (tileRect.width - drawWidth) / 2;
+        const dy = tileRect.y + (tileRect.height - drawHeight) / 2;
+        context.drawImage(image, dx, dy, drawWidth, drawHeight);
+      }
     } else {
+      // 占位符
       const placeholderGradient = context.createLinearGradient(tileRect.x, tileRect.y, tileRect.x + tileRect.width, tileRect.y + tileRect.height);
       placeholderGradient.addColorStop(0, "rgba(152, 219, 198, 0.18)");
       placeholderGradient.addColorStop(1, "rgba(152, 219, 198, 0.05)");
@@ -949,91 +1253,161 @@ function drawGridFrames(
     }
     context.restore();
 
+    // 绘制边框（合并到一次操作）
     context.save();
-    drawRoundedRectPath(context, tileRect.x, tileRect.y, tileRect.width, tileRect.height, radius * 0.8);
-    context.lineWidth = Math.min(frameWidth, frameHeight) * 0.02;
+    drawRoundedRectPath(context, tileRect.x, tileRect.y, tileRect.width, tileRect.height, clipRadius);
+    context.lineWidth = borderWidth;
     context.strokeStyle = "rgba(239, 234, 231, 0.18)";
     context.globalAlpha = 0.9;
     context.stroke();
     context.restore();
 
-    // 每张图底部渐变与文字（标题/日期/时长/用户名），对齐单图导出风格，缩放到 tileRect 尺寸
-    drawTileFooter(context, tileRect, data, item, frameWidth);
+    // 根据模式绘制不同的底部信息
+    if (displayMode === "compact") {
+      const infoType = compactInfoType[item.id] || "title";
+      drawTileFooterCompact(context, tileRect, data, item, frameWidth, infoType);
+    } else {
+      drawTileFooterDetailed(context, tileRect, data, item, frameWidth, detailBarColor);
+    }
   });
+
+  // 详细模式：在整个大图的右下角显示名字
+  if (displayMode === "detailed" && username) {
+    const paddingX = frameWidth * 0.06;
+    const paddingY = frameHeight * 0.05;
+    const rightX = startX + frameWidth * 2 - paddingX;
+    const bottomY = startY + frameHeight * 2 - paddingY;
+    
+    context.save();
+    context.textAlign = "right";
+    context.textBaseline = "bottom";
+    context.font = `500 ${Math.round(Math.min(frameWidth, frameHeight) * 0.10)}px "Manrope", "Segoe UI", sans-serif`;
+    
+    // 添加背景以提高可读性
+    const metrics = context.measureText(username);
+    const textWidth = metrics.width;
+    const textHeight = Math.round(Math.min(frameWidth, frameHeight) * 0.10);
+    const bgPadding = Math.round(Math.min(frameWidth, frameHeight) * 0.02);
+    const bgX = rightX - textWidth - bgPadding;
+    const bgY = bottomY - textHeight - bgPadding;
+    const bgWidth = textWidth + bgPadding * 2;
+    const bgHeight = textHeight + bgPadding * 2;
+
+    context.fillStyle = withAlpha(data.shadowColor || "#221b1b", 0.7);
+    context.fillRect(bgX, bgY, bgWidth, bgHeight);
+
+    context.fillStyle = withAlpha(data.textColor, data.textOpacity);
+    context.fillText(username, rightX, bottomY);
+    context.restore();
+  }
 }
 
-function drawTileFooter(
+// 紧凑模式：每张图右下角只显示一个信息
+function drawTileFooterCompact(
   context: CanvasRenderingContext2D,
   tile: { x: number; y: number; width: number; height: number },
   data: TemplateViewModel,
   item: TemplateItem,
   _baseWidth: number,
+  infoType?: "title" | "duration" | "date",
 ) {
-  const overlayHeight = Math.min(tile.height * 0.35, tile.width * 0.55);
-  const overlayY = tile.y + tile.height - overlayHeight;
-  const gradient = context.createLinearGradient(0, overlayY, 0, tile.y + tile.height);
-  const base = data.shadowColor || "#221b1b";
-  gradient.addColorStop(0, withAlpha(base, 0));
-  gradient.addColorStop(1, withAlpha(base, 0.95 * data.overlayOpacity));
+  if (!infoType) return;
+
+  const paddingX = tile.width * 0.06;
+  const paddingY = tile.height * 0.05;
+  const rightX = tile.x + tile.width - paddingX;
+  const bottomY = tile.y + tile.height - paddingY;
+
+  let displayText = "";
+  if (infoType === "title") {
+    displayText = (item.title || "").trim();
+  } else if (infoType === "duration") {
+    displayText = item.durationLabel || data.durationLabel || "";
+  } else if (infoType === "date") {
+    displayText = item.dateLabel || data.dateLabel || "";
+  }
+
+  if (!displayText) return;
 
   context.save();
-  drawRoundedRectPath(context, tile.x, overlayY, tile.width, overlayHeight, tile.width * 0.06);
-  context.clip();
-  context.fillStyle = gradient;
-  context.fillRect(tile.x, overlayY, tile.width, overlayHeight);
-  context.restore();
+  context.textAlign = "right";
+  context.textBaseline = "bottom";
+  context.font = `500 ${Math.round(tile.width * 0.10)}px "Manrope", "Segoe UI", sans-serif`;
+  context.fillStyle = withAlpha(data.textColor, data.textOpacity);
+  
+  // 添加背景以提高可读性
+  const metrics = context.measureText(displayText);
+  const textWidth = metrics.width;
+  const textHeight = Math.round(tile.width * 0.10);
+  const bgPadding = Math.round(tile.width * 0.02);
+  const bgX = rightX - textWidth - bgPadding;
+  const bgY = bottomY - textHeight - bgPadding;
+  const bgWidth = textWidth + bgPadding * 2;
+  const bgHeight = textHeight + bgPadding * 2;
 
+  context.fillStyle = withAlpha(data.shadowColor || "#221b1b", 0.7);
+  context.fillRect(bgX, bgY, bgWidth, bgHeight);
+
+  context.fillStyle = withAlpha(data.textColor, data.textOpacity);
+  context.fillText(displayText, rightX, bottomY);
+  context.restore();
+}
+
+// 详细模式：每张图下面有一个纯色小条，显示标题、时长、日期
+function drawTileFooterDetailed(
+  context: CanvasRenderingContext2D,
+  tile: { x: number; y: number; width: number; height: number },
+  data: TemplateViewModel,
+  item: TemplateItem,
+  _baseWidth: number,
+  barColor: string,
+) {
+  const barHeight = Math.min(tile.height * 0.12, tile.width * 0.15);
+  const barY = tile.y + tile.height - barHeight;
   const paddingX = tile.width * 0.06;
   const contentX = tile.x + paddingX;
   const contentWidth = tile.width - paddingX * 2;
-  const lineHeight = Math.round(tile.width * 0.12);
-  const bottomPadding = Math.round(tile.width * 0.05);
-  const usernameY = tile.y + tile.height - bottomPadding;
-  const blockBottomY = usernameY - Math.round(tile.width * 0.04);
 
-  const title = (item.title || "").trim();
-  const metaParts: string[] = [];
-  if (data.dateLabel || item.dateLabel) metaParts.push(item.dateLabel || data.dateLabel);
-  if (data.durationLabel || item.durationLabel) metaParts.push(item.durationLabel || data.durationLabel);
-  const metaLine = metaParts.join(" / ");
+  // 绘制纯色小条
+  context.save();
+  drawRoundedRectPath(context, tile.x, barY, tile.width, barHeight, tile.width * 0.06);
+  context.clip();
+  context.fillStyle = barColor;
+  context.fillRect(tile.x, barY, tile.width, barHeight);
+  context.restore();
 
-  const enabledLines: Array<"title" | "meta"> = [];
-  if (title) enabledLines.push("title");
-  if (metaLine) enabledLines.push("meta");
-
-  const totalLines = enabledLines.length;
-  const getLineY = (indexFromTop: number) => {
-    const indexFromBottom = totalLines - 1 - indexFromTop;
-    return blockBottomY - lineHeight * indexFromBottom;
-  };
+  // 在小条内绘制文字
+  const lineHeight = Math.round(barHeight * 0.35);
+  const centerY = barY + barHeight / 2;
 
   context.save();
   context.textAlign = "left";
-  enabledLines.forEach((kind, indexFromTop) => {
-    const y = getLineY(indexFromTop);
-    if (kind === "title") {
-      context.fillStyle = withAlpha(data.accentColor || "#9edac4", data.textOpacity);
-      context.font = `600 ${Math.round(tile.width * 0.12)}px "Manrope", "Segoe UI", sans-serif`;
-      const truncated = ellipsizeToWidth(context, title, contentWidth);
-      context.fillText(truncated, contentX, y);
-      return;
-    }
-    if (kind === "meta") {
-      context.font = `400 ${Math.round(tile.width * 0.09)}px "Manrope", "Segoe UI", sans-serif`;
-      context.fillStyle = withAlpha(data.textColor, data.textOpacity);
-      const truncated = ellipsizeToWidth(context, metaLine, contentWidth);
-      context.fillText(truncated, contentX, y);
-    }
-  });
-  context.restore();
+  context.textBaseline = "middle";
 
-  const username = (data.username || "").trim();
-  if (username) {
-    context.textAlign = "right";
-    context.font = `500 ${Math.round(tile.width * 0.10)}px "Manrope", "Segoe UI", sans-serif`;
-    context.fillStyle = withAlpha(data.textColor, data.textOpacity);
-    context.fillText(username, tile.x + tile.width - paddingX, usernameY);
+  const title = (item.title || "").trim();
+  const dateLabel = item.dateLabel || data.dateLabel || "";
+  const durationLabel = item.durationLabel || data.durationLabel || "";
+
+  const parts: string[] = [];
+  if (title) parts.push(title);
+  if (dateLabel) parts.push(dateLabel);
+  if (durationLabel) parts.push(durationLabel);
+
+  const textLine = parts.join(" · ");
+
+  if (textLine) {
+    // 根据背景颜色决定文字颜色（浅色背景用深色字，深色背景用浅色字）
+    const rgb = hexToRgb(barColor);
+    const isLight = rgb ? (rgb.r * 0.299 + rgb.g * 0.587 + rgb.b * 0.114) > 186 : false;
+    const textColor = isLight ? "#161514" : "#f7f2ec";
+
+    context.font = `500 ${Math.round(barHeight * 0.4)}px "Manrope", "Segoe UI", sans-serif`;
+    context.fillStyle = textColor;
+    const truncated = ellipsizeToWidth(context, textLine, contentWidth);
+    context.fillText(truncated, contentX, centerY);
   }
+
+  context.restore();
 }
 
 // 移除未使用的 drawGradientFooter 以通过构建

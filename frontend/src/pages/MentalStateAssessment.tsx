@@ -49,7 +49,7 @@ function MentalStateAssessment({ onBack }: MentalStateAssessmentProps) {
       </div>
 
       <TopNav
-        className="top-nav--fixed"
+        className="top-nav--fixed top-nav--flush"
         leadingAction={{
           icon: "arrow_back",
           label: "返回",

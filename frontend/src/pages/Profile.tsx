@@ -567,7 +567,7 @@ function ProfileDashboard({
       <TopNav
         title="个人"
         subtitle="Profile"
-        className="top-nav--fixed"
+        className="top-nav--fixed top-nav--flush"
         leadingSlot={
           <button
             type="button"

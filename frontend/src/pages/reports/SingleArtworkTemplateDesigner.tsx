@@ -5,6 +5,7 @@ import TopNav from "@/components/TopNav";
 import type { Artwork } from "@/types/artwork";
 import { fetchProfilePreferences } from "@/services/api";
 import { getActiveUserEmail } from "@/services/authStorage";
+import { getOrLoadImage } from "@/utils/imageCache";
 
 import "./SingleArtworkTemplateDesigner.css";
 
@@ -217,42 +218,35 @@ function SingleArtworkTemplateDesigner({ open, artworks, onClose }: SingleArtwor
     if (!open || !selectedArtwork) {
       return;
     }
-    const img = new Image();
     setImageStatus("loading");
-    img.crossOrigin = "anonymous";
-    const handleLoad = () => {
-      setImage(img);
-      setImageStatus("ready");
-      const ratio =
-        img.naturalWidth > 0 && img.naturalHeight > 0
-          ? img.naturalWidth / img.naturalHeight
-          : CANVAS_WIDTH / DEFAULT_CANVAS_LAYOUT.imageHeight;
-      const safeRatio = Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
-      const desiredImageHeight = CANVAS_WIDTH / safeRatio;
-      const imageHeight = clamp(
-        desiredImageHeight,
-        CANVAS_WIDTH * MIN_IMAGE_HEIGHT_RATIO,
-        CANVAS_WIDTH * MAX_IMAGE_HEIGHT_RATIO,
-      );
-      const footerHeight = 0; // 移除底部大块面板
-      setCanvasLayout({
-        imageHeight,
-        footerHeight,
-        canvasHeight: Math.round(imageHeight),
+    // 使用共享的图片缓存工具加载图片
+    getOrLoadImage(selectedArtwork.imageSrc)
+      .then((img) => {
+        setImage(img);
+        setImageStatus("ready");
+        const ratio =
+          img.naturalWidth > 0 && img.naturalHeight > 0
+            ? img.naturalWidth / img.naturalHeight
+            : CANVAS_WIDTH / DEFAULT_CANVAS_LAYOUT.imageHeight;
+        const safeRatio = Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
+        const desiredImageHeight = CANVAS_WIDTH / safeRatio;
+        const imageHeight = clamp(
+          desiredImageHeight,
+          CANVAS_WIDTH * MIN_IMAGE_HEIGHT_RATIO,
+          CANVAS_WIDTH * MAX_IMAGE_HEIGHT_RATIO,
+        );
+        const footerHeight = 0; // 移除底部大块面板
+        setCanvasLayout({
+          imageHeight,
+          footerHeight,
+          canvasHeight: Math.round(imageHeight),
+        });
+      })
+      .catch(() => {
+        setImage(null);
+        setImageStatus("error");
+        setCanvasLayout(DEFAULT_CANVAS_LAYOUT);
       });
-    };
-    const handleError = () => {
-      setImage(null);
-      setImageStatus("error");
-      setCanvasLayout(DEFAULT_CANVAS_LAYOUT);
-    };
-    img.addEventListener("load", handleLoad);
-    img.addEventListener("error", handleError);
-    img.src = selectedArtwork.imageSrc;
-    return () => {
-      img.removeEventListener("load", handleLoad);
-      img.removeEventListener("error", handleError);
-    };
   }, [open, selectedArtwork]);
 
   const templateData = useMemo<TemplateViewModel | null>(() => {

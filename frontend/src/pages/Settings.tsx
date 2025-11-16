@@ -264,7 +264,7 @@ function Settings({
       <TopNav
         title="设置"
         subtitle="Settings"
-        className="top-nav--fixed"
+        className="top-nav--fixed top-nav--flush"
         leadingAction={{
           icon: "arrow_back_ios_new",
           label: "返回",

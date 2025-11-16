@@ -19,6 +19,9 @@ import "./HomeScreen.css";
 
 const LOCAL_LAST_CHECKIN_KEY = "echo-last-checkin-date";
 const LOCAL_CHECKIN_STATUS_KEY = "echo-last-checkin-status";
+const HOME_COPY_CACHE_KEY = "echo-home-copy-cache";
+const HOME_COPY_CACHE_TIMESTAMP_KEY = "echo-home-copy-cache-timestamp";
+const CACHE_MAX_AGE = 5 * 60 * 1000; // 5分钟缓存有效期
 
 type HomeProps = {
   onOpenUpload?: () => void;
@@ -65,6 +68,37 @@ function normalizeMessages(payload: HomeMessagesResponse | null): HomeCopy | nul
 
   const hasContent = Object.values(normalized).some(Boolean);
   return hasContent ? normalized : null;
+}
+
+function loadCachedCopy(): HomeCopy | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  try {
+    const cached = window.sessionStorage.getItem(HOME_COPY_CACHE_KEY);
+    const timestamp = window.sessionStorage.getItem(HOME_COPY_CACHE_TIMESTAMP_KEY);
+    if (cached && timestamp) {
+      const age = Date.now() - Number.parseInt(timestamp, 10);
+      if (age < CACHE_MAX_AGE) {
+        return JSON.parse(cached) as HomeCopy;
+      }
+    }
+  } catch {
+    // ignore cache errors
+  }
+  return null;
+}
+
+function saveCachedCopy(copy: HomeCopy) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.sessionStorage.setItem(HOME_COPY_CACHE_KEY, JSON.stringify(copy));
+    window.sessionStorage.setItem(HOME_COPY_CACHE_TIMESTAMP_KEY, String(Date.now()));
+  } catch {
+    // ignore cache errors
+  }
 }
 
 function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomeProps) {
@@ -167,7 +201,16 @@ function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomePr
     let isMounted = true;
 
     async function loadCopy() {
-      setLoadingCopy(true);
+      // 先尝试从缓存加载，避免闪烁
+      const cached = loadCachedCopy();
+      if (cached && isMounted) {
+        setCopy(cached);
+        setCopyError(null);
+        setLoadingCopy(false);
+      } else {
+        setLoadingCopy(true);
+      }
+
       try {
         if (!hasAuthToken()) {
           if (isMounted) {
@@ -175,6 +218,15 @@ function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomePr
             setCopyError("请登录后查看今日专属文案。");
             setCheckInStatus(null);
             setCheckInStatusRequested(false);
+            // 清除缓存，因为未登录状态不应该使用缓存
+            if (typeof window !== "undefined") {
+              try {
+                window.sessionStorage.removeItem(HOME_COPY_CACHE_KEY);
+                window.sessionStorage.removeItem(HOME_COPY_CACHE_TIMESTAMP_KEY);
+              } catch {
+                // ignore storage errors
+              }
+            }
           }
           return;
         }
@@ -193,6 +245,8 @@ function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomePr
         if (normalized) {
           setCopy(normalized);
           setCopyError(null);
+          // 保存到缓存
+          saveCachedCopy(normalized);
         } else {
           // 后端暂未返回匹配文案时，保持为空，不提示错误、也不展示备用文案
           setCopy(EMPTY_COPY);
@@ -207,10 +261,17 @@ function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomePr
         if (status === 401 || status === 403) {
           setCopyError("请登录后查看今日专属文案。");
         } else {
-          setCopyError("获取今日文案失败。");
-          console.warn("Failed to load home copy", error);
+          // 如果出错但有缓存，保持使用缓存，不显示错误
+          if (cached) {
+            setCopyError(null);
+          } else {
+            setCopyError("获取今日文案失败。");
+            console.warn("Failed to load home copy", error);
+          }
         }
-        setCopy(EMPTY_COPY);
+        if (!cached) {
+          setCopy(EMPTY_COPY);
+        }
       } finally {
         if (isMounted) {
           setLoadingCopy(false);
@@ -447,7 +508,7 @@ function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomePr
       <TopNav
         title="EchoDraw"
         subtitle="Home"
-        className="top-nav--fixed"
+        className="top-nav--fixed top-nav--flush"
         trailingActions={[{ icon: "notifications", label: "通知" }]}
       />
 

@@ -18,6 +18,7 @@ from core.models import (
     EncouragementMessage,
     HolidayMessage,
     LongTermPlanCopy,
+    MonthlyReportTemplate,
     ShortTermTaskPreset,
     Test,
     TestAccountProfile,
@@ -40,6 +41,7 @@ from core.serializers import (
     EncouragementMessageSerializer,
     HolidayMessageSerializer,
     LongTermPlanCopySerializer,
+    MonthlyReportTemplateSerializer,
     ShortTermTaskPresetSerializer,
     TestAccountCheckInSerializer,
     TestAccountSerializer,
@@ -87,6 +89,23 @@ class UploadConditionalMessageAdminViewSet(viewsets.ModelViewSet):
     serializer_class = UploadConditionalMessageSerializer
     permission_classes = [IsStaffUser]
     pagination_class = None
+
+
+class MonthlyReportTemplateAdminViewSet(viewsets.ModelViewSet):
+    queryset = MonthlyReportTemplate.objects.all().order_by("section", "priority", "id")
+    serializer_class = MonthlyReportTemplateSerializer
+    permission_classes = [IsStaffUser]
+    pagination_class = None
+    
+    def get_queryset(self):
+        queryset = MonthlyReportTemplate.objects.all().order_by("section", "priority", "id")
+        
+        # 支持按部分筛选
+        section = self.request.query_params.get("section")
+        if section:
+            queryset = queryset.filter(section=section)
+        
+        return queryset
 
 
 class AchievementGroupAdminViewSet(viewsets.ModelViewSet):

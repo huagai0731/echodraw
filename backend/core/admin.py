@@ -10,6 +10,7 @@ from core.models import (
     DailyQuizOption,
     EncouragementMessage,
     HolidayMessage,
+    MonthlyReportTemplate,
     UserProfile,
     TestAccountProfile,
     UploadConditionalMessage,
@@ -162,6 +163,43 @@ class UploadConditionalMessageAdmin(admin.ModelAdmin):
             {"fields": ("match_moods", "match_tags")},
         ),
     )
+
+
+@admin.register(MonthlyReportTemplate)
+class MonthlyReportTemplateAdmin(admin.ModelAdmin):
+    list_display = ("section", "name", "priority", "is_active", "updated_at")
+    list_filter = ("section", "is_active", "creator_type")
+    search_fields = ("name", "text_template")
+    ordering = ("section", "priority", "name")
+    fieldsets = (
+        (
+            "基础信息",
+            {"fields": ("section", "name", "text_template", "priority", "is_active")},
+        ),
+        (
+            "上传条件",
+            {"fields": ("min_total_uploads", "max_total_uploads")},
+        ),
+        (
+            "时长条件",
+            {"fields": ("min_total_hours", "max_total_hours", "min_avg_hours", "max_avg_hours")},
+        ),
+        (
+            "创作类型与评分条件",
+            {"fields": ("creator_type", "min_avg_rating", "max_avg_rating")},
+        ),
+        (
+            "变化趋势条件",
+            {"fields": ("uploads_change_direction", "hours_change_direction")},
+        ),
+        (
+            "扩展条件",
+            {"fields": ("extra_conditions",)},
+        ),
+    )
+    formfield_overrides = {
+        models.JSONField: {"widget": admin.widgets.AdminTextareaWidget},
+    }
 
 
 @admin.register(UserUpload)

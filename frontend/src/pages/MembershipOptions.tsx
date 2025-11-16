@@ -98,7 +98,7 @@ function MembershipOptions({ onBack, currentTier, onSelectTier }: MembershipOpti
       </div>
 
       <TopNav
-        className="top-nav--fixed membership-options__nav"
+        className="top-nav--fixed top-nav--flush membership-options__nav"
         title="会员服务"
         subtitle="Membership"
         leadingAction={{

@@ -6,6 +6,7 @@ import type { Artwork } from "@/types/artwork";
 import FourArtworkTemplateDesigner from "@/pages/reports/FourArtworkTemplateDesigner";
 import SingleArtworkTemplateDesigner from "@/pages/reports/SingleArtworkTemplateDesigner";
 import FullMonthlyReportDemo from "@/pages/reports/FullMonthlyReportDemo";
+import Calendar28DayTemplateDesigner from "@/pages/reports/28DayCalendarTemplateDesigner";
 
 import "./Reports.css";
 
@@ -20,7 +21,7 @@ type ReportItem = {
   glow: number;
 };
 
-type TemplateAction = "single" | "quad";
+type TemplateAction = "single" | "quad" | "28day";
 
 type TemplateItem = {
   id: string;
@@ -101,7 +102,10 @@ const TEMPLATE_GROUPS: TemplateGroup[] = [
   {
     id: "calendar-export",
     title: "日历导出",
-    items: [{ id: "calendar-export", icon: "calendar_month", label: "日历导出" }],
+    items: [
+      { id: "calendar-export", icon: "calendar_month", label: "日历导出" },
+      { id: "28day-calendar", icon: "calendar_month", label: "28天作品日历", action: "28day" as TemplateAction },
+    ],
   },
   {
     id: "short-term-export",
@@ -125,6 +129,7 @@ function Reports({ artworks = [] }: ReportsProps) {
   const [singleTemplateOpen, setSingleTemplateOpen] = useState(false);
   const [quadTemplateOpen, setQuadTemplateOpen] = useState(false);
   const [fullMonthlyDemoOpen, setFullMonthlyDemoOpen] = useState(false);
+  const [calendar28DayOpen, setCalendar28DayOpen] = useState(false);
   const isTemplatesTab = activeTab === "templates";
   const isTemplateExperience = isTemplatesTab || singleTemplateOpen || quadTemplateOpen;
   const showTemplateBack = singleTemplateOpen || quadTemplateOpen;
@@ -145,6 +150,10 @@ function Reports({ artworks = [] }: ReportsProps) {
       }
       if (action === "quad") {
         setQuadTemplateOpen(true);
+        return;
+      }
+      if (action === "28day") {
+        setCalendar28DayOpen(true);
       }
     },
     [],
@@ -197,7 +206,7 @@ function Reports({ artworks = [] }: ReportsProps) {
       <TopNav
         title={isTemplateExperience ? "模版" : "报告"}
         subtitle={isTemplateExperience ? "Templates" : "Reports"}
-        className="top-nav--fixed"
+        className="top-nav--fixed top-nav--flush"
         leadingAction={
           showTemplateBack
             ? {
@@ -318,6 +327,7 @@ function Reports({ artworks = [] }: ReportsProps) {
         onClose={() => setQuadTemplateOpen(false)}
       />
       <FullMonthlyReportDemo open={fullMonthlyDemoOpen} onClose={() => setFullMonthlyDemoOpen(false)} />
+      <Calendar28DayTemplateDesigner open={calendar28DayOpen} artworks={artworks} onClose={() => setCalendar28DayOpen(false)} />
     </div>
   );
 }

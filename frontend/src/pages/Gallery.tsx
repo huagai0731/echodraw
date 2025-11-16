@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import GalleryFilterModal from "@/components/GalleryFilterModal";
 import MaterialIcon from "@/components/MaterialIcon";
@@ -170,10 +170,20 @@ function normalizeFilters(filters: GalleryFilters, stats: GalleryFilterStats): G
   };
 }
 
+// 性能优化配置
+const INITIAL_RENDER_COUNT = 20; // 初始渲染的图片数量
+const LOAD_MORE_COUNT = 10; // 每次加载更多的数量
+const INTERSECTION_ROOT_MARGIN = "300px"; // Intersection Observer 的提前加载距离
+
 function Gallery({ artworks, onOpenUpload, onDeleteArtwork, onEditArtwork }: GalleryProps) {
   const [showInfo, setShowInfo] = useState(true);
   const [filterOpen, setFilterOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [renderedCount, setRenderedCount] = useState(INITIAL_RENDER_COUNT);
+  const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
+  const containerRef = useRef<HTMLDivElement>(null);
+  const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
 
   const stats = useMemo<GalleryFilterStats>(() => {
     let maxDuration = 0;
@@ -299,6 +309,89 @@ function Gallery({ artworks, onOpenUpload, onDeleteArtwork, onEditArtwork }: Gal
     return list;
   }, [filteredArtworks, filters.sortBy]);
 
+  // 计算需要渲染的图片
+  const renderedArtworks = useMemo(() => {
+    return sortedArtworks.slice(0, renderedCount);
+  }, [sortedArtworks, renderedCount]);
+
+  // 重置渲染数量当排序或筛选改变时
+  useEffect(() => {
+    setRenderedCount(INITIAL_RENDER_COUNT);
+    setLoadedImages(new Set());
+  }, [sortedArtworks.length]);
+
+  // 使用 Intersection Observer 实现无限滚动加载
+  useEffect(() => {
+    if (typeof window === "undefined" || !loadMoreTriggerRef.current) {
+      return;
+    }
+
+    // 清理旧的 observer
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+    }
+
+    // 创建新的 observer 用于加载更多
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && renderedCount < sortedArtworks.length) {
+            // 加载更多图片
+            setRenderedCount((prev) => Math.min(prev + LOAD_MORE_COUNT, sortedArtworks.length));
+          }
+        });
+      },
+      {
+        root: null, // 使用视口作为root
+        rootMargin: INTERSECTION_ROOT_MARGIN,
+        threshold: 0.1,
+      },
+    );
+
+    observerRef.current.observe(loadMoreTriggerRef.current);
+
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+      }
+    };
+  }, [renderedCount, sortedArtworks.length]);
+
+  // 使用 Intersection Observer 优化图片懒加载
+  useEffect(() => {
+    if (typeof window === "undefined" || !containerRef.current) {
+      return;
+    }
+
+    const imageObserver = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const img = entry.target as HTMLImageElement;
+            const artworkId = img.dataset.artworkId;
+            if (artworkId && !loadedImages.has(artworkId)) {
+              // 标记为已加载
+              setLoadedImages((prev) => new Set(prev).add(artworkId));
+            }
+          }
+        });
+      },
+      {
+        root: containerRef.current,
+        rootMargin: "100px",
+        threshold: 0.01,
+      },
+    );
+
+    // 观察所有图片
+    const images = containerRef.current.querySelectorAll("img[data-artwork-id]");
+    images.forEach((img) => imageObserver.observe(img));
+
+    return () => {
+      imageObserver.disconnect();
+    };
+  }, [renderedArtworks, loadedImages]);
+
   const handleShare = useCallback((artwork: Artwork) => {
     const hasNavigator = typeof navigator !== "undefined";
     const hasWindow = typeof window !== "undefined";
@@ -367,7 +460,7 @@ function Gallery({ artworks, onOpenUpload, onDeleteArtwork, onEditArtwork }: Gal
       <TopNav
         title="画集"
         subtitle="My Works"
-        className="top-nav--fixed"
+        className="top-nav--fixed top-nav--flush"
         leadingAction={{
           icon: showInfo ? "visibility" : "visibility_off",
           label: showInfo ? "隐藏作品信息" : "显示作品信息",
@@ -389,38 +482,84 @@ function Gallery({ artworks, onOpenUpload, onDeleteArtwork, onEditArtwork }: Gal
         {sortedArtworks.length === 0 ? (
           <p className="gallery-screen__empty">暂无符合条件的作品，可尝试调整筛选条件。</p>
         ) : (
-          <div className="gallery-screen__masonry">
-            {sortedArtworks.map((artwork) => (
-              <figure key={artwork.id} className="gallery-item">
-                <button
-                  type="button"
-                  className="gallery-item__trigger"
-                  onClick={() => {
-                    const index = sortedArtworks.findIndex((item) => item.id === artwork.id);
-                    setSelectedIndex(index === -1 ? null : index);
-                  }}
-                  aria-label={`查看 ${artwork.title}`}
-                >
-                  <img src={artwork.imageSrc} alt={artwork.alt} className="gallery-item__image" loading="lazy" />
-                  <figcaption
-                    className={`gallery-item__info ${showInfo ? "" : "gallery-item__info--hidden"}`.trim()}
-                    aria-hidden={!showInfo}
+          <div ref={containerRef} className="gallery-screen__masonry">
+            {renderedArtworks.map((artwork, index) => {
+              const shouldLoadImage = loadedImages.has(artwork.id) || index < INITIAL_RENDER_COUNT;
+              return (
+                <figure key={artwork.id} className="gallery-item">
+                  <button
+                    type="button"
+                    className="gallery-item__trigger"
+                    onClick={() => {
+                      const actualIndex = sortedArtworks.findIndex((item) => item.id === artwork.id);
+                      setSelectedIndex(actualIndex === -1 ? null : actualIndex);
+                    }}
+                    aria-label={`查看 ${artwork.title}`}
                   >
-                    <div>
-                      <h2 className="gallery-item__title">{artwork.title}</h2>
-                      <p className="gallery-item__date">{artwork.date}</p>
-                    </div>
-                    <div className="gallery-item__tags">
-                      {artwork.tags.map((tag) => (
-                        <span key={tag} className="gallery-item__tag">
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  </figcaption>
-                </button>
-              </figure>
-            ))}
+                    {shouldLoadImage ? (
+                      <img
+                        src={artwork.imageSrc}
+                        alt={artwork.alt}
+                        className="gallery-item__image"
+                        data-artwork-id={artwork.id}
+                        loading={index < INITIAL_RENDER_COUNT ? "eager" : "lazy"}
+                        decoding="async"
+                        fetchPriority={index < 6 ? "high" : "auto"}
+                      />
+                    ) : (
+                      <div
+                        className="gallery-item__image gallery-item__image--placeholder"
+                        data-artwork-id={artwork.id}
+                        style={{
+                          aspectRatio: "1",
+                          backgroundColor: "rgba(152, 219, 198, 0.1)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: "40%",
+                            height: "40%",
+                            backgroundColor: "rgba(152, 219, 198, 0.2)",
+                            borderRadius: "4px",
+                          }}
+                        />
+                      </div>
+                    )}
+                    <figcaption
+                      className={`gallery-item__info ${showInfo ? "" : "gallery-item__info--hidden"}`.trim()}
+                      aria-hidden={!showInfo}
+                    >
+                      <div>
+                        <h2 className="gallery-item__title">{artwork.title}</h2>
+                        <p className="gallery-item__date">{artwork.date}</p>
+                      </div>
+                      <div className="gallery-item__tags">
+                        {artwork.tags.map((tag) => (
+                          <span key={tag} className="gallery-item__tag">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    </figcaption>
+                  </button>
+                </figure>
+              );
+            })}
+            {/* 加载更多触发器 */}
+            {renderedCount < sortedArtworks.length && (
+              <div
+                ref={loadMoreTriggerRef}
+                className="gallery-screen__load-more-trigger"
+                style={{
+                  width: "100%",
+                  height: "1px",
+                  breakInside: "avoid",
+                }}
+              />
+            )}
           </div>
         )}
 

@@ -275,7 +275,7 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
       <TopNav
         title="自定义标签"
         subtitle="Custom Tags"
-        className="top-nav--fixed"
+        className="top-nav--fixed top-nav--flush"
         leadingAction={{
           icon: "arrow_back",
           label: "返回",

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import secrets
 import uuid
 
@@ -7,6 +8,30 @@ from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
+
+
+def user_upload_path(instance, filename):
+    """
+    生成包含用户ID hash的文件路径，使用UUID作为文件名避免冲突。
+    
+    格式：uploads/{user_hash}/{uuid}.{ext}
+    """
+    user_hash = hashlib.md5(str(instance.user.id).encode()).hexdigest()[:8]
+    # 使用UUID作为文件名，避免冲突
+    file_ext = filename.split('.')[-1] if '.' in filename else 'webp'
+    unique_filename = f"{uuid.uuid4()}.{file_ext}"
+    return f"uploads/{user_hash}/{unique_filename}"
+
+
+def daily_quiz_upload_path(instance, filename):
+    """
+    生成每日小测图片的文件路径，使用UUID作为文件名避免冲突。
+    
+    格式：daily_quiz/{uuid}.{ext}
+    """
+    file_ext = filename.split('.')[-1] if '.' in filename else 'webp'
+    unique_filename = f"{uuid.uuid4()}.{file_ext}"
+    return f"daily_quiz/{unique_filename}"
 
 
 class EmailVerification(models.Model):
@@ -48,6 +73,9 @@ def generate_token_key() -> str:
 
 
 class AuthToken(models.Model):
+    # Token过期时间（天），默认30天
+    TOKEN_EXPIRY_DAYS = 30
+    
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -56,18 +84,58 @@ class AuthToken(models.Model):
     key = models.CharField(max_length=96, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     last_used_at = models.DateTimeField(auto_now=True)
+    expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Token过期时间，过期后需要重新登录"
+    )
 
     class Meta:
-        indexes = [models.Index(fields=["key"])]
+        indexes = [
+            models.Index(fields=["key"]),
+            models.Index(fields=["expires_at"]),
+        ]
+
+    def save(self, *args, **kwargs):
+        # 如果未设置过期时间，自动设置为创建时间+30天
+        if not self.expires_at:
+            from datetime import timedelta
+            self.expires_at = timezone.now() + timedelta(days=self.TOKEN_EXPIRY_DAYS)
+        super().save(*args, **kwargs)
+
+    @property
+    def is_expired(self) -> bool:
+        """检查token是否已过期"""
+        # 如果expires_at为None（旧数据），视为未过期，但会在下次使用时自动设置
+        if self.expires_at is None:
+            return False
+        return timezone.now() >= self.expires_at
 
     @classmethod
     def issue_for_user(cls, user):
+        from datetime import timedelta
+        
         token, created = cls.objects.get_or_create(
-            user=user, defaults={"key": generate_token_key()}
+            user=user,
+            defaults={
+                "key": generate_token_key(),
+                "expires_at": timezone.now() + timedelta(days=cls.TOKEN_EXPIRY_DAYS),
+            }
         )
         if not created:
-            token.key = generate_token_key()
-            token.save(update_fields=["key", "last_used_at"])
+            # 如果expires_at为None（旧数据），设置过期时间
+            if token.expires_at is None:
+                token.expires_at = timezone.now() + timedelta(days=cls.TOKEN_EXPIRY_DAYS)
+            # 如果token已过期，生成新token
+            elif token.is_expired:
+                token.key = generate_token_key()
+                token.expires_at = timezone.now() + timedelta(days=cls.TOKEN_EXPIRY_DAYS)
+            token.last_used_at = timezone.now()
+            # 根据是否有变更决定更新哪些字段
+            update_fields = ["last_used_at"]
+            if token.expires_at is None or token.is_expired:
+                update_fields.extend(["key", "expires_at"])
+            token.save(update_fields=update_fields)
         return token.key
 
 
@@ -145,7 +213,7 @@ class UserUpload(models.Model):
     )
     notes = models.TextField(blank=True)
     image = models.ImageField(
-        upload_to="uploads/%Y/%m/",
+        upload_to=user_upload_path,
         blank=True,
         null=True,
         help_text="用户上传的作品图片。",
@@ -1294,7 +1362,7 @@ class DailyQuizOption(models.Model):
         help_text="选项文字（当选项类型为文字时使用）。",
     )
     image = models.ImageField(
-        upload_to="daily_quiz/%Y/%m/",
+        upload_to=daily_quiz_upload_path,
         blank=True,
         null=True,
         help_text="选项图片（当选项类型为图片时使用）。",
@@ -1322,3 +1390,265 @@ class DailyQuizOption(models.Model):
         if self.option_type == self.OPTION_TYPE_IMAGE:
             return f"{self.quiz.date:%Y-%m-%d} - 图片选项"
         return f"{self.quiz.date:%Y-%m-%d} - {self.text[:32]}"
+
+
+class MonthlyReportTemplate(models.Model):
+    """
+    月报文案模板：根据用户数据生成个性化月报文案。
+    支持不同部分（月度摘要、节点回顾、创作深度等）的条件化文案模板。
+    """
+    SECTION_MONTHLY_SUMMARY = "monthly_summary"  # 月度摘要
+    SECTION_RHYTHM = "rhythm"  # 节律与习惯
+    SECTION_TAGS = "tags"  # 标签快照
+    SECTION_MILESTONE_REVIEW = "milestone_review"  # 节点回顾
+    SECTION_CREATIVE_DEPTH = "creative_depth"  # 创作深度
+    SECTION_TREND_COMPARISON = "trend_comparison"  # 趋势对比
+    SECTION_PERSONALIZED_INSIGHT = "personalized_insight"  # 个性化洞察
+    
+    SECTION_CHOICES = [
+        (SECTION_MONTHLY_SUMMARY, "月度摘要"),
+        (SECTION_RHYTHM, "节律与习惯"),
+        (SECTION_TAGS, "标签快照"),
+        (SECTION_MILESTONE_REVIEW, "节点回顾"),
+        (SECTION_CREATIVE_DEPTH, "创作深度"),
+        (SECTION_TREND_COMPARISON, "趋势对比"),
+        (SECTION_PERSONALIZED_INSIGHT, "个性化洞察"),
+    ]
+    
+    CREATOR_TYPE_FRAGMENTED = "fragmented"  # 碎片型创作者
+    CREATOR_TYPE_FOCUSED = "focused"  # 专注型创作者
+    CREATOR_TYPE_BALANCED = "balanced"  # 平衡型创作者
+    
+    CREATOR_TYPE_CHOICES = [
+        (CREATOR_TYPE_FRAGMENTED, "碎片型创作者"),
+        (CREATOR_TYPE_FOCUSED, "专注型创作者"),
+        (CREATOR_TYPE_BALANCED, "平衡型创作者"),
+    ]
+    
+    section = models.CharField(
+        max_length=64,
+        choices=SECTION_CHOICES,
+        help_text="月报部分标识。",
+    )
+    name = models.CharField(
+        max_length=128,
+        help_text="模板名称，便于后台识别。",
+    )
+    text_template = models.TextField(
+        help_text="文案模板，支持变量：{count}（上传数）、{hours}（总时长）、{avg_hours}（平均时长）、{creator_type}（创作类型）、{rating}（平均评分）、{trend}（趋势描述）等。",
+    )
+    priority = models.PositiveIntegerField(
+        default=100,
+        help_text="优先级，数字越小优先级越高。当多个条件同时满足时，优先显示优先级高的。",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="是否启用此模板。",
+    )
+    
+    # 条件规则
+    # 上传相关条件
+    min_total_uploads = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="本月上传总数最低值（含）。",
+    )
+    max_total_uploads = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="本月上传总数最高值（含）。",
+    )
+    
+    # 时长相关条件
+    min_total_hours = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="本月总时长最低值（小时，含）。",
+    )
+    max_total_hours = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="本月总时长最高值（小时，含）。",
+    )
+    min_avg_hours = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="平均单张时长最低值（小时，含）。",
+    )
+    max_avg_hours = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="平均单张时长最高值（小时，含）。",
+    )
+    
+    # 创作类型条件
+    creator_type = models.CharField(
+        max_length=32,
+        choices=CREATOR_TYPE_CHOICES,
+        null=True,
+        blank=True,
+        help_text="限定创作类型（碎片型、专注型、平衡型）。",
+    )
+    
+    # 评分相关条件
+    min_avg_rating = models.FloatField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0), MaxValueValidator(5)],
+        help_text="平均自评分最低值（含）。",
+    )
+    max_avg_rating = models.FloatField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0), MaxValueValidator(5)],
+        help_text="平均自评分最高值（含）。",
+    )
+    
+    # 与上月对比条件
+    uploads_change_direction = models.CharField(
+        max_length=16,
+        choices=[
+            ("increase", "增加"),
+            ("decrease", "减少"),
+            ("stable", "稳定"),
+        ],
+        null=True,
+        blank=True,
+        help_text="与上月相比上传数的变化方向。",
+    )
+    hours_change_direction = models.CharField(
+        max_length=16,
+        choices=[
+            ("increase", "增加"),
+            ("decrease", "减少"),
+            ("stable", "稳定"),
+        ],
+        null=True,
+        blank=True,
+        help_text="与上月相比总时长的变化方向。",
+    )
+    
+    # 其他条件（JSON格式，便于扩展）
+    extra_conditions = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="其他扩展条件（JSON格式）。",
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["section", "priority", "id"]
+        indexes = [
+            models.Index(fields=["section", "is_active", "priority"]),
+        ]
+        verbose_name = "月报文案模板"
+        verbose_name_plural = "月报文案模板"
+
+    def __str__(self) -> str:
+        return f"{self.get_section_display()}: {self.name}"
+
+    def matches_conditions(
+        self,
+        *,
+        total_uploads: int | None = None,
+        total_hours: float | None = None,
+        avg_hours: float | None = None,
+        creator_type: str | None = None,
+        avg_rating: float | None = None,
+        uploads_change: str | None = None,  # "increase", "decrease", "stable"
+        hours_change: str | None = None,  # "increase", "decrease", "stable"
+    ) -> bool:
+        """
+        检查是否满足此模板的条件。
+        
+        Args:
+            total_uploads: 本月上传总数
+            total_hours: 本月总时长（小时）
+            avg_hours: 平均单张时长（小时）
+            creator_type: 创作类型
+            avg_rating: 平均自评分
+            uploads_change: 与上月相比上传数的变化方向
+            hours_change: 与上月相比总时长的变化方向
+        """
+        if not self.is_active:
+            return False
+        
+        # 检查上传条件
+        if total_uploads is not None:
+            if self.min_total_uploads is not None and total_uploads < self.min_total_uploads:
+                return False
+            if self.max_total_uploads is not None and total_uploads > self.max_total_uploads:
+                return False
+        
+        # 检查时长条件
+        if total_hours is not None:
+            if self.min_total_hours is not None and total_hours < self.min_total_hours:
+                return False
+            if self.max_total_hours is not None and total_hours > self.max_total_hours:
+                return False
+        
+        if avg_hours is not None:
+            if self.min_avg_hours is not None and avg_hours < self.min_avg_hours:
+                return False
+            if self.max_avg_hours is not None and avg_hours > self.max_avg_hours:
+                return False
+        
+        # 检查创作类型条件
+        if self.creator_type and creator_type != self.creator_type:
+            return False
+        
+        # 检查评分条件
+        if avg_rating is not None:
+            if self.min_avg_rating is not None and avg_rating < self.min_avg_rating:
+                return False
+            if self.max_avg_rating is not None and avg_rating > self.max_avg_rating:
+                return False
+        
+        # 检查变化方向条件
+        if self.uploads_change_direction and uploads_change != self.uploads_change_direction:
+            return False
+        if self.hours_change_direction and hours_change != self.hours_change_direction:
+            return False
+        
+        return True
+    
+    def render_template(
+        self,
+        *,
+        count: int | None = None,
+        hours: float | None = None,
+        avg_hours: float | None = None,
+        creator_type: str | None = None,
+        rating: float | None = None,
+        trend: str | None = None,
+    ) -> str:
+        """
+        渲染文案模板，替换变量。
+        
+        Args:
+            count: 上传数
+            hours: 总时长
+            avg_hours: 平均时长
+            creator_type: 创作类型显示名称
+            rating: 平均评分
+            trend: 趋势描述
+        """
+        text = self.text_template
+        
+        # 替换变量
+        if count is not None:
+            text = text.replace("{count}", str(count))
+        if hours is not None:
+            text = text.replace("{hours}", f"{hours:.1f}")
+        if avg_hours is not None:
+            text = text.replace("{avg_hours}", f"{avg_hours:.1f}")
+        if creator_type:
+            text = text.replace("{creator_type}", creator_type)
+        if rating is not None:
+            text = text.replace("{rating}", f"{rating:.1f}")
+        if trend:
+            text = text.replace("{trend}", trend)
+        
+        return text

@@ -137,7 +137,7 @@ function ArtworkDetails({
           subtitle="Artwork Details"
           leadingAction={{ icon: "arrow_back", label: "返回", onClick: onBack }}
           trailingActions={topNavActions}
-          className="top-nav--fixed"
+          className="top-nav--fixed top-nav--flush"
         />
         {menuOpen ? (
           <div className="artwork-details-menu" role="menu">

@@ -28,13 +28,47 @@ load_dotenv(BASE_DIR / ".env.development", override=True)
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv(
-    "DJANGO_SECRET_KEY",
-    "django-insecure-cek3ua7xe03xkv)eoj&(f30fc8=_^#&l9slh-)vl85$q(qr_o1",
-)
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
+if not SECRET_KEY:
+    if DEBUG:
+        # 开发环境允许使用默认值，但会警告
+        SECRET_KEY = "django-insecure-dev-key-change-in-production"
+        warnings.warn(
+            "SECRET_KEY未设置，使用开发环境默认值。生产环境必须设置DJANGO_SECRET_KEY环境变量！",
+            RuntimeWarning,
+        )
+    else:
+        # 生产环境必须设置SECRET_KEY
+        raise ValueError(
+            "SECRET_KEY未设置！生产环境必须设置DJANGO_SECRET_KEY环境变量。"
+            "请使用强随机生成的密钥（至少50字符）。"
+        )
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() == "true"
+# 默认关闭DEBUG，生产环境必须明确设置DJANGO_DEBUG=false
+_debug_env = os.getenv("DJANGO_DEBUG", "").lower()
+if _debug_env == "true":
+    DEBUG = True
+elif _debug_env == "false":
+    DEBUG = False
+else:
+    # 未设置时，根据环境判断：本地开发环境默认True，其他环境默认False
+    _is_local = os.getenv("ENVIRONMENT", "").lower() in {"local", "development", "dev"}
+    DEBUG = _is_local
+    if not _is_local:
+        warnings.warn(
+            "DJANGO_DEBUG未设置，已默认关闭DEBUG模式。"
+            "如需开启，请明确设置DJANGO_DEBUG=true（仅限开发环境）",
+            RuntimeWarning,
+        )
+
+# 生产环境安全检查：如果DEBUG=True且不在本地环境，发出警告
+if DEBUG and os.getenv("ENVIRONMENT", "").lower() not in {"local", "development", "dev", ""}:
+    warnings.warn(
+        "⚠️ 警告：生产环境检测到DEBUG=True！这可能导致敏感信息泄露。"
+        "请确保这是开发/测试环境，或设置DJANGO_DEBUG=false",
+        RuntimeWarning,
+    )
 
 _allowed_hosts = os.getenv("DJANGO_ALLOWED_HOSTS", "")
 ALLOWED_HOSTS = [host.strip() for host in _allowed_hosts.split(",") if host.strip()]
@@ -66,6 +100,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.gzip.GZipMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "config.middleware.TraceIdMiddleware",  # 请求追踪中间件，必须在最前面
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -116,22 +151,42 @@ if _db_engine in {"postgres", "postgresql", "psql"}:
         }
     }
 elif _db_engine in {"mysql", "mariadb"}:
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.mysql",
-            "HOST": os.getenv("DB_HOST", "127.0.0.1"),
-            "PORT": int(os.getenv("DB_PORT", "3306")),
-            "NAME": os.getenv("DB_NAME", "echo"),
-            "USER": os.getenv("DB_USER", "root"),
-            "PASSWORD": os.getenv("DB_PASSWORD", ""),
-            "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "60")),
-            "OPTIONS": {
-                "charset": "utf8mb4",
-                "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
-                "connect_timeout": int(os.getenv("DB_CONNECT_TIMEOUT", "5")),
-            },
+    # 使用自定义后端以兼容 MySQL 5.7（生产环境建议升级到 MySQL 8.0+）
+    _mysql_engine = os.getenv("MYSQL_USE_CUSTOM_BACKEND", "true").lower() == "true"
+    if _mysql_engine:
+        DATABASES = {
+            "default": {
+                "ENGINE": "core.db_backend",
+                "HOST": os.getenv("DB_HOST", "127.0.0.1"),
+                "PORT": int(os.getenv("DB_PORT", "3306")),
+                "NAME": os.getenv("DB_NAME", "echo"),
+                "USER": os.getenv("DB_USER", "root"),
+                "PASSWORD": os.getenv("DB_PASSWORD", ""),
+                "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "60")),
+                "OPTIONS": {
+                    "charset": "utf8mb4",
+                    "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
+                    "connect_timeout": int(os.getenv("DB_CONNECT_TIMEOUT", "5")),
+                },
+            }
         }
-    }
+    else:
+        DATABASES = {
+            "default": {
+                "ENGINE": "django.db.backends.mysql",
+                "HOST": os.getenv("DB_HOST", "127.0.0.1"),
+                "PORT": int(os.getenv("DB_PORT", "3306")),
+                "NAME": os.getenv("DB_NAME", "echo"),
+                "USER": os.getenv("DB_USER", "root"),
+                "PASSWORD": os.getenv("DB_PASSWORD", ""),
+                "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "60")),
+                "OPTIONS": {
+                    "charset": "utf8mb4",
+                    "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
+                    "connect_timeout": int(os.getenv("DB_CONNECT_TIMEOUT", "5")),
+                },
+            }
+        }
 else:
     DATABASES = {
         "default": {
@@ -270,11 +325,25 @@ if not CORS_ALLOWED_ORIGIN_REGEXES and DEBUG:
 
 CORS_ALLOW_CREDENTIALS = True
 
+# CORS配置：生产环境必须明确配置允许的来源
 _cors_allow_all = os.getenv("DJANGO_CORS_ALLOW_ALL", "")
 if _cors_allow_all:
     CORS_ALLOW_ALL_ORIGINS = _cors_allow_all.lower() == "true"
 elif DEBUG:
+    # 仅在DEBUG模式下允许所有来源（开发环境）
     CORS_ALLOW_ALL_ORIGINS = True
+    warnings.warn(
+        "DEBUG模式下CORS允许所有来源。生产环境请设置DJANGO_CORS_ALLOWED_ORIGINS明确指定允许的来源。",
+        RuntimeWarning,
+    )
+else:
+    # 生产环境默认不允许所有来源
+    CORS_ALLOW_ALL_ORIGINS = False
+    if not CORS_ALLOWED_ORIGINS:
+        warnings.warn(
+            "生产环境未配置CORS允许的来源。请设置DJANGO_CORS_ALLOWED_ORIGINS环境变量。",
+            RuntimeWarning,
+        )
 
 _csrf_trusted = os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "")
 CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in _csrf_trusted.split(",") if origin.strip()]
@@ -330,7 +399,12 @@ if _use_tls and _use_ssl:
 EMAIL_USE_TLS = _use_tls
 EMAIL_USE_SSL = _use_ssl
 EMAIL_HOST_USER = os.getenv("SMTP_USERNAME", "echodraw@163.com")
-EMAIL_HOST_PASSWORD = os.getenv("SMTP_PASSWORD", "RLTFvFP3ReVTGhh8")
+EMAIL_HOST_PASSWORD = os.getenv("SMTP_PASSWORD")
+if not EMAIL_HOST_PASSWORD:
+    warnings.warn(
+        "SMTP_PASSWORD未设置，邮件发送功能可能无法正常工作。",
+        RuntimeWarning,
+    )
 DEFAULT_FROM_EMAIL = os.getenv("SMTP_FROM_EMAIL", EMAIL_HOST_USER)
 EMAIL_TIMEOUT = int(os.getenv("SMTP_TIMEOUT", "10"))
 
@@ -341,3 +415,67 @@ CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://127.0.0.1:63
 CELERY_TASK_ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "false").lower() == "true"
 CELERY_TASK_TIME_LIMIT = int(os.getenv("CELERY_TASK_TIME_LIMIT", "60"))
 CELERY_TASK_SOFT_TIME_LIMIT = int(os.getenv("CELERY_TASK_SOFT_TIME_LIMIT", "45"))
+
+# File upload size limits (10MB)
+# 限制文件上传大小，防止内存溢出
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB
+
+# Logging configuration
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "[{levelname}] {asctime} [{name}] {message}",
+            "style": "{",
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+        },
+        "with_trace": {
+            "format": "[{levelname}] {asctime} [{name}] [trace_id={trace_id}] {message}",
+            "style": "{",
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+        },
+    },
+    "filters": {
+        "require_trace_id": {
+            "()": "config.logging_filters.RequireTraceIdFilter",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "with_trace",
+            "filters": ["require_trace_id"],
+        },
+        "file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": str(BASE_DIR / "logs" / "django.log"),
+            "maxBytes": 10 * 1024 * 1024,  # 10MB
+            "backupCount": 5,
+            "formatter": "with_trace",
+            "filters": ["require_trace_id"],
+        },
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console", "file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "core": {
+            "handlers": ["console", "file"],
+            "level": "DEBUG" if DEBUG else "INFO",
+            "propagate": False,
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "WARNING",
+    },
+}
+
+# 确保日志目录存在
+_logs_dir = BASE_DIR / "logs"
+if not _logs_dir.exists():
+    _logs_dir.mkdir(exist_ok=True)

@@ -25,6 +25,7 @@ from core.models import (
     HolidayMessage,
     LongTermGoal,
     LongTermPlanCopy,
+    MonthlyReportTemplate,
     ShortTermGoal,
     ShortTermTaskPreset,
     TestAccountProfile,
@@ -92,6 +93,86 @@ class UserUploadSerializer(serializers.ModelSerializer):
         allow_empty=True,
     )
 
+    # 允许的图片MIME类型
+    ALLOWED_IMAGE_MIME_TYPES = [
+        'image/jpeg',
+        'image/jpg',
+        'image/png',
+        'image/webp',
+        'image/gif',
+    ]
+
+    def validate_image(self, value):
+        """
+        验证图片文件：MIME类型、文件大小和文件内容
+        使用PIL验证文件头，确保是真实的图片文件，防止文件伪装攻击
+        """
+        if value is None:
+            return value
+        
+        # 1. 验证文件大小，限制为10MB
+        max_size = 10 * 1024 * 1024  # 10MB
+        if value.size > max_size:
+            raise serializers.ValidationError(
+                f"文件大小不能超过 {max_size / 1024 / 1024}MB，当前文件大小为 {value.size / 1024 / 1024:.2f}MB"
+            )
+        
+        # 2. 验证文件扩展名
+        if hasattr(value, 'name') and value.name:
+            import os
+            ext = os.path.splitext(value.name)[1].lower()
+            allowed_extensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif']
+            if ext not in allowed_extensions:
+                raise serializers.ValidationError(
+                    f"不支持的文件扩展名：{ext}。仅支持：{', '.join(allowed_extensions)}"
+                )
+        
+        # 3. 验证MIME类型
+        if hasattr(value, 'content_type'):
+            content_type = value.content_type.lower()
+            if content_type not in self.ALLOWED_IMAGE_MIME_TYPES:
+                raise serializers.ValidationError(
+                    f"不支持的文件类型：{content_type}。仅支持：{', '.join(self.ALLOWED_IMAGE_MIME_TYPES)}"
+                )
+        
+        # 4. 使用PIL验证文件内容（文件头验证，防止文件伪装）
+        # 这是最重要的验证，确保文件确实是图片格式
+        try:
+            # 保存当前位置
+            if hasattr(value, 'seek'):
+                current_pos = value.tell()
+                value.seek(0)
+            
+            # 尝试用PIL打开文件，验证文件头
+            img = Image.open(value)
+            # 验证图片格式
+            if img.format not in ['JPEG', 'PNG', 'WEBP', 'GIF']:
+                raise serializers.ValidationError(
+                    f"不支持的图片格式：{img.format}。仅支持：JPEG、PNG、WebP、GIF"
+                )
+            
+            # 验证图片尺寸（防止超大图片导致内存问题）
+            width, height = img.size
+            max_dimension = 10000  # 最大边长10000像素
+            if width > max_dimension or height > max_dimension:
+                raise serializers.ValidationError(
+                    f"图片尺寸过大：{width}x{height}。最大支持：{max_dimension}x{max_dimension}像素"
+                )
+            
+            # 恢复文件位置
+            if hasattr(value, 'seek'):
+                value.seek(current_pos)
+            
+        except Exception as e:
+            if isinstance(e, serializers.ValidationError):
+                raise
+            # PIL无法打开文件，说明不是有效的图片文件
+            raise serializers.ValidationError(
+                "无法识别该文件为有效的图片格式。请确保上传的是有效的图片文件（JPEG、PNG、WebP或GIF）。"
+            ) from e
+        
+        return value
+
     class Meta:
         model = UserUpload
         fields = [
@@ -118,10 +199,11 @@ class UserUploadSerializer(serializers.ModelSerializer):
     def _compress_image(file_obj, *, max_side: int = 2048, fmt: str = "WEBP", quality: int = 82):
         """
         将输入文件压缩为指定格式（默认 WEBP），并限制最长边，返回 ContentFile。
-        压缩失败则回退原文件。
+        如果处理失败，抛出异常拒绝上传，确保只保存有效的图片文件。
         """
         try:
             img = Image.open(file_obj)
+            # 验证确实是图片格式（PIL会尝试打开文件，如果不是图片会抛出异常）
             # 纠正 EXIF 方向并统一到 RGB，避免部分模式保存失败
             img = ImageOps.exif_transpose(img).convert("RGB")
 
@@ -141,9 +223,11 @@ class UserUploadSerializer(serializers.ModelSerializer):
             data = buffer.getvalue()
             new_name = UserUploadSerializer._rename_with_format(getattr(file_obj, "name", "upload"), fmt)
             return ContentFile(data, name=new_name)
-        except Exception:
-            # 任意异常时回退使用原文件，避免阻断上传流程
-            return file_obj
+        except Exception as e:
+            # 处理失败时拒绝上传，防止恶意文件或损坏文件被保存
+            raise serializers.ValidationError(
+                f"图片处理失败：无法识别或处理该文件。请确保上传的是有效的图片文件（JPEG、PNG、WebP或GIF）。"
+            ) from e
 
     def create(self, validated_data: dict[str, Any]) -> UserUpload:
         image_file = validated_data.get("image")
@@ -176,12 +260,27 @@ class UserUploadSerializer(serializers.ModelSerializer):
             use_tos_storage = getattr(dj_settings, "USE_TOS_STORAGE", False)
             force_proxy_url = getattr(dj_settings, "FORCE_IMAGE_PROXY_URL", False)
             
-            if use_tos_storage and not force_proxy_url:
+            # 决定是否使用代理 URL：
+            # 1. 如果强制使用代理（FORCE_IMAGE_PROXY_URL=true），则使用代理
+            # 2. 如果使用 TOS 存储且是开发环境（DEBUG=true），则使用代理以避免 CORS 问题
+            # 3. 生产环境（DEBUG=false）默认使用 TOS 直链（需要 TOS 配置 CORS）
+            is_debug = getattr(dj_settings, "DEBUG", False)
+            # 只在开发环境自动使用代理，生产环境需要显式设置 FORCE_IMAGE_PROXY_URL 才会使用代理
+            should_use_proxy = force_proxy_url or (use_tos_storage and is_debug)
+            
+            if use_tos_storage and not should_use_proxy:
                 # 使用 TOS 直链（需要 TOS 存储桶配置 CORS）
                 data["image"] = instance.image.url
             else:
                 # 使用代理 URL（通过 Django 返回，自动处理 CORS）
                 proxy_url = reverse("core:user-upload-image", args=[instance.pk])
+                
+                # 确保返回绝对 URL
+                if request:
+                    image_url = request.build_absolute_uri(proxy_url)
+                else:
+                    # 如果没有 request 上下文，使用相对路径（前端需要自己处理）
+                    image_url = proxy_url
 
                 token = getattr(getattr(request, "auth", None), "key", None)
                 if not token and request is not None:
@@ -189,7 +288,6 @@ class UserUploadSerializer(serializers.ModelSerializer):
                     if token:
                         token = getattr(token, "key", None)
 
-                image_url = proxy_url
                 if token:
                     separator = "&" if "?" in image_url else "?"
                     image_url = f"{image_url}{separator}token={token}"
@@ -718,9 +816,37 @@ class LongTermGoalSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         image_url = None
         if upload.image:
-            image_url = upload.image.url
-            if request:
-                image_url = request.build_absolute_uri(image_url)
+            # 使用与 UserUploadSerializer 相同的逻辑来决定使用代理 URL 还是直链
+            # 生产环境（DEBUG=false）默认使用 TOS 直链，开发环境（DEBUG=true）自动使用代理
+            from django.conf import settings as dj_settings
+            use_tos_storage = getattr(dj_settings, "USE_TOS_STORAGE", False)
+            force_proxy_url = getattr(dj_settings, "FORCE_IMAGE_PROXY_URL", False)
+            is_debug = getattr(dj_settings, "DEBUG", False)
+            should_use_proxy = force_proxy_url or (use_tos_storage and is_debug)
+            
+            if use_tos_storage and not should_use_proxy:
+                # 使用 TOS 直链
+                image_url = upload.image.url
+            else:
+                # 使用代理 URL（通过 Django 返回，自动处理 CORS）
+                from django.urls import reverse
+                proxy_url = reverse("core:user-upload-image", args=[upload.pk])
+                
+                if request:
+                    image_url = request.build_absolute_uri(proxy_url)
+                else:
+                    image_url = proxy_url
+                
+                # 添加 token 参数
+                token = getattr(getattr(request, "auth", None), "key", None)
+                if not token and request is not None:
+                    token = getattr(request.user, "auth_token", None)
+                    if token:
+                        token = getattr(token, "key", None)
+                
+                if token:
+                    separator = "&" if "?" in image_url else "?"
+                    image_url = f"{image_url}{separator}token={token}"
 
         return {
             "id": upload.id,
@@ -855,6 +981,66 @@ class UploadConditionalMessageSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["created_at", "updated_at"]
+
+
+class MonthlyReportTemplateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MonthlyReportTemplate
+        fields = [
+            "id",
+            "section",
+            "name",
+            "text_template",
+            "priority",
+            "is_active",
+            "min_total_uploads",
+            "max_total_uploads",
+            "min_total_hours",
+            "max_total_hours",
+            "min_avg_hours",
+            "max_avg_hours",
+            "creator_type",
+            "min_avg_rating",
+            "max_avg_rating",
+            "uploads_change_direction",
+            "hours_change_direction",
+            "extra_conditions",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["created_at", "updated_at"]
+
+    def validate_text_template(self, value: str) -> str:
+        text = (value or "").strip()
+        if not text:
+            raise serializers.ValidationError("文案模板不能为空。")
+        if len(text) > 1000:
+            raise serializers.ValidationError("文案模板不可超过 1000 字符。")
+        return text
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        # 验证数值范围
+        min_uploads = attrs.get("min_total_uploads")
+        max_uploads = attrs.get("max_total_uploads")
+        if min_uploads is not None and max_uploads is not None and max_uploads < min_uploads:
+            raise serializers.ValidationError({"max_total_uploads": "最大上传数需不小于最小上传数。"})
+        
+        min_hours = attrs.get("min_total_hours")
+        max_hours = attrs.get("max_total_hours")
+        if min_hours is not None and max_hours is not None and max_hours < min_hours:
+            raise serializers.ValidationError({"max_total_hours": "最大总时长需不小于最小总时长。"})
+        
+        min_avg = attrs.get("min_avg_hours")
+        max_avg = attrs.get("max_avg_hours")
+        if min_avg is not None and max_avg is not None and max_avg < min_avg:
+            raise serializers.ValidationError({"max_avg_hours": "最大平均时长需不小于最小平均时长。"})
+        
+        min_rating = attrs.get("min_avg_rating")
+        max_rating = attrs.get("max_avg_rating")
+        if min_rating is not None and max_rating is not None and max_rating < min_rating:
+            raise serializers.ValidationError({"max_avg_rating": "最大平均评分需不小于最小平均评分。"})
+        
+        return attrs
 
 
 class GroupAchievementSerializer(serializers.ModelSerializer):

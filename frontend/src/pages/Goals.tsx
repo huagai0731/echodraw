@@ -35,6 +35,12 @@ const MONTHLY_CHART_HEIGHT = 192;
 const MONTHLY_CHART_TOP_PADDING = 16;
 const MONTHLY_CHART_BOTTOM_PADDING = 28;
 
+const LONG_TERM_GOAL_CACHE_KEY = "echo-long-term-goal-cache";
+const LONG_TERM_GOAL_CACHE_TIMESTAMP_KEY = "echo-long-term-goal-cache-timestamp";
+const SHORT_TERM_GOALS_CACHE_KEY = "echo-short-term-goals-cache";
+const SHORT_TERM_GOALS_CACHE_TIMESTAMP_KEY = "echo-short-term-goals-cache-timestamp";
+const CACHE_MAX_AGE = 5 * 60 * 1000; // 5分钟缓存有效期
+
 const FALLBACK_COVER_GRADIENTS = [
   "linear-gradient(135deg, rgba(152, 219, 198, 0.45), rgba(74, 63, 58, 0.55))",
   "linear-gradient(135deg, rgba(255, 197, 164, 0.5), rgba(116, 90, 84, 0.5))",
@@ -316,6 +322,78 @@ function buildMonthSkeleton(reference: Date): GoalsCalendarDay[] {
   return days;
 }
 
+function loadCachedLongTermGoal(): LongTermGoal | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  try {
+    const cached = window.sessionStorage.getItem(LONG_TERM_GOAL_CACHE_KEY);
+    const timestamp = window.sessionStorage.getItem(LONG_TERM_GOAL_CACHE_TIMESTAMP_KEY);
+    if (cached && timestamp) {
+      const age = Date.now() - Number.parseInt(timestamp, 10);
+      if (age < CACHE_MAX_AGE) {
+        return JSON.parse(cached) as LongTermGoal;
+      }
+    }
+  } catch {
+    // ignore cache errors
+  }
+  return null;
+}
+
+function saveCachedLongTermGoal(goal: LongTermGoal | null) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    if (goal) {
+      window.sessionStorage.setItem(LONG_TERM_GOAL_CACHE_KEY, JSON.stringify(goal));
+      window.sessionStorage.setItem(LONG_TERM_GOAL_CACHE_TIMESTAMP_KEY, String(Date.now()));
+    } else {
+      window.sessionStorage.removeItem(LONG_TERM_GOAL_CACHE_KEY);
+      window.sessionStorage.removeItem(LONG_TERM_GOAL_CACHE_TIMESTAMP_KEY);
+    }
+  } catch {
+    // ignore cache errors
+  }
+}
+
+function loadCachedShortTermGoals(): ShortTermGoal[] | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  try {
+    const cached = window.sessionStorage.getItem(SHORT_TERM_GOALS_CACHE_KEY);
+    const timestamp = window.sessionStorage.getItem(SHORT_TERM_GOALS_CACHE_TIMESTAMP_KEY);
+    if (cached && timestamp) {
+      const age = Date.now() - Number.parseInt(timestamp, 10);
+      if (age < CACHE_MAX_AGE) {
+        return JSON.parse(cached) as ShortTermGoal[];
+      }
+    }
+  } catch {
+    // ignore cache errors
+  }
+  return null;
+}
+
+function saveCachedShortTermGoals(goals: ShortTermGoal[]) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    if (goals.length > 0) {
+      window.sessionStorage.setItem(SHORT_TERM_GOALS_CACHE_KEY, JSON.stringify(goals));
+      window.sessionStorage.setItem(SHORT_TERM_GOALS_CACHE_TIMESTAMP_KEY, String(Date.now()));
+    } else {
+      window.sessionStorage.removeItem(SHORT_TERM_GOALS_CACHE_KEY);
+      window.sessionStorage.removeItem(SHORT_TERM_GOALS_CACHE_TIMESTAMP_KEY);
+    }
+  } catch {
+    // ignore cache errors
+  }
+}
+
 function Goals() {
   const [range, setRange] = useState<RangeKey>("weekly");
   const [showWizard, setShowWizard] = useState(false);
@@ -561,12 +639,23 @@ function Goals() {
     let active = true;
 
     async function loadInitialLongTermGoal() {
-      setLongTermLoading(true);
+      // 先尝试从缓存加载，避免闪烁
+      const cached = loadCachedLongTermGoal();
+      if (cached && active) {
+        setLongTermGoal(cached);
+        setLongTermError(null);
+        setLongTermRetryable(true);
+        setLongTermLoading(false);
+      } else {
+        setLongTermLoading(true);
+      }
+
       try {
         if (!hasAuthToken()) {
           setLongTermGoal(null);
           setLongTermError("登录后可同步长期目标。");
           setLongTermRetryable(false);
+          saveCachedLongTermGoal(null);
           return;
         }
 
@@ -577,6 +666,7 @@ function Goals() {
         setLongTermGoal(goal);
         setLongTermError(null);
         setLongTermRetryable(true);
+        saveCachedLongTermGoal(goal);
       } catch (error) {
         if (!active) {
           return;
@@ -586,10 +676,16 @@ function Goals() {
           setLongTermGoal(null);
           setLongTermError("登录后可同步长期目标。");
           setLongTermRetryable(false);
+          saveCachedLongTermGoal(null);
         } else {
           console.warn("Failed to load long-term goal", error);
-          setLongTermGoal(null);
-          setLongTermError("获取长期目标失败，请稍后重试。");
+          // 如果出错但有缓存，保持使用缓存，不显示错误
+          if (!cached) {
+            setLongTermGoal(null);
+            setLongTermError("获取长期目标失败，请稍后重试。");
+          } else {
+            setLongTermError(null);
+          }
           setLongTermRetryable(true);
         }
       } finally {
@@ -610,13 +706,23 @@ function Goals() {
     let isMounted = true;
 
     async function loadShortTerm() {
+      // 先尝试从缓存加载，避免闪烁
+      const cached = loadCachedShortTermGoals();
+      if (cached && isMounted) {
+        setShortTermGoals(cached);
+        setShortTermError(null);
+        setShortTermLoading(false);
+      } else {
+        setShortTermLoading(true);
+      }
+
       if (!hasAuthToken()) {
         setShortTermGoals([]);
         setShortTermError("登录后可查看短期目标。");
+        saveCachedShortTermGoals([]);
         return;
       }
 
-      setShortTermLoading(true);
       try {
         const data = await fetchShortTermGoals();
         if (!isMounted) {
@@ -624,6 +730,7 @@ function Goals() {
         }
         setShortTermGoals(data);
         setShortTermError(null);
+        saveCachedShortTermGoals(data);
       } catch (error) {
         if (!isMounted) {
           return;
@@ -632,10 +739,16 @@ function Goals() {
         if (status === 401 || status === 403) {
           setShortTermGoals([]);
           setShortTermError("登录后可查看短期目标。");
+          saveCachedShortTermGoals([]);
         } else {
           console.warn("Failed to load short-term goals", error);
-          setShortTermGoals([]);
-          setShortTermError("获取短期目标失败，请稍后重试。");
+          // 如果出错但有缓存，保持使用缓存，不显示错误
+          if (!cached) {
+            setShortTermGoals([]);
+            setShortTermError("获取短期目标失败，请稍后重试。");
+          } else {
+            setShortTermError(null);
+          }
         }
       } finally {
         if (isMounted) {
@@ -901,7 +1014,7 @@ function Goals() {
         <div className="goals-screen__glow goals-screen__glow--brown" />
       </div>
 
-      <TopNav title="目标" subtitle="Progress" className="top-nav--fixed" />
+      <TopNav title="目标" subtitle="Progress" className="top-nav--fixed top-nav--flush" />
 
       <main className="goals-screen__content">
         <section className="goals-section">

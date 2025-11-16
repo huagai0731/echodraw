@@ -12,6 +12,7 @@ from core.admin_views import (
     EncouragementMessageAdminViewSet,
     HolidayMessageAdminViewSet,
     LongTermPlanCopyAdminViewSet,
+    MonthlyReportTemplateAdminViewSet,
     ShortTermTaskPresetAdminViewSet,
     TestAccountCheckInDetailView,
     TestAccountCheckInListCreateView,
@@ -72,6 +73,11 @@ router.register(
     r"admin/goals/long-term-copy",
     LongTermPlanCopyAdminViewSet,
     basename="admin-long-term-copy",
+)
+router.register(
+    r"admin/reports/monthly-templates",
+    MonthlyReportTemplateAdminViewSet,
+    basename="admin-monthly-report-templates",
 )
 router.register(
     r"admin/test-accounts",

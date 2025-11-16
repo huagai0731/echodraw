@@ -94,6 +94,29 @@ export type AdminLongTermCopy = {
   updated_at: string;
 };
 
+export type AdminMonthlyReportTemplate = {
+  id: number;
+  section: string;
+  name: string;
+  text_template: string;
+  priority: number;
+  is_active: boolean;
+  min_total_uploads: number | null;
+  max_total_uploads: number | null;
+  min_total_hours: number | null;
+  max_total_hours: number | null;
+  min_avg_hours: number | null;
+  max_avg_hours: number | null;
+  creator_type: string | null;
+  min_avg_rating: number | null;
+  max_avg_rating: number | null;
+  uploads_change_direction: string | null;
+  hours_change_direction: string | null;
+  extra_conditions: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
 export type AdminTestAccount = {
   id: number;
   user_id: number;
@@ -781,5 +804,28 @@ export async function updateDailyQuiz(id: number, payload: AdminDailyQuizInput) 
 
 export async function deleteDailyQuiz(id: number) {
   await api.delete(`/admin/daily-quiz/${id}/`);
+}
+
+export async function listMonthlyReportTemplates(section?: string) {
+  const params = section ? { section } : {};
+  const response = await api.get<AdminMonthlyReportTemplate[]>("/admin/reports/monthly-templates/", { params });
+  return response.data;
+}
+
+export async function createMonthlyReportTemplate(payload: Partial<AdminMonthlyReportTemplate>) {
+  const response = await api.post<AdminMonthlyReportTemplate>("/admin/reports/monthly-templates/", payload);
+  return response.data;
+}
+
+export async function updateMonthlyReportTemplate(
+  id: number,
+  payload: Partial<AdminMonthlyReportTemplate>,
+) {
+  const response = await api.patch<AdminMonthlyReportTemplate>(`/admin/reports/monthly-templates/${id}/`, payload);
+  return response.data;
+}
+
+export async function deleteMonthlyReportTemplate(id: number) {
+  await api.delete(`/admin/reports/monthly-templates/${id}/`);
 }
 
