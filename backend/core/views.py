@@ -22,6 +22,9 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.views import APIView
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
+from core.email_utils import send_mail_async
 
 from core.models import (
     Achievement,
@@ -191,9 +194,10 @@ def send_verification_code(request):
         code=code, minutes=CODE_EXPIRY_MINUTES
     )
 
+    # 异步发送邮件，避免阻塞请求
     try:
-        send_mail(subject, message, from_email, [email], fail_silently=False)
-    except Exception as exc:  # pylint: disable=broad-except
+        send_mail_async(subject, message, from_email, [email])
+    except Exception as exc:  # 极少数情况下线程池提交失败
         verification.delete()
         payload = {"detail": "验证码发送失败，请稍后重试"}
         if settings.DEBUG:
@@ -484,6 +488,7 @@ def _build_achievement_payload(achievement: Achievement, *, unlocked_at=None) ->
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
+@cache_page(600)
 def profile_achievements(request):
     """
     返回当前用户的成就概览。
@@ -560,9 +565,26 @@ class UserUploadListCreateView(generics.ListCreateAPIView):
     serializer_class = UserUploadSerializer
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
+    pagination_class = None  # 保持前端期望的数组响应，不受全局分页影响
 
     def get_queryset(self):
-        return UserUpload.objects.filter(user=self.request.user).order_by("-uploaded_at")
+        return (
+            UserUpload.objects.filter(user=self.request.user)
+            .only(
+                "id",
+                "title",
+                "notes",
+                "uploaded_at",
+                "self_rating",
+                "mood_label",
+                "tags",
+                "duration_minutes",
+                "image",
+                "created_at",
+                "updated_at",
+            )
+            .order_by("-uploaded_at")
+        )
 
     def perform_create(self, serializer: UserUploadSerializer):
         upload = serializer.save(user=self.request.user)
@@ -594,7 +616,23 @@ class UserUploadDetailView(generics.RetrieveDestroyAPIView):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get_queryset(self):
-        return UserUpload.objects.filter(user=self.request.user).order_by("-uploaded_at")
+        return (
+            UserUpload.objects.filter(user=self.request.user)
+            .only(
+                "id",
+                "title",
+                "notes",
+                "uploaded_at",
+                "self_rating",
+                "mood_label",
+                "tags",
+                "duration_minutes",
+                "image",
+                "created_at",
+                "updated_at",
+            )
+            .order_by("-uploaded_at")
+        )
 
 
 class UserUploadImageView(APIView):
@@ -660,9 +698,14 @@ class UserUploadImageView(APIView):
 class ShortTermGoalListCreateView(generics.ListCreateAPIView):
     serializer_class = ShortTermGoalSerializer
     permission_classes = [IsAuthenticated]
+    pagination_class = None
 
     def get_queryset(self):
-        return ShortTermGoal.objects.filter(user=self.request.user).order_by("-created_at", "-id")
+        return (
+            ShortTermGoal.objects.filter(user=self.request.user)
+            .only("id", "title", "duration_days", "plan_type", "schedule", "created_at", "updated_at")
+            .order_by("-created_at", "-id")
+        )
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
@@ -675,15 +718,22 @@ class ShortTermGoalDetailView(generics.RetrieveDestroyAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return ShortTermGoal.objects.filter(user=self.request.user)
+        return ShortTermGoal.objects.filter(user=self.request.user).only(
+            "id", "title", "duration_days", "plan_type", "schedule", "created_at", "updated_at", "user"
+        )
 
 
 class UserTaskPresetListCreateView(generics.ListCreateAPIView):
     serializer_class = UserTaskPresetSerializer
     permission_classes = [IsAuthenticated]
+    pagination_class = None
 
     def get_queryset(self):
-        return UserTaskPreset.objects.filter(user=self.request.user).order_by("-updated_at", "-id")
+        return (
+            UserTaskPreset.objects.filter(user=self.request.user)
+            .only("id", "slug", "title", "description", "metadata", "is_active", "created_at", "updated_at", "user")
+            .order_by("-updated_at", "-id")
+        )
 
     def perform_create(self, serializer: UserTaskPresetSerializer):
         serializer.save(
@@ -697,7 +747,11 @@ class UserTaskPresetDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return UserTaskPreset.objects.filter(user=self.request.user).order_by("-updated_at", "-id")
+        return (
+            UserTaskPreset.objects.filter(user=self.request.user)
+            .only("id", "slug", "title", "description", "metadata", "is_active", "created_at", "updated_at", "user")
+            .order_by("-updated_at", "-id")
+        )
 
     def perform_update(self, serializer: UserTaskPresetSerializer):
         serializer.save(category=UserTaskPreset.DEFAULT_CATEGORY)
@@ -838,6 +892,10 @@ class LongTermPlanCopyListView(generics.ListAPIView):
         )
         return queryset
 
+    @method_decorator(cache_page(300))
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
@@ -880,18 +938,17 @@ def goals_calendar(request):
     end_offset = (6 - ((month_end.weekday() + 1) % 7)) % 7
     display_end = month_end + timedelta(days=end_offset)
 
-    checkins = {
-        item.date
-        for item in DailyCheckIn.objects.filter(
+    checkins = set(
+        DailyCheckIn.objects.filter(
             user=user, date__range=(display_start, display_end)
-        )
-    }
+        ).values_list("date", flat=True)
+    )
 
     uploads = set()
-    for upload in UserUpload.objects.filter(
+    for uploaded_at in UserUpload.objects.filter(
         user=user, uploaded_at__date__range=(display_start, display_end)
-    ):
-        localized = timezone.localtime(upload.uploaded_at)
+    ).values_list("uploaded_at", flat=True):
+        localized = timezone.localtime(uploaded_at)
         uploads.add(localized.date())
 
     days_payload = []
@@ -996,14 +1053,12 @@ def _get_check_in_stats(user):
     """
     today = timezone.localdate()
     # 1) 收集 DailyCheckIn 日期
-    checkin_dates = {
-        item.date
-        for item in DailyCheckIn.objects.filter(user=user).only("date").order_by("-date")
-    }
+    checkin_dates = set(
+        DailyCheckIn.objects.filter(user=user).values_list("date", flat=True)
+    )
     # 2) 收集上传记录日期（本地化为上海时区的“日”）
     upload_dates = set()
-    for upload in UserUpload.objects.filter(user=user).only("uploaded_at").order_by("-uploaded_at"):
-        uploaded_at = upload.uploaded_at
+    for uploaded_at in UserUpload.objects.filter(user=user).values_list("uploaded_at", flat=True):
         if uploaded_at is None:
             continue
         localized = timezone.localtime(uploaded_at)
@@ -1036,7 +1091,9 @@ def _get_check_in_stats(user):
 
 def _resolve_general_message():
     """解析通用文案：随机展示一句。"""
-    messages = list(EncouragementMessage.objects.filter(is_active=True))
+    messages = list(
+        EncouragementMessage.objects.filter(is_active=True).only("text", "weight")
+    )
     if not messages:
         return None
 

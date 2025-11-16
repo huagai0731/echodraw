@@ -171,22 +171,24 @@ class UserUploadSerializer(serializers.ModelSerializer):
         data = super().to_representation(instance)
         request = self.context.get("request")
         if instance.image:
-            # 返回相对路径，避免在代理（如 Vite dev server）场景下把 Host 锚定为 127.0.0.1:8000
-            # 交给前端按其已知的 API Base URL 进行拼接/代理，从而在内网/公网都可用
-            proxy_url = reverse("core:user-upload-image", args=[instance.pk])
+            # 若启用对象存储（TOS/S3 兼容），直接返回直链，交给 CDN/Nginx 处理；否则保留带 token 的代理 URL
+            from django.conf import settings as dj_settings  # 局部导入避免循环
+            if getattr(dj_settings, "USE_TOS_STORAGE", False):
+                data["image"] = instance.image.url
+            else:
+                proxy_url = reverse("core:user-upload-image", args=[instance.pk])
 
-            token = getattr(getattr(request, "auth", None), "key", None)
-            if not token and request is not None:
-                token = getattr(request.user, "auth_token", None)
+                token = getattr(getattr(request, "auth", None), "key", None)
+                if not token and request is not None:
+                    token = getattr(request.user, "auth_token", None)
+                    if token:
+                        token = getattr(token, "key", None)
+
+                image_url = proxy_url
                 if token:
-                    token = getattr(token, "key", None)
-
-            image_url = proxy_url
-            if token:
-                separator = "&" if "?" in image_url else "?"
-                image_url = f"{image_url}{separator}token={token}"
-
-            data["image"] = image_url
+                    separator = "&" if "?" in image_url else "?"
+                    image_url = f"{image_url}{separator}token={token}"
+                data["image"] = image_url
         else:
             data["image"] = None
         return data

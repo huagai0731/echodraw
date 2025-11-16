@@ -4,6 +4,9 @@ django-cors-headers>=4.4,<4.5
 python-dotenv>=1.0,<2.0
 Pillow>=10.4,<11.0
 django-storages[boto3]>=1.14,<1.15
+psycopg2-binary>=2.9,<3.0
+celery[redis]>=5.4,<5.5
+redis>=5.0,<6.0
 
 
 
