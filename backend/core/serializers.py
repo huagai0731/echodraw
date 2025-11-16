@@ -702,7 +702,9 @@ class LongTermGoalSerializer(serializers.ModelSerializer):
     def get_progress(self, obj: LongTermGoal) -> dict[str, object]:
         stats = self._ensure_goal_stats(obj)
         total_minutes = stats["total_minutes"]
-        target_minutes = obj.target_hours * 60
+        # 确保类型正确（防止从数据库读取时是字符串）
+        target_hours = float(obj.target_hours) if obj.target_hours is not None else 0.0
+        target_minutes = target_hours * 60
         ratio = total_minutes / target_minutes if target_minutes > 0 else 0
         ratio = max(0.0, min(ratio, 1.0))
         elapsed = timezone.now() - obj.started_at
@@ -720,10 +722,10 @@ class LongTermGoalSerializer(serializers.ModelSerializer):
             "spentHours": round(total_minutes / 60, 2),
             "progressRatio": ratio,
             "progressPercent": round(ratio * 100),
-            "targetHours": obj.target_hours,
+            "targetHours": float(obj.target_hours) if obj.target_hours is not None else 0.0,
             "elapsedDays": elapsed_days,
             "completedCheckpoints": completed_checkpoints,
-            "totalCheckpoints": obj.checkpoint_count,
+            "totalCheckpoints": int(obj.checkpoint_count) if obj.checkpoint_count is not None else 0,
             "nextCheckpoint": next_checkpoint,
             "startedDate": timezone.localdate(obj.started_at).isoformat(),
         }
@@ -774,10 +776,13 @@ class LongTermGoalSerializer(serializers.ModelSerializer):
         entries: list[dict[str, object]],
     ) -> list[dict[str, object]]:
         checkpoints: list[dict[str, object]] = []
-        per_checkpoint_minutes = obj.target_hours * 60 / obj.checkpoint_count
+        # 确保类型正确（防止从数据库读取时是字符串）
+        target_hours = float(obj.target_hours) if obj.target_hours is not None else 0.0
+        checkpoint_count = int(obj.checkpoint_count) if obj.checkpoint_count is not None else 1
+        per_checkpoint_minutes = target_hours * 60 / checkpoint_count
         first_open_index: int | None = None
 
-        for index in range(obj.checkpoint_count):
+        for index in range(checkpoint_count):
             threshold_minutes = per_checkpoint_minutes * (index + 1)
             entry = next((item for item in entries if item["cumulative"] >= threshold_minutes), None)
 
