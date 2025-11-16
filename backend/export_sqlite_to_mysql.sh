@@ -44,14 +44,15 @@ fi
 echo "正在导出数据..."
 echo ""
 
-# 使用 Python 脚本导出（更可靠）
-python3 << EOF
+# 创建 Python 脚本文件
+PYTHON_SCRIPT=$(mktemp)
+cat > "$PYTHON_SCRIPT" << 'PYEOF'
 import sqlite3
 import sys
 import os
 
-sqlite_db = "$SQLITE_DB"
-output_file = "$OUTPUT_FILE"
+sqlite_db = sys.argv[1]
+output_file = sys.argv[2]
 
 if not os.path.exists(sqlite_db):
     print(f"错误: SQLite 数据库文件不存在: {sqlite_db}")
@@ -70,7 +71,7 @@ try:
     
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write("-- 从 SQLite 导出的数据\n")
-        f.write("-- 数据库: {}\n".format(sqlite_db))
+        f.write(f"-- 数据库: {sqlite_db}\n")
         f.write("SET NAMES utf8mb4;\n")
         f.write("SET FOREIGN_KEY_CHECKS = 0;\n\n")
         
@@ -123,10 +124,19 @@ try:
     
 except Exception as e:
     print(f"错误: {e}")
+    import traceback
+    traceback.print_exc()
     sys.exit(1)
-EOF
+PYEOF
 
-if [ $? -eq 0 ]; then
+# 运行 Python 脚本
+python3 "$PYTHON_SCRIPT" "$SQLITE_DB" "$OUTPUT_FILE"
+EXIT_CODE=$?
+
+# 清理临时文件
+rm -f "$PYTHON_SCRIPT"
+
+if [ $EXIT_CODE -eq 0 ]; then
     echo ""
     echo "========================================"
     echo "导出成功！"
@@ -142,4 +152,3 @@ else
     echo "导出失败，请检查错误信息"
     exit 1
 fi
-
