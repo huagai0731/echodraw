@@ -6,7 +6,9 @@ Pillow>=10.4,<11.0
 django-storages[boto3]>=1.14,<1.15
 psycopg2-binary>=2.9,<3.0
 celery[redis]>=5.4,<5.5
-redis>=5.0,<6.0
+redis>=5.0.0,<5.1.0
+kombu>=5.4,<5.5
+flower>=2.0,<3.0
 
 
 

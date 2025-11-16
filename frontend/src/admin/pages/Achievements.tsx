@@ -40,9 +40,12 @@ function AchievementsPage() {
       try {
         setLoading(true);
         const data = await listAchievements({ standalone: true });
-        setAchievements(data);
+        // 防御性处理：确保 data 是数组（兼容分页和非分页响应）
+        const achievementsList = Array.isArray(data) ? data : (data?.results ?? []);
+        setAchievements(achievementsList);
       } catch (err) {
         handleError(err, "加载成就配置失败，请稍后重试。");
+        setAchievements([]); // 错误时设置为空数组
       } finally {
         setLoading(false);
       }

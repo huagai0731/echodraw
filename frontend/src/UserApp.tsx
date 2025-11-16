@@ -358,6 +358,7 @@ function UserApp() {
   const [achievementsLoading, setAchievementsLoading] = useState(false);
   const [forcedLogoutVersion, setForcedLogoutVersion] = useState(0);
   const [forcedLogoutVisible, setForcedLogoutVisible] = useState(false);
+  const [isForcedLogout, setIsForcedLogout] = useState(false);
   const [colorTestResultData, setColorTestResultData] = useState<{
     selectedOptionId: string;
     mainImageUrl: string;
@@ -427,6 +428,12 @@ function UserApp() {
   );
 
   const refreshUserArtworks = useCallback(async () => {
+    // 如果处于强制退出登录状态，不加载任何数据
+    if (isForcedLogout) {
+      setUserArtworks([]);
+      return;
+    }
+    
     try {
       const records = await fetchUserUploads();
       const mapped = records.map((item) => mapUploadRecordToArtwork(item));
@@ -437,10 +444,13 @@ function UserApp() {
       if (status !== 401 && status !== 403) {
         console.warn("[Echo] Failed to load remote artworks:", error);
       }
-      const stored = loadStoredArtworks();
-      setUserArtworks(stored);
+      // 只有在非强制退出登录状态下才从 localStorage 加载
+      if (!isForcedLogout) {
+        const stored = loadStoredArtworks();
+        setUserArtworks(stored);
+      }
     }
-  }, [mapUploadRecordToArtwork]);
+  }, [mapUploadRecordToArtwork, isForcedLogout]);
 
   const refreshUserAchievements = useCallback(async () => {
     setAchievementsLoading(true);
@@ -469,6 +479,12 @@ function UserApp() {
   }, []);
 
   useEffect(() => {
+    // 如果处于强制退出登录状态，不加载任何数据
+    if (isForcedLogout) {
+      setUserArtworks([]);
+      return;
+    }
+    
     if (!hasAuthToken()) {
       const stored = loadStoredArtworks();
       setUserArtworks(stored);
@@ -484,7 +500,7 @@ function UserApp() {
     refreshUserAchievements().catch(() => {
       /* 已在函数内部处理 */
     });
-  }, [refreshUserArtworks, refreshUserAchievements]);
+  }, [refreshUserArtworks, refreshUserAchievements, isForcedLogout]);
 
   useEffect(() => {
     setPinnedAchievements((prev) => {
@@ -569,12 +585,31 @@ function UserApp() {
     }
 
     const handleForcedLogout = (event: Event) => {
+      // 标记为强制退出登录，防止重新加载数据
+      setIsForcedLogout(true);
+      
+      // 清除所有用户相关的状态
       setUserArtworks([]);
       persistStoredArtworks([]);
       setAchievementGroups([]);
       setStandaloneAchievements([]);
       setAchievementSummary(null);
       setPinnedAchievements([]);
+      
+      // 清除所有 localStorage 中的用户相关数据
+      if (typeof window !== "undefined") {
+        try {
+          // 清除画作存储
+          window.localStorage.removeItem(USER_ARTWORK_STORAGE_KEY);
+          // 清除个人偏好设置
+          window.localStorage.removeItem("echodraw-profile-preferences");
+          // 清除打卡相关数据
+          window.localStorage.removeItem(LOCAL_LAST_CHECKIN_KEY);
+        } catch (error) {
+          console.warn("[Echo] Failed to clear user data from localStorage:", error);
+        }
+      }
+      
       setForcedLogoutVersion((prev) => prev + 1);
       setActiveNav("profile");
       setActivePage("profile");
@@ -605,6 +640,10 @@ function UserApp() {
       return;
     }
     const handleAuthChanged = () => {
+      // 如果用户重新登录，重置强制退出登录标志
+      if (hasAuthToken() && isForcedLogout) {
+        setIsForcedLogout(false);
+      }
       refreshUserArtworks().catch(() => {
         /* 已在函数内部处理 */
       });
@@ -616,7 +655,7 @@ function UserApp() {
     return () => {
       window.removeEventListener(AUTH_CHANGED_EVENT, handleAuthChanged as EventListener);
     };
-  }, [refreshUserArtworks, refreshUserAchievements]);
+  }, [refreshUserArtworks, refreshUserAchievements, isForcedLogout]);
 
   const handleOpenUpload = useCallback(() => {
     setActivePage("upload");

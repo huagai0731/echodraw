@@ -188,9 +188,8 @@ function Profile({
       return;
     }
 
-    if (auth?.user.email) {
-      setCachedEmail(auth.user.email);
-    }
+    // 强制退出登录时，清除所有用户相关状态
+    setCachedEmail(""); // 清除缓存的邮箱
     setAuth(null);
     setView("login");
     setDisplayName("");

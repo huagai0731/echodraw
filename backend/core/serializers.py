@@ -171,11 +171,16 @@ class UserUploadSerializer(serializers.ModelSerializer):
         data = super().to_representation(instance)
         request = self.context.get("request")
         if instance.image:
-            # 若启用对象存储（TOS/S3 兼容），直接返回直链，交给 CDN/Nginx 处理；否则保留带 token 的代理 URL
+            # 若启用对象存储（TOS/S3 兼容），优先返回直链，但可通过环境变量强制使用代理 URL（避免 CORS 问题）
             from django.conf import settings as dj_settings  # 局部导入避免循环
-            if getattr(dj_settings, "USE_TOS_STORAGE", False):
+            use_tos_storage = getattr(dj_settings, "USE_TOS_STORAGE", False)
+            force_proxy_url = getattr(dj_settings, "FORCE_IMAGE_PROXY_URL", False)
+            
+            if use_tos_storage and not force_proxy_url:
+                # 使用 TOS 直链（需要 TOS 存储桶配置 CORS）
                 data["image"] = instance.image.url
             else:
+                # 使用代理 URL（通过 Django 返回，自动处理 CORS）
                 proxy_url = reverse("core:user-upload-image", args=[instance.pk])
 
                 token = getattr(getattr(request, "auth", None), "key", None)

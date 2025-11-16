@@ -58,35 +58,41 @@ class DailyHistoryMessageAdminViewSet(viewsets.ModelViewSet):
     queryset = DailyHistoryMessage.objects.all().order_by("-date", "-updated_at")
     serializer_class = DailyHistoryMessageSerializer
     permission_classes = [IsStaffUser]
+    pagination_class = None  # 禁用分页，后台管理页面返回完整列表
 
 
 class EncouragementMessageAdminViewSet(viewsets.ModelViewSet):
     queryset = EncouragementMessage.objects.all().order_by("-updated_at")
     serializer_class = EncouragementMessageSerializer
     permission_classes = [IsStaffUser]
+    pagination_class = None
 
 
 class ConditionalMessageAdminViewSet(viewsets.ModelViewSet):
     queryset = ConditionalMessage.objects.all().order_by("priority", "id")
     serializer_class = ConditionalMessageSerializer
     permission_classes = [IsStaffUser]
+    pagination_class = None
 
 
 class HolidayMessageAdminViewSet(viewsets.ModelViewSet):
     queryset = HolidayMessage.objects.all().order_by("month", "day")
     serializer_class = HolidayMessageSerializer
     permission_classes = [IsStaffUser]
+    pagination_class = None
 
 
 class UploadConditionalMessageAdminViewSet(viewsets.ModelViewSet):
     queryset = UploadConditionalMessage.objects.all().order_by("priority", "id")
     serializer_class = UploadConditionalMessageSerializer
     permission_classes = [IsStaffUser]
+    pagination_class = None
 
 
 class AchievementGroupAdminViewSet(viewsets.ModelViewSet):
     serializer_class = AchievementGroupSerializer
     permission_classes = [IsStaffUser]
+    pagination_class = None
 
     def get_queryset(self):
         achievement_order = (
@@ -104,6 +110,7 @@ class AchievementGroupAdminViewSet(viewsets.ModelViewSet):
 class AchievementAdminViewSet(viewsets.ModelViewSet):
     serializer_class = AchievementSerializer
     permission_classes = [IsStaffUser]
+    pagination_class = None  # 禁用分页，后台管理页面返回完整列表
 
     def get_queryset(self):
         queryset = (
@@ -143,18 +150,21 @@ class ShortTermTaskPresetAdminViewSet(viewsets.ModelViewSet):
     queryset = ShortTermTaskPreset.objects.all().order_by("display_order", "code")
     serializer_class = ShortTermTaskPresetSerializer
     permission_classes = [IsStaffUser]
+    pagination_class = None
 
 
 class LongTermPlanCopyAdminViewSet(viewsets.ModelViewSet):
     queryset = LongTermPlanCopy.objects.all().order_by("min_hours", "max_hours", "id")
     serializer_class = LongTermPlanCopySerializer
     permission_classes = [IsStaffUser]
+    pagination_class = None
 
 
 class TestAccountViewSet(viewsets.ModelViewSet):
     queryset = TestAccountProfile.objects.select_related("user").all()
     serializer_class = TestAccountSerializer
     permission_classes = [IsStaffUser]
+    pagination_class = None
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -266,12 +276,14 @@ class TestDimensionAdminViewSet(viewsets.ModelViewSet):
     queryset = TestDimension.objects.all().order_by("display_order", "code")
     serializer_class = TestDimensionSerializer
     permission_classes = [IsStaffUser]
+    pagination_class = None
 
 
 class TestAdminViewSet(viewsets.ModelViewSet):
     queryset = Test.objects.prefetch_related("dimensions", "questions__options").all().order_by("display_order", "slug")
     serializer_class = TestSerializer
     permission_classes = [IsStaffUser]
+    pagination_class = None
 
 
 class TestQuestionAdminViewSet(viewsets.ModelViewSet):
@@ -280,6 +292,7 @@ class TestQuestionAdminViewSet(viewsets.ModelViewSet):
     )
     serializer_class = TestQuestionSerializer
     permission_classes = [IsStaffUser]
+    pagination_class = None
 
 
 class TestOptionTextAdminViewSet(viewsets.ModelViewSet):
@@ -288,6 +301,7 @@ class TestOptionTextAdminViewSet(viewsets.ModelViewSet):
     )
     serializer_class = TestOptionTextSerializer
     permission_classes = [IsStaffUser]
+    pagination_class = None
 
 
 class TestOptionAdminViewSet(viewsets.ModelViewSet):
@@ -296,12 +310,14 @@ class TestOptionAdminViewSet(viewsets.ModelViewSet):
     )
     serializer_class = TestOptionSerializer
     permission_classes = [IsStaffUser]
+    pagination_class = None
 
 
 class UserTestResultAdminViewSet(viewsets.ModelViewSet):
     queryset = UserTestResult.objects.select_related("user", "test").all().order_by("-completed_at")
     serializer_class = UserTestResultSerializer
     permission_classes = [IsStaffUser]
+    pagination_class = None
 
 
 # ==================== 每日小测 ====================
@@ -310,6 +326,7 @@ class DailyQuizAdminViewSet(viewsets.ModelViewSet):
     queryset = DailyQuiz.objects.prefetch_related("options").all().order_by("-date")
     serializer_class = DailyQuizSerializer
     permission_classes = [IsStaffUser]
+    pagination_class = None
     
     def get_parser_classes(self):
         from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -325,6 +342,7 @@ class DailyQuizOptionAdminViewSet(viewsets.ModelViewSet):
     queryset = DailyQuizOption.objects.select_related("quiz").all().order_by("quiz", "display_order", "id")
     serializer_class = DailyQuizOptionSerializer
     permission_classes = [IsStaffUser]
+    pagination_class = None
     
     def get_parser_classes(self):
         from rest_framework.parsers import FormParser, JSONParser, MultiPartParser

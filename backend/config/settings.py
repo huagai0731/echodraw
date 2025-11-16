@@ -197,6 +197,9 @@ if USE_TOS_STORAGE and any(value in {None, ""} for value in _required_tos_settin
     )
     USE_TOS_STORAGE = False
 
+# 图片 URL 代理配置：当 TOS 存储桶未配置 CORS 时，可通过此选项强制使用代理 URL
+FORCE_IMAGE_PROXY_URL = os.getenv("DJANGO_FORCE_IMAGE_PROXY_URL", "false").lower() == "true"
+
 if USE_TOS_STORAGE:
     DEFAULT_FILE_STORAGE = "config.storage.TOSMediaStorage"
     AWS_ACCESS_KEY_ID = TOS_ACCESS_KEY_ID
