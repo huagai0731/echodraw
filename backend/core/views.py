@@ -1487,7 +1487,8 @@ def _resolve_general_message():
     if not messages:
         return None
 
-    weights = [max(message.weight, 1) for message in messages]
+    # 确保类型正确（防止从数据库读取时是字符串）
+    weights = [max(int(message.weight) if message.weight is not None else 1, 1) for message in messages]
     selected = random.choices(messages, weights=weights, k=1)[0]
     return selected.text
 
