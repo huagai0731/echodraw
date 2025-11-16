@@ -6,6 +6,7 @@ import calendar
 import mimetypes
 import os
 from datetime import date, timedelta
+from zoneinfo import ZoneInfo
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -25,6 +26,21 @@ from rest_framework.views import APIView
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from core.email_utils import send_mail_async
+
+# 中国时区常量
+SHANGHAI_TZ = ZoneInfo("Asia/Shanghai")
+
+
+def get_today_shanghai() -> date:
+    """
+    获取中国时区（Asia/Shanghai）的今天日期。
+    确保无论服务器系统时区如何，都能正确获取中国时区的日期。
+    """
+    now_utc = timezone.now()
+    if timezone.is_naive(now_utc):
+        now_utc = timezone.make_aware(now_utc)
+    shanghai_time = now_utc.astimezone(SHANGHAI_TZ)
+    return shanghai_time.date()
 
 from core.models import (
     Achievement,
@@ -593,12 +609,13 @@ class UserUploadListCreateView(generics.ListCreateAPIView):
         uploaded_at = upload.uploaded_at
         if uploaded_at is None:
             uploaded_at = timezone.now()
-        # 确保是时区感知的 datetime（如果已经是 timezone-aware，timezone.localtime 可以直接处理）
+        # 确保是时区感知的 datetime
         elif timezone.is_naive(uploaded_at):
             uploaded_at = timezone.make_aware(uploaded_at)
 
-        localized = timezone.localtime(uploaded_at)
-        checkin_date = localized.date()
+        # 明确转换为中国时区，确保日期计算正确
+        shanghai_time = uploaded_at.astimezone(SHANGHAI_TZ)
+        checkin_date = shanghai_time.date()
 
         checkin, created = DailyCheckIn.objects.get_or_create(
             user=self.request.user,
@@ -767,7 +784,7 @@ def homepage_messages(request):
     3. 节日文案 - 特定日期显示特定文案
     """
     user = request.user
-    today = timezone.localdate()
+    today = get_today_shanghai()
 
     # 第二块：条件文案（基于用户条件，优先检查）
     check_in_stats = _get_check_in_stats(user)
@@ -901,7 +918,7 @@ class LongTermPlanCopyListView(generics.ListAPIView):
 @permission_classes([IsAuthenticated])
 def goals_calendar(request):
     user = request.user
-    today = timezone.localdate()
+    today = get_today_shanghai()
 
     year_param = request.query_params.get("year")
     month_param = request.query_params.get("month")
@@ -948,8 +965,11 @@ def goals_calendar(request):
     for uploaded_at in UserUpload.objects.filter(
         user=user, uploaded_at__date__range=(display_start, display_end)
     ).values_list("uploaded_at", flat=True):
-        localized = timezone.localtime(uploaded_at)
-        uploads.add(localized.date())
+        # 明确转换为中国时区，确保日期计算正确
+        if timezone.is_naive(uploaded_at):
+            uploaded_at = timezone.make_aware(uploaded_at)
+        shanghai_time = uploaded_at.astimezone(SHANGHAI_TZ)
+        uploads.add(shanghai_time.date())
 
     days_payload = []
     cursor = display_start
@@ -994,7 +1014,7 @@ def goals_calendar(request):
 @permission_classes([IsAuthenticated])
 def check_in(request):
     user = request.user
-    today = timezone.localdate()
+    today = get_today_shanghai()
 
     if request.method == "POST":
         date_str = request.data.get("date")
@@ -1047,22 +1067,25 @@ def check_in(request):
 def _get_check_in_stats(user):
     """
     统计规则（与日历一致）：
-    - 打卡天数 = “打卡记录日期” 与 “上传记录日期（按中国时区）” 的并集（去重）天数
+    - 打卡天数 = "打卡记录日期" 与 "上传记录日期（按中国时区）" 的并集（去重）天数
     - 今日是否已打卡 = 并集中是否包含今天
     - 连续天数 = 以最近一天为起点，向前按日连续命中的天数
     """
-    today = timezone.localdate()
+    today = get_today_shanghai()
     # 1) 收集 DailyCheckIn 日期
     checkin_dates = set(
         DailyCheckIn.objects.filter(user=user).values_list("date", flat=True)
     )
-    # 2) 收集上传记录日期（本地化为上海时区的“日”）
+    # 2) 收集上传记录日期（本地化为上海时区的"日"）
     upload_dates = set()
     for uploaded_at in UserUpload.objects.filter(user=user).values_list("uploaded_at", flat=True):
         if uploaded_at is None:
             continue
-        localized = timezone.localtime(uploaded_at)
-        upload_dates.add(localized.date())
+        # 明确转换为中国时区，确保日期计算正确
+        if timezone.is_naive(uploaded_at):
+            uploaded_at = timezone.make_aware(uploaded_at)
+        shanghai_time = uploaded_at.astimezone(SHANGHAI_TZ)
+        upload_dates.add(shanghai_time.date())
     # 3) 合并为并集
     union_dates = checkin_dates | upload_dates
     if not union_dates:
