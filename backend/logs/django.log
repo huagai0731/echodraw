@@ -1830,3 +1830,7 @@ TypeError: '>=' not supported between instances of 'datetime.datetime' and 'None
 [INFO] 2025-11-17 07:35:05 [django.utils.autoreload] [trace_id=unknown] Watching for file changes with StatReloader
 [INFO] 2025-11-17 07:35:32 [django.utils.autoreload] [trace_id=unknown] C:\Users\gai\Desktop\echo\backend\core\views.py changed, reloading.
 [INFO] 2025-11-17 07:35:34 [django.utils.autoreload] [trace_id=unknown] Watching for file changes with StatReloader
+[INFO] 2025-11-17 07:39:50 [django.utils.autoreload] [trace_id=unknown] C:\Users\gai\Desktop\echo\backend\core\serializers.py changed, reloading.
+[INFO] 2025-11-17 07:39:53 [django.utils.autoreload] [trace_id=unknown] Watching for file changes with StatReloader
+[INFO] 2025-11-17 07:40:00 [django.utils.autoreload] [trace_id=unknown] C:\Users\gai\Desktop\echo\backend\core\serializers.py changed, reloading.
+[INFO] 2025-11-17 07:40:03 [django.utils.autoreload] [trace_id=unknown] Watching for file changes with StatReloader

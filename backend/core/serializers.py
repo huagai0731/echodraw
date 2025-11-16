@@ -675,6 +675,9 @@ class UserTaskPresetPublicSerializer(serializers.ModelSerializer):
 class LongTermGoalSerializer(serializers.ModelSerializer):
     progress = serializers.SerializerMethodField()
     checkpoints = serializers.SerializerMethodField()
+    # 重写字段以处理类型转换问题
+    target_hours = serializers.SerializerMethodField()
+    checkpoint_count = serializers.SerializerMethodField()
 
     class Meta:
         model = LongTermGoal
@@ -697,7 +700,28 @@ class LongTermGoalSerializer(serializers.ModelSerializer):
             "updated_at",
             "progress",
             "checkpoints",
+            "target_hours",
+            "checkpoint_count",
         ]
+    
+    def get_target_hours(self, obj):
+        """安全转换为浮点数"""
+        if obj.target_hours is None:
+            return 0.0
+        try:
+            return float(obj.target_hours)
+        except (ValueError, TypeError):
+            return 0.0
+    
+    def get_checkpoint_count(self, obj):
+        """安全转换为整数"""
+        if obj.checkpoint_count is None:
+            return 0
+        try:
+            # 先转 float 再转 int，处理 '120.00' 这种情况
+            return int(float(obj.checkpoint_count))
+        except (ValueError, TypeError):
+            return 0
 
     def get_progress(self, obj: LongTermGoal) -> dict[str, object]:
         stats = self._ensure_goal_stats(obj)
