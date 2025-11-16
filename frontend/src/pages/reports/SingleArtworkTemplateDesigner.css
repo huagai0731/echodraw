@@ -47,7 +47,7 @@
   width: 100%;
   max-width: 1080px;
   border-radius: 1.25rem;
-  padding: clamp(0.5rem, 1.5vw, 1.25rem);
+  padding: clamp(0.5rem, 1.5vw, 1.25rem) clamp(0.5rem, 1.5vw, 1.25rem) clamp(0.5rem, 1.5vw, 1.25rem);
   color: #f9f2ed;
   box-sizing: border-box;
 }
@@ -273,6 +273,10 @@
   align-items: stretch;
   gap: 0.75rem;
   flex-wrap: nowrap;
+}
+/* 保持含开关的行在小屏也横排展示 */
+.single-template-designer__field-row--inline {
+  align-items: center;
 }
 
 .single-template-designer__field-row label {
@@ -636,8 +640,14 @@
     flex-direction: column;
     align-items: flex-start;
   }
+  /* 默认列排，但对标记为 inline 的行保持横排 */
   .single-template-designer__field-row {
     flex-direction: column;
+    gap: 0.5rem;
+  }
+  .single-template-designer__field-row.single-template-designer__field-row--inline {
+    flex-direction: row;
+    align-items: center;
     gap: 0.5rem;
   }
   .single-template-designer__meta-toggles {

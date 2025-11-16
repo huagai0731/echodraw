@@ -6,6 +6,7 @@ import NewChallengeWizard from "@/pages/NewChallengeWizard";
 import LongTermGoalSetup from "@/pages/LongTermGoalSetup";
 import LongTermGoalDetails from "@/pages/LongTermGoalDetails";
 import ShortTermGoalDetails from "@/pages/ShortTermGoalDetails";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import TopNav from "@/components/TopNav";
 import {
   AUTH_CHANGED_EVENT,
@@ -783,31 +784,6 @@ function Goals() {
     }
   }, []);
 
-  if (showLongTermMetaEdit && longTermGoal) {
-    return (
-      <LongTermGoalSetup
-        mode="edit-meta"
-        onClose={() => setShowLongTermMetaEdit(false)}
-        onSaved={handleLongTermMetaSaved}
-        initialGoal={longTermGoal}
-      />
-    );
-  }
-
-  if (activeLongTermGoal) {
-    return (
-      <LongTermGoalDetails
-        goal={activeLongTermGoal}
-        onClose={handleCloseLongTermDetails}
-        onEdit={() => {
-          setActiveLongTermGoal(null);
-          setShowLongTermMetaEdit(true);
-        }}
-        onExport={handleLongTermExport}
-      />
-    );
-  }
-
   const handleGoalComplete = useCallback((dateKey: string) => {
     // 立即更新本地状态，确保完成状态不会丢失
     setLocalUploadDates((prev) => {
@@ -834,6 +810,53 @@ function Goals() {
     setShortTermGoals((prev) => prev.filter((goal) => goal.id !== goalId));
     console.log("[Goals] Removed deleted goal from list", goalId);
   }, []);
+
+  if (showLongTermMetaEdit && longTermGoal) {
+    return (
+      <LongTermGoalSetup
+        mode="edit-meta"
+        onClose={() => setShowLongTermMetaEdit(false)}
+        onSaved={handleLongTermMetaSaved}
+        initialGoal={longTermGoal}
+      />
+    );
+  }
+
+  if (activeLongTermGoal) {
+    return (
+      <ErrorBoundary
+        fallback={
+          <div className="goals-card goals-card--error" style={{ margin: "1rem" }}>
+            <p className="goals-card__error-text">长期目标详情渲染失败。</p>
+            <button
+              type="button"
+              className="goals-card__retry"
+              onClick={handleCloseLongTermDetails}
+            >
+              返回
+            </button>
+          </div>
+        }
+        onError={(error) => {
+          if (typeof console !== "undefined" && typeof console.error === "function") {
+            console.error("[Goals] LongTermGoalDetails render failed:", error, {
+              goal: activeLongTermGoal,
+            });
+          }
+        }}
+      >
+        <LongTermGoalDetails
+          goal={activeLongTermGoal}
+          onClose={handleCloseLongTermDetails}
+          onEdit={() => {
+            setActiveLongTermGoal(null);
+            setShowLongTermMetaEdit(true);
+          }}
+          onExport={handleLongTermExport}
+        />
+      </ErrorBoundary>
+    );
+  }
 
   if (activeGoalDetail) {
     return (

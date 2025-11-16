@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from typing import Any
+from io import BytesIO
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
@@ -9,6 +10,8 @@ from django.urls import reverse
 from rest_framework import serializers
 
 from django.utils import timezone
+from django.core.files.base import ContentFile
+from PIL import Image, ImageOps
 
 from core.models import (
     Achievement,
@@ -105,6 +108,64 @@ class UserUploadSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "uploaded_at", "created_at", "updated_at"]
+
+    @staticmethod
+    def _rename_with_format(original_name: str, fmt: str) -> str:
+        base = original_name.rsplit(".", 1)[0] if original_name and "." in original_name else (original_name or "upload")
+        return f"{base}.{fmt.lower()}"
+
+    @staticmethod
+    def _compress_image(file_obj, *, max_side: int = 2048, fmt: str = "WEBP", quality: int = 82):
+        """
+        将输入文件压缩为指定格式（默认 WEBP），并限制最长边，返回 ContentFile。
+        压缩失败则回退原文件。
+        """
+        try:
+            img = Image.open(file_obj)
+            # 纠正 EXIF 方向并统一到 RGB，避免部分模式保存失败
+            img = ImageOps.exif_transpose(img).convert("RGB")
+
+            width, height = img.size
+            if max(width, height) > max_side:
+                if width >= height:
+                    new_width = max_side
+                    new_height = int(height * (max_side / width))
+                else:
+                    new_height = max_side
+                    new_width = int(width * (max_side / height))
+                img = img.resize((new_width, new_height), Image.LANCZOS)
+
+            buffer = BytesIO()
+            # optimize=True 可能提高压缩率；webp 默认使用 4:2:0 色度抽样
+            img.save(buffer, format=fmt, quality=quality, optimize=True)
+            data = buffer.getvalue()
+            new_name = UserUploadSerializer._rename_with_format(getattr(file_obj, "name", "upload"), fmt)
+            return ContentFile(data, name=new_name)
+        except Exception:
+            # 任意异常时回退使用原文件，避免阻断上传流程
+            return file_obj
+
+    def create(self, validated_data: dict[str, Any]) -> UserUpload:
+        image_file = validated_data.get("image")
+        if image_file:
+            validated_data["image"] = self._compress_image(
+                image_file,
+                max_side=2048,
+                fmt="WEBP",
+                quality=82,
+            )
+        return super().create(validated_data)
+
+    def update(self, instance: UserUpload, validated_data: dict[str, Any]) -> UserUpload:
+        image_file = validated_data.get("image", None)
+        if image_file:
+            validated_data["image"] = self._compress_image(
+                image_file,
+                max_side=2048,
+                fmt="WEBP",
+                quality=82,
+            )
+        return super().update(instance, validated_data)
 
     def to_representation(self, instance):
         data = super().to_representation(instance)

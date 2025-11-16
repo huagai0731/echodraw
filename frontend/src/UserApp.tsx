@@ -40,6 +40,29 @@ import {
 
 import "./App.css";
 
+const LOCAL_LAST_CHECKIN_KEY = "echo-last-checkin-date";
+
+function getChinaDateIsoFrom(date: Date): string {
+  try {
+    const formatter = new Intl.DateTimeFormat("zh-CN", {
+      timeZone: "Asia/Shanghai",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    const parts = formatter.formatToParts(date);
+    const y = parts.find((p) => p.type === "year")?.value ?? "0000";
+    const m = parts.find((p) => p.type === "month")?.value ?? "01";
+    const d = parts.find((p) => p.type === "day")?.value ?? "01";
+    return `${y}-${m}-${d}`;
+  } catch {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+}
+
 function sanitizeBaseUrl(source: string): string {
   const trimmed = source.trim();
   if (!trimmed) {
@@ -757,6 +780,14 @@ function UserApp() {
           persistStoredArtworks(next);
           return next;
         });
+        try {
+          const chinaIso = getChinaDateIsoFrom(today);
+          if (typeof window !== "undefined") {
+            window.localStorage.setItem(LOCAL_LAST_CHECKIN_KEY, chinaIso);
+          }
+        } catch {
+          // ignore storage errors
+        }
         setActivePage(activeNav);
         if (typeof window !== "undefined" && typeof window.alert === "function") {
           window.alert("网络暂不可用，作品已暂存于本地。");
@@ -779,6 +810,14 @@ function UserApp() {
           persistStoredArtworks(next);
           return next;
         });
+        try {
+          const chinaIso = getChinaDateIsoFrom(new Date(record.uploaded_at));
+          if (typeof window !== "undefined") {
+            window.localStorage.setItem(LOCAL_LAST_CHECKIN_KEY, chinaIso);
+          }
+        } catch {
+          // ignore storage errors
+        }
         setActivePage(activeNav);
       } catch (error) {
         const status = (error as { response?: { status?: number } })?.response?.status;

@@ -988,29 +988,49 @@ def check_in(request):
 
 
 def _get_check_in_stats(user):
+    """
+    统计规则（与日历一致）：
+    - 打卡天数 = “打卡记录日期” 与 “上传记录日期（按中国时区）” 的并集（去重）天数
+    - 今日是否已打卡 = 并集中是否包含今天
+    - 连续天数 = 以最近一天为起点，向前按日连续命中的天数
+    """
     today = timezone.localdate()
-    queryset = DailyCheckIn.objects.filter(user=user).order_by("-date")
-    total = queryset.count()
-
-    latest_date = queryset[0].date if total else None
-    checked_today = latest_date == today if latest_date else False
-
+    # 1) 收集 DailyCheckIn 日期
+    checkin_dates = {
+        item.date
+        for item in DailyCheckIn.objects.filter(user=user).only("date").order_by("-date")
+    }
+    # 2) 收集上传记录日期（本地化为上海时区的“日”）
+    upload_dates = set()
+    for upload in UserUpload.objects.filter(user=user).only("uploaded_at").order_by("-uploaded_at"):
+        uploaded_at = upload.uploaded_at
+        if uploaded_at is None:
+            continue
+        localized = timezone.localtime(uploaded_at)
+        upload_dates.add(localized.date())
+    # 3) 合并为并集
+    union_dates = checkin_dates | upload_dates
+    if not union_dates:
+        return {
+            "checked_today": False,
+            "current_streak": 0,
+            "total_checkins": 0,
+            "latest_checkin": None,
+        }
+    total = len(union_dates)
+    latest_date = max(union_dates)
+    checked_today = today in union_dates
+    # 4) 计算连续天数：从最近一天开始，向前逐天查找连续
     streak = 0
-    expected = latest_date
-    for record in queryset:
-        if expected is None:
-            break
-        if record.date == expected:
-            streak += 1
-            expected = expected - timedelta(days=1)
-        else:
-            break
-
+    cursor = latest_date
+    while cursor in union_dates:
+        streak += 1
+        cursor = cursor - timedelta(days=1)
     return {
         "checked_today": checked_today,
-        "current_streak": streak if latest_date else 0,
+        "current_streak": streak,
         "total_checkins": total,
-        "latest_checkin": latest_date.isoformat() if latest_date else None,
+        "latest_checkin": latest_date.isoformat(),
     }
 
 

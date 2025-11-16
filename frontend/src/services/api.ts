@@ -243,8 +243,13 @@ export type HomeMessagesResponse = {
     headline: string | null;
     text: string | null;
   } | null;
+  holiday?: {
+    headline: string | null;
+    text: string | null;
+  } | null;
   conditional: string | null;
   encouragement: string | null;
+  general?: string | null;
   last_upload: {
     uploaded_at: string | null;
     self_rating: number | null;

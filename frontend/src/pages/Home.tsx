@@ -16,6 +16,9 @@ import {
 
 import "./HomeScreen.css";
 
+const LOCAL_LAST_CHECKIN_KEY = "echo-last-checkin-date";
+const LOCAL_CHECKIN_STATUS_KEY = "echo-last-checkin-status";
+
 type HomeProps = {
   onOpenUpload?: () => void;
   onOpenMentalStateAssessment?: () => void;
@@ -29,12 +32,11 @@ type HomeCopy = {
   encouragement: string;
 };
 
-const FALLBACK_COPY: HomeCopy = {
-  historyHeadline: "历史上的今天",
-  historyText: "1901 年的今天，巴黎的清晨薄雾被一位年轻画家捕捉在画布上，唤起整个工作室的灵感回响。",
-  conditional:
-    "你上次上传时留下一句“自评分 72 分，心情是心如止水”，那份沉静的力量依旧在作品里流动。",
-  encouragement: "再向前一步吧，灵感就在下一笔。保持节奏，你的故事值得被看见。",
+const EMPTY_COPY: HomeCopy = {
+  historyHeadline: "",
+  historyText: "",
+  conditional: "",
+  encouragement: "",
 };
 
 function sanitize(value: string | null | undefined): string {
@@ -46,11 +48,18 @@ function normalizeMessages(payload: HomeMessagesResponse | null): HomeCopy | nul
     return null;
   }
 
+  // 后端现有返回字段为：general/conditional/holiday/history
+  // 为兼容老字段，将 general 作为 encouragement 兜底，holiday/history 合并为历史区块
+  const historyHeadline = sanitize(payload.history?.headline) || sanitize(payload.holiday?.headline);
+  const historyText = sanitize(payload.history?.text) || sanitize(payload.holiday?.text);
+  const conditional = sanitize(payload.conditional);
+  const encouragement = sanitize(payload.encouragement) || sanitize((payload as any).general);
+
   const normalized: HomeCopy = {
-    historyHeadline: sanitize(payload.history?.headline),
-    historyText: sanitize(payload.history?.text),
-    conditional: sanitize(payload.conditional),
-    encouragement: sanitize(payload.encouragement),
+    historyHeadline,
+    historyText,
+    conditional,
+    encouragement,
   };
 
   const hasContent = Object.values(normalized).some(Boolean);
@@ -58,14 +67,38 @@ function normalizeMessages(payload: HomeMessagesResponse | null): HomeCopy | nul
 }
 
 function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomeProps) {
-  const [copy, setCopy] = useState<HomeCopy>(FALLBACK_COPY);
-  const [loadingCopy, setLoadingCopy] = useState(false);
+  const [copy, setCopy] = useState<HomeCopy>(EMPTY_COPY);
+  const [loadingCopy, setLoadingCopy] = useState(true);
   const [copyError, setCopyError] = useState<string | null>(null);
   const [checkInStatus, setCheckInStatus] = useState<CheckInStatus | null>(null);
   const [checkInLoading, setCheckInLoading] = useState(false);
   const [checkInError, setCheckInError] = useState<string | null>(null);
   const [checkInStatusRequested, setCheckInStatusRequested] = useState(false);
   const [authVersion, setAuthVersion] = useState(0);
+
+  function getTodayIso(): string {
+    // 始终以中国时区（Asia/Shanghai）计算“今天”，避免用户本地时区影响
+    try {
+      const formatter = new Intl.DateTimeFormat("zh-CN", {
+        timeZone: "Asia/Shanghai",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      });
+      const parts = formatter.formatToParts(new Date());
+      const y = parts.find((p) => p.type === "year")?.value ?? "0000";
+      const m = parts.find((p) => p.type === "month")?.value ?? "01";
+      const d = parts.find((p) => p.type === "day")?.value ?? "01";
+      return `${y}-${m}-${d}`;
+    } catch {
+      // 兜底：若 Intl 不可用，退回本地时区
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, "0");
+      const d = String(now.getDate()).padStart(2, "0");
+      return `${y}-${m}-${d}`;
+    }
+  }
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -74,11 +107,12 @@ function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomePr
 
     const handleAuthChange = () => {
       setAuthVersion((prev) => prev + 1);
-      setCopy(FALLBACK_COPY);
+      setCopy(EMPTY_COPY);
       setCopyError(null);
       setCheckInStatus(null);
       setCheckInStatusRequested(false);
       setCheckInError(null);
+      setLoadingCopy(true);
     };
 
     window.addEventListener(AUTH_CHANGED_EVENT, handleAuthChange);
@@ -95,7 +129,7 @@ function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomePr
       try {
         if (!hasAuthToken()) {
           if (isMounted) {
-            setCopy(FALLBACK_COPY);
+            setCopy(EMPTY_COPY);
             setCopyError("请登录后查看今日专属文案。");
             setCheckInStatus(null);
             setCheckInStatusRequested(false);
@@ -118,8 +152,9 @@ function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomePr
           setCopy(normalized);
           setCopyError(null);
         } else {
-          setCopy(FALLBACK_COPY);
-          setCopyError("暂时没有匹配的专属文案，已展示备用内容。");
+          // 后端暂未返回匹配文案时，保持为空，不提示错误、也不展示备用文案
+          setCopy(EMPTY_COPY);
+          setCopyError(null);
         }
       } catch (error) {
         if (!isMounted) {
@@ -130,10 +165,10 @@ function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomePr
         if (status === 401 || status === 403) {
           setCopyError("请登录后查看今日专属文案。");
         } else {
-          setCopyError("获取今日文案失败，已展示备用内容。");
+          setCopyError("获取今日文案失败。");
           console.warn("Failed to load home copy", error);
         }
-        setCopy(FALLBACK_COPY);
+        setCopy(EMPTY_COPY);
       } finally {
         if (isMounted) {
           setLoadingCopy(false);
@@ -156,6 +191,30 @@ function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomePr
     let isMounted = true;
     setCheckInStatusRequested(true);
 
+    // 乐观：如果本地记录了当天已打卡，则先行置位，避免刷新后短暂可点击
+    try {
+      if (typeof window !== "undefined") {
+        // 先读取缓存的打卡统计，避免请求期间显示为 0
+        const cached = window.localStorage.getItem(LOCAL_CHECKIN_STATUS_KEY);
+        if (cached && isMounted) {
+          try {
+            const parsed = JSON.parse(cached) as CheckInStatus;
+            if (parsed && typeof parsed.total_checkins === "number") {
+              setCheckInStatus(parsed);
+            }
+          } catch {
+            // ignore bad cache
+          }
+        }
+        const local = window.localStorage.getItem(LOCAL_LAST_CHECKIN_KEY);
+        if (local && local === getTodayIso()) {
+          // 不修改累计与连击，仅用于后续渲染时本地判断“今日已打卡”
+        }
+      }
+    } catch {
+      // ignore storage errors
+    }
+
     async function loadStatus() {
       try {
         if (!hasAuthToken()) {
@@ -173,6 +232,13 @@ function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomePr
           return;
         }
         setCheckInStatus(status);
+        try {
+          if (typeof window !== "undefined") {
+            window.localStorage.setItem(LOCAL_CHECKIN_STATUS_KEY, JSON.stringify(status));
+          }
+        } catch {
+          // ignore storage errors
+        }
         setCheckInError(null);
       } catch (error) {
         if (!isMounted) {
@@ -218,6 +284,14 @@ function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomePr
       const { created: _created, checked_date: _checkedDate, ...status } = result;
       setCheckInStatus(status);
       setCheckInError(null);
+      try {
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem(LOCAL_LAST_CHECKIN_KEY, getTodayIso());
+          window.localStorage.setItem(LOCAL_CHECKIN_STATUS_KEY, JSON.stringify(status));
+        }
+      } catch {
+        // ignore storage errors
+      }
     } catch (error) {
       console.warn("Failed to submit check-in", error);
       setCheckInError("打卡失败，请稍后再试。");
@@ -226,7 +300,41 @@ function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomePr
     }
   };
 
-  const checkedIn = checkInStatus?.checked_today ?? false;
+  const checkedIn = (() => {
+    const serverChecked = checkInStatus?.checked_today ?? false;
+    if (serverChecked) {
+      return true;
+    }
+    try {
+      if (typeof window !== "undefined") {
+        const local = window.localStorage.getItem(LOCAL_LAST_CHECKIN_KEY);
+        return Boolean(local && local === (function getToday() {
+          try {
+            const formatter = new Intl.DateTimeFormat("zh-CN", {
+              timeZone: "Asia/Shanghai",
+              year: "numeric",
+              month: "2-digit",
+              day: "2-digit",
+            });
+            const parts = formatter.formatToParts(new Date());
+            const y = parts.find((p) => p.type === "year")?.value ?? "0000";
+            const m = parts.find((p) => p.type === "month")?.value ?? "01";
+            const d = parts.find((p) => p.type === "day")?.value ?? "01";
+            return `${y}-${m}-${d}`;
+          } catch {
+            const now = new Date();
+            const y = now.getFullYear();
+            const m = String(now.getMonth() + 1).padStart(2, "0");
+            const d = String(now.getDate()).padStart(2, "0");
+            return `${y}-${m}-${d}`;
+          }
+        })());
+      }
+    } catch {
+      // ignore storage errors
+    }
+    return false;
+  })();
   const totalCheckins = checkInStatus?.total_checkins ?? 0;
   const currentStreak = checkInStatus?.current_streak ?? 0;
 
