@@ -17,6 +17,7 @@ import Upload, { type UploadResult } from "@/pages/Upload";
 import {
   API_BASE_URL,
   AUTH_FORCED_LOGOUT_EVENT,
+    AUTH_CHANGED_EVENT,
   EXPLICIT_API_BASE_URL,
   createUserUpload,
   deleteUserUpload,
@@ -597,6 +598,25 @@ function UserApp() {
       window.removeEventListener(AUTH_FORCED_LOGOUT_EVENT, handleForcedLogout);
     };
   }, []);
+
+  // 监听登录态变化：当 token 写入/清除时，刷新用户数据，保证图片 URL（含 token）与权限数据最新
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const handleAuthChanged = () => {
+      refreshUserArtworks().catch(() => {
+        /* 已在函数内部处理 */
+      });
+      refreshUserAchievements().catch(() => {
+        /* 已在函数内部处理 */
+      });
+    };
+    window.addEventListener(AUTH_CHANGED_EVENT, handleAuthChanged as EventListener);
+    return () => {
+      window.removeEventListener(AUTH_CHANGED_EVENT, handleAuthChanged as EventListener);
+    };
+  }, [refreshUserArtworks, refreshUserAchievements]);
 
   const handleOpenUpload = useCallback(() => {
     setActivePage("upload");

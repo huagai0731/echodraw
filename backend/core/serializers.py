@@ -171,15 +171,9 @@ class UserUploadSerializer(serializers.ModelSerializer):
         data = super().to_representation(instance)
         request = self.context.get("request")
         if instance.image:
+            # 返回相对路径，避免在代理（如 Vite dev server）场景下把 Host 锚定为 127.0.0.1:8000
+            # 交给前端按其已知的 API Base URL 进行拼接/代理，从而在内网/公网都可用
             proxy_url = reverse("core:user-upload-image", args=[instance.pk])
-            if request is not None:
-                absolute_url = request.build_absolute_uri(proxy_url)
-            else:
-                site_root = getattr(settings, "FRONTEND_ORIGIN", "").rstrip("/")
-                if site_root:
-                    absolute_url = f"{site_root}{proxy_url}"
-                else:
-                    absolute_url = proxy_url
 
             token = getattr(getattr(request, "auth", None), "key", None)
             if not token and request is not None:
@@ -187,11 +181,12 @@ class UserUploadSerializer(serializers.ModelSerializer):
                 if token:
                     token = getattr(token, "key", None)
 
+            image_url = proxy_url
             if token:
-                separator = "&" if "?" in absolute_url else "?"
-                absolute_url = f"{absolute_url}{separator}token={token}"
+                separator = "&" if "?" in image_url else "?"
+                image_url = f"{image_url}{separator}token={token}"
 
-            data["image"] = absolute_url
+            data["image"] = image_url
         else:
             data["image"] = None
         return data
