@@ -52,8 +52,6 @@ function generateDays(): CalendarDay[] {
 const CANVAS_WIDTH = 1080;
 const CANVAS_HEIGHT = 1760;
 
-type ImageStatus = "idle" | "loading" | "ready" | "error";
-
 function Calendar28DayTemplateDesigner({ open, artworks, onClose }: Calendar28DayTemplateDesignerProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [days, setDays] = useState<CalendarDay[]>(generateDays());
@@ -67,7 +65,6 @@ function Calendar28DayTemplateDesigner({ open, artworks, onClose }: Calendar28Da
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerDayIndex, setPickerDayIndex] = useState<number | null>(null);
   const [loadedImages, setLoadedImages] = useState<Record<string, HTMLImageElement>>({});
-  const [imageStatus, setImageStatus] = useState<ImageStatus>("idle");
 
   const hasArtworks = artworks.length > 0;
 
@@ -149,16 +146,13 @@ function Calendar28DayTemplateDesigner({ open, artworks, onClose }: Calendar28Da
   useEffect(() => {
     if (!open) {
       setLoadedImages({});
-      setImageStatus("idle");
       return;
     }
     if (selectedArtworkIds.length === 0) {
       setLoadedImages({});
-      setImageStatus("idle");
       return;
     }
     let isCancelled = false;
-    setImageStatus("loading");
     
     // 收集需要加载的图片 URL
     const imageSrcs: string[] = [];
@@ -174,7 +168,6 @@ function Calendar28DayTemplateDesigner({ open, artworks, onClose }: Calendar28Da
     
     if (imageSrcs.length === 0) {
       setLoadedImages({});
-      setImageStatus("idle");
       return;
     }
     
@@ -193,12 +186,10 @@ function Calendar28DayTemplateDesigner({ open, artworks, onClose }: Calendar28Da
           }
         });
         setLoadedImages(next);
-        setImageStatus("ready");
       })
       .catch(() => {
         if (!isCancelled) {
           setLoadedImages({});
-          setImageStatus("error");
         }
       });
     return () => {
@@ -727,15 +718,6 @@ function desaturateHex(hex: string, t: number): string {
   const hsl = rgbToHsl(rgb);
   const s = clamp01(t);
   const adjusted = hslToRgb({ h: hsl.h, s, l: hsl.l });
-  return rgbToHex(adjusted);
-}
-
-function adjustHexSaturation(hex: string, saturation: number): string {
-  const rgb = hexToRgb(hex);
-  if (!rgb) return hex;
-  const hsl = rgbToHsl(rgb);
-  const clampedS = clamp01(saturation);
-  const adjusted = hslToRgb({ h: hsl.h, s: clampedS, l: hsl.l });
   return rgbToHex(adjusted);
 }
 

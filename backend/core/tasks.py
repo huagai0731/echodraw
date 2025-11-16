@@ -17,3 +17,4 @@ def send_email_task(self, subject: str, message: str, from_email: str | None, re
         raise self.retry(exc=exc)
 
 
+

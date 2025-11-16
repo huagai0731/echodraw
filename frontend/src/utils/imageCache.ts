@@ -81,3 +81,4 @@ export function clearImageCache(): void {
   imageCache.clear();
 }
 
+

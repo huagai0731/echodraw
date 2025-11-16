@@ -528,7 +528,7 @@ function FourArtworkTemplateDesigner({ open, artworks, onClose }: FourArtworkTem
                                     }}
                                     title="已裁剪"
                                   >
-                                    <MaterialIcon name="crop" style={{ fontSize: "0.7rem", color: "#221b1b" }} />
+                                    <MaterialIcon name="crop" />
                                   </div>
                                 )}
                               </div>
@@ -587,7 +587,7 @@ function FourArtworkTemplateDesigner({ open, artworks, onClose }: FourArtworkTem
                             }
                           }}
                         >
-                          <MaterialIcon name="crop" style={{ fontSize: "1rem" }} />
+                          <MaterialIcon name="crop" />
                           <span>{artwork.title || "未命名"}</span>
                         </button>
                       ))}
@@ -1377,7 +1377,6 @@ function drawTileFooterDetailed(
   context.restore();
 
   // 在小条内绘制文字
-  const lineHeight = Math.round(barHeight * 0.35);
   const centerY = barY + barHeight / 2;
 
   context.save();

@@ -41,7 +41,7 @@ function AchievementsPage() {
         setLoading(true);
         const data = await listAchievements({ standalone: true });
         // 防御性处理：确保 data 是数组（兼容分页和非分页响应）
-        const achievementsList = Array.isArray(data) ? data : (data?.results ?? []);
+        const achievementsList = Array.isArray(data) ? data : (typeof data === "object" && data !== null && "results" in data && Array.isArray(data.results) ? data.results : []);
         setAchievements(achievementsList);
       } catch (err) {
         handleError(err, "加载成就配置失败，请稍后重试。");

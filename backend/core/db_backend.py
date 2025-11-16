@@ -13,3 +13,4 @@ class DatabaseWrapper(MySQLDatabaseWrapper):
         # 禁用版本检查，允许使用 MySQL 5.7
         pass
 
+

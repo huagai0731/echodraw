@@ -152,7 +152,7 @@ function LongTermGoalDetails({
           checkpoint={selectedCheckpoint}
           goal={goal}
           onClose={handleCloseArtworkModal}
-          onSelect={(artwork) => {
+          onSelect={() => {
             onSelectShowcase?.(selectedCheckpoint);
             handleCloseArtworkModal();
           }}
