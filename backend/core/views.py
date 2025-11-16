@@ -629,7 +629,7 @@ def _build_achievement_payload(achievement: Achievement, *, unlocked_at=None) ->
         "description": achievement.description,
         "category": achievement.category,
         "icon": achievement.icon,
-        "level": achievement.level,
+        "level": int(achievement.level) if achievement.level is not None else 0,  # 确保类型正确
         "metadata": metadata.copy() if isinstance(metadata, dict) else {},
         "condition": condition.copy() if isinstance(condition, dict) else {},
         "unlocked_at": unlocked_at,
@@ -826,7 +826,8 @@ def profile_achievements(request):
                 
                 # 如果成就已解锁，更新组的统计信息
                 if unlocked_at:
-                    level = achievement.level
+                    # 确保类型正确（防止从数据库读取时是字符串）
+                    level = int(achievement.level) if achievement.level is not None else 0
                     group_payload["summary"]["unlocked_levels"].append(level)
                     current_highest = group_payload["summary"]["highest_unlocked_level"]
                     if level > current_highest:
@@ -842,7 +843,11 @@ def profile_achievements(request):
                     standalone.append(levels[0])
                 continue
             group_payload["summary"]["level_count"] = len(levels)
-            # 对已解锁的等级进行排序
+            # 对已解锁的等级进行排序（确保都是整数）
+            group_payload["summary"]["unlocked_levels"] = [
+                int(level) if not isinstance(level, int) else level 
+                for level in group_payload["summary"]["unlocked_levels"]
+            ]
             group_payload["summary"]["unlocked_levels"].sort()
             groups.append(group_payload)
 
