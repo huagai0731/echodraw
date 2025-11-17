@@ -99,6 +99,22 @@ sudo supervisorctl restart echo
 
 ## 故障排除
 
+### 错误：Field 'id' doesn't have a default value
+
+如果在运行迁移时遇到 `django_migrations` 表的 AUTO_INCREMENT 错误：
+
+```bash
+# 1. 修复 django_migrations 表的 AUTO_INCREMENT
+chmod +x fix_django_migrations_auto_increment.sh
+./fix_django_migrations_auto_increment.sh
+
+# 或者直接执行 SQL
+mysql -u root -p echo < fix_django_migrations_auto_increment.sql
+
+# 2. 然后重新运行迁移
+python manage.py migrate
+```
+
 ### 如果迁移失败
 
 1. **检查数据库连接**：
