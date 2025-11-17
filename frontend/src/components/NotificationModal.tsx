@@ -118,6 +118,10 @@ function NotificationModal({ open, onClose, onNotificationClick }: NotificationM
     let isMounted = true;
 
     async function loadDetail() {
+      if (!selectedNotification) {
+        return;
+      }
+      
       try {
         setDetailLoading(true);
         setDetailError(null);

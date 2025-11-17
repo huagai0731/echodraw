@@ -12772,3 +12772,5 @@ django.db.utils.OperationalError: no such table: core_highfivecounter
 [INFO] 2025-11-18 05:08:10 [django.server] [trace_id=a5433689-374c-48d9-84eb-a955b4197f44] "GET /api/high-five/has-clicked/ HTTP/1.1" 200 21
 [INFO] 2025-11-18 05:08:10 [django.server] [trace_id=afde3346-317e-4f7d-a6d1-a09dc2564d1e] "GET /api/high-five/count/ HTTP/1.1" 200 12
 [INFO] 2025-11-18 05:08:11 [django.server] [trace_id=f3b414d5-eac7-4c31-9b22-f38ec4f6ce6b] "POST /api/high-five/increment/ HTTP/1.1" 200 27
+[INFO] 2025-11-18 05:11:02 [django.utils.autoreload] [trace_id=unknown] C:\Users\gai\Desktop\echo\backend\core\views.py changed, reloading.
+[INFO] 2025-11-18 05:11:04 [django.utils.autoreload] [trace_id=unknown] Watching for file changes with StatReloader
