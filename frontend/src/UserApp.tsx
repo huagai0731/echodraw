@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import BottomNav, { type NavId } from "@/components/BottomNav";
 import Gallery, { INITIAL_ARTWORKS, type Artwork } from "@/pages/Gallery";
@@ -19,7 +19,6 @@ import {
   AUTH_FORCED_LOGOUT_EVENT,
     AUTH_CHANGED_EVENT,
   CHECK_IN_STATUS_CHANGED_EVENT,
-  EXPLICIT_API_BASE_URL,
   createUserUpload,
   deleteUserUpload,
   fetchUserAchievements,
@@ -39,6 +38,8 @@ import {
   USER_ARTWORKS_CHANGED_EVENT,
   USER_ARTWORK_STORAGE_KEY,
 } from "@/services/artworkStorage";
+import { addFeaturedArtworkId } from "@/services/featuredArtworks";
+import { replaceLocalhostInUrl } from "@/utils/urlUtils";
 
 import "./App.css";
 
@@ -63,150 +64,6 @@ function getChinaDateIsoFrom(date: Date): string {
     const d = String(date.getDate()).padStart(2, "0");
     return `${y}-${m}-${d}`;
   }
-}
-
-function sanitizeBaseUrl(source: string): string {
-  const trimmed = source.trim();
-  if (!trimmed) {
-    return "";
-  }
-  return trimmed.replace(/\/+$/, "");
-}
-
-function stripTrailingApiSegment(baseUrl: string): string {
-  if (!baseUrl) {
-    return baseUrl;
-  }
-  return baseUrl.replace(/\/api(?:\/)?$/i, "");
-}
-
-function isLocalhostName(hostname: string): boolean {
-  return (
-    hostname === "localhost" ||
-    hostname === "[::1]" ||
-    hostname.startsWith("127.") ||
-    hostname.endsWith(".localhost")
-  );
-}
-
-function safeParseUrl(value: string): URL | null {
-  try {
-    return new URL(value);
-  } catch (_error) {
-    return null;
-  }
-}
-
-function resolveHttpCandidateBase(candidate: string): string {
-  if (!candidate) {
-    return "";
-  }
-
-  let prepared = stripTrailingApiSegment(candidate);
-  if (!prepared) {
-    return "";
-  }
-
-  let urlString = prepared;
-  if (prepared.startsWith("//")) {
-    if (typeof window === "undefined" || !window.location?.protocol) {
-      return "";
-    }
-    urlString = `${window.location.protocol}${prepared}`;
-  } else if (!/^[a-z][a-z\d+\-.]*:/i.test(prepared)) {
-    // 未包含协议时无法构建绝对 URL。
-    return "";
-  }
-
-  const parsed = safeParseUrl(urlString);
-  if (!parsed) {
-    return "";
-  }
-
-  if (
-    isLocalhostName(parsed.hostname) &&
-    typeof window !== "undefined" &&
-    window.location?.hostname &&
-    !isLocalhostName(window.location.hostname)
-  ) {
-    parsed.hostname = window.location.hostname;
-  }
-
-  return parsed.origin;
-}
-
-function deriveAssetBaseUrl(): string {
-  const explicitAssetBase = sanitizeBaseUrl(import.meta.env.VITE_ASSET_BASE_URL ?? "");
-  if (explicitAssetBase) {
-    return explicitAssetBase;
-  }
-
-  const candidates = [
-    sanitizeBaseUrl(EXPLICIT_API_BASE_URL ?? ""),
-    sanitizeBaseUrl(API_BASE_URL ?? ""),
-  ];
-
-  for (const candidate of candidates) {
-    if (!candidate) {
-      continue;
-    }
-
-    const resolved = resolveHttpCandidateBase(candidate);
-    if (resolved) {
-      return resolved;
-    }
-  }
-
-  if (typeof window !== "undefined" && window.location?.origin) {
-    return window.location.origin.replace(/\/+$/, "");
-  }
-
-  return "";
-}
-
-const ASSET_BASE_URL = deriveAssetBaseUrl();
-
-function joinWithAssetBase(pathname: string): string {
-  const normalizedPath = pathname.startsWith("/")
-    ? pathname
-    : `/${pathname.replace(/^\/+/, "")}`;
-  if (!ASSET_BASE_URL) {
-    return normalizedPath;
-  }
-  return `${ASSET_BASE_URL}${normalizedPath}`;
-}
-
-const LOCALHOST_MEDIA_URL = /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?\/(media\/.*)$/i;
-const RELATIVE_MEDIA_PATH = /^\/?media\//i;
-
-function resolveAssetUrl(source?: string | null): string {
-  if (!source) {
-    return "";
-  }
-  const trimmed = source.trim();
-  if (!trimmed) {
-    return "";
-  }
-  if (trimmed.startsWith("data:")) {
-    return trimmed;
-  }
-  if (/^[a-z][a-z\d+\-.]*:/i.test(trimmed) || trimmed.startsWith("//")) {
-    const match = trimmed.match(LOCALHOST_MEDIA_URL);
-    if (match) {
-      return joinWithAssetBase(match[1]);
-    }
-    return trimmed;
-  }
-  if (trimmed.startsWith("/")) {
-    if (RELATIVE_MEDIA_PATH.test(trimmed)) {
-      return joinWithAssetBase(trimmed);
-    }
-    return ASSET_BASE_URL ? `${ASSET_BASE_URL}${trimmed}` : trimmed;
-  }
-  if (RELATIVE_MEDIA_PATH.test(trimmed)) {
-    return joinWithAssetBase(trimmed);
-  }
-  return ASSET_BASE_URL ? `${ASSET_BASE_URL}/${trimmed}` : trimmed;
 }
 
 function ensureRecord(value: unknown): Record<string, unknown> {
@@ -369,6 +226,10 @@ function UserApp() {
       percentage: number;
     }>;
   } | null>(null);
+  
+  // 滚动位置存储
+  const scrollPositionsRef = useRef<Map<string, number>>(new Map());
+  const currentPageKeyRef = useRef<string>("");
 
   const combinedArtworks = useMemo(
     () => [...userArtworks, ...INITIAL_ARTWORKS],
@@ -404,8 +265,17 @@ function UserApp() {
           ? `${(record.self_rating / 20).toFixed(1)}/5`
           : "--/5";
       const tags = Array.isArray(record.tags) && record.tags.length > 0 ? record.tags : ["新作"];
-      const resolvedImage = resolveAssetUrl(record.image);
-      const imageSrc = resolvedImage || fallbackImage || "";
+      // 直接使用后端返回的image字段，后端已经处理好了URL（TOS直链或代理URL）
+      let imageSrc = record.image || fallbackImage || "";
+      // 如果是相对路径 /api/uploads/...，说明后端返回的是代理URL，需要拼接API base
+      if (imageSrc && imageSrc.startsWith("/api/") && !imageSrc.startsWith("http")) {
+        const apiBase = API_BASE_URL.replace(/\/api\/?$/, "");
+        imageSrc = apiBase ? `${apiBase}${imageSrc}` : imageSrc;
+      }
+      // 如果URL包含127.0.0.1或localhost，且当前页面不是localhost，则替换为当前hostname
+      if (imageSrc && typeof window !== "undefined" && window.location?.hostname) {
+        imageSrc = replaceLocalhostInUrl(imageSrc);
+      }
       const title = record.title?.trim() || "未命名作品";
       const description = record.description?.trim() || "尚未添加简介。";
 
@@ -439,6 +309,7 @@ function UserApp() {
       const records = await fetchUserUploads();
       const mapped = records.map((item) => mapUploadRecordToArtwork(item));
       setUserArtworks(mapped);
+      // 清除旧的缓存，使用最新的数据
       persistStoredArtworks(mapped);
     } catch (error) {
       const status = (error as { response?: { status?: number } })?.response?.status;
@@ -731,6 +602,75 @@ function UserApp() {
     setColorTestResultData(null);
   }, []);
 
+
+  // 获取当前页面的唯一标识
+  const getCurrentPageKey = useCallback(() => {
+    // 对于详情页等特殊页面，使用activePage
+    if (activePage !== activeNav && activePage !== "home") {
+      return activePage;
+    }
+    // 对于主要导航页面，使用activeNav
+    return activeNav;
+  }, [activeNav, activePage]);
+
+  // 保存当前页面的滚动位置
+  const saveScrollPosition = useCallback((pageKey: string) => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const scrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
+    scrollPositionsRef.current.set(pageKey, scrollY);
+  }, []);
+
+  // 恢复页面的滚动位置
+  const restoreScrollPosition = useCallback((pageKey: string) => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const savedPosition = scrollPositionsRef.current.get(pageKey);
+    if (savedPosition !== undefined) {
+      // 使用requestAnimationFrame确保DOM已更新
+      requestAnimationFrame(() => {
+        window.scrollTo(0, savedPosition);
+      });
+    } else {
+      // 如果没有保存的位置，滚动到顶部
+      requestAnimationFrame(() => {
+        window.scrollTo(0, 0);
+      });
+    }
+  }, []);
+
+  // 监听页面切换，保存和恢复滚动位置
+  useEffect(() => {
+    const previousPageKey = currentPageKeyRef.current;
+    const currentPageKey = getCurrentPageKey();
+
+    // 如果页面切换了
+    if (previousPageKey !== currentPageKey) {
+      // 保存上一个页面的滚动位置
+      if (previousPageKey) {
+        saveScrollPosition(previousPageKey);
+      }
+      
+      // 恢复当前页面的滚动位置
+      restoreScrollPosition(currentPageKey);
+      
+      // 更新当前页面标识
+      currentPageKeyRef.current = currentPageKey;
+    }
+  }, [activeNav, activePage, getCurrentPageKey, saveScrollPosition, restoreScrollPosition]);
+
+  // 组件卸载时保存当前页面的滚动位置
+  useEffect(() => {
+    return () => {
+      const currentPageKey = getCurrentPageKey();
+      if (currentPageKey) {
+        saveScrollPosition(currentPageKey);
+      }
+    };
+  }, [getCurrentPageKey, saveScrollPosition]);
+
   const handleTogglePinnedAchievement = useCallback(
     ({ id, title, subtitle, nextPinned }: { id: string; title: string; subtitle: string; nextPinned: boolean }) => {
       const kind = resolvePinnedKind(id);
@@ -947,10 +887,14 @@ function UserApp() {
 
   const handleEditArtwork = useCallback((target: Artwork) => {
     if (typeof window !== "undefined" && typeof window.alert === "function") {
-      window.alert(`“${target.title}” 的编辑功能即将上线，敬请期待。`);
+      window.alert(`"${target.title}" 的编辑功能即将上线，敬请期待。`);
     } else {
       console.info("[Echo] Edit requested for artwork:", target.id);
     }
+  }, []);
+
+  const handleSetAsFeatured = useCallback((target: Artwork) => {
+    addFeaturedArtworkId(target.id);
   }, []);
 
   if (import.meta.env.DEV) {
@@ -1001,6 +945,7 @@ function UserApp() {
           onOpenUpload={handleOpenUpload}
           onDeleteArtwork={handleDeleteArtwork}
           onEditArtwork={handleEditArtwork}
+          onSetAsFeatured={handleSetAsFeatured}
         />
       ) : activeNav === "goals" ? (
         <Goals />
@@ -1012,6 +957,7 @@ function UserApp() {
           onOpenAchievements={handleOpenProfileAchievements}
           pinnedAchievements={pinnedAchievements}
           recentAchievements={recentAchievements}
+          artworks={combinedArtworks}
         />
       )}
       <BottomNav

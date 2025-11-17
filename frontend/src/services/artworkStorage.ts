@@ -186,7 +186,8 @@ export function replaceTagNameForStoredArtworks(oldName: string, newName: string
 
     let tagChanged = false;
     const nextTags = item.tags.map((tag) => {
-      if (tag === normalizedOld) {
+      const normalizedTag = tag.trim();
+      if (normalizedTag === normalizedOld) {
         tagChanged = true;
         return normalizedNew;
       }
@@ -223,7 +224,7 @@ export function removeTagFromStoredArtworks(tagName: string) {
       return item;
     }
 
-    const filtered = item.tags.filter((tag) => tag !== normalized);
+    const filtered = item.tags.filter((tag) => tag.trim() !== normalized);
     if (filtered.length === item.tags.length) {
       return item;
     }

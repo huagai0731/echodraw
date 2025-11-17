@@ -155,3 +155,4 @@ EOF
 2. 检查 Django 日志：`tail -f logs/django.log`
 3. 检查 MySQL 错误日志（在宝塔面板中查看）
 
+

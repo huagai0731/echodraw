@@ -10,6 +10,7 @@ import {
   TAG_PREFERENCES_CHANGED_EVENT,
   type TagPreferences,
 } from "@/services/tagPreferences";
+import { fetchCurrentUser } from "@/services/api";
 
 import "./Settings.css";
 
@@ -49,11 +50,6 @@ const SETTINGS_ITEMS: SettingsItem[] = [
     dialog: "signature",
   },
   {
-    id: "achievements",
-    title: "修改展示的成就",
-    subtitleDefault: "挑选想让大家看到的勋章",
-  },
-  {
     id: "custom-tags",
     title: "修改自定义标签",
     subtitleDefault: "管理你专属的创作标签",
@@ -74,6 +70,15 @@ function Settings({
   const [validationMessage, setValidationMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [tagPreferences, setTagPreferences] = useState<TagPreferences>(getDefaultTagPreferences);
+  const [userInfo, setUserInfo] = useState<{
+    email: string | null;
+    dateJoined: string | null;
+    registrationNumber: number | null;
+  }>({
+    email: userEmail,
+    dateJoined: null,
+    registrationNumber: null,
+  });
 
   const currentItem = useMemo(() => {
     if (!activeDialog) {
@@ -230,6 +235,22 @@ function Settings({
     };
   }, [userEmail]);
 
+  useEffect(() => {
+    async function loadUserInfo() {
+      try {
+        const user = await fetchCurrentUser();
+        setUserInfo({
+          email: user.email,
+          dateJoined: user.date_joined,
+          registrationNumber: user.registration_number,
+        });
+      } catch (error) {
+        console.warn("[Echo] Failed to fetch user info:", error);
+      }
+    }
+    loadUserInfo();
+  }, []);
+
   const dialogFooter = useMemo(() => {
     return (
       <footer className="settings-dialog__footer">
@@ -276,7 +297,7 @@ function Settings({
         <section className="settings-page__section">
           <header className="settings-page__section-header">
             <h2>账户与个性化</h2>
-            <p>在这里调整个人资料的展示方式。</p>
+            <p>在这里调整个人资料的展示方式</p>
           </header>
           <div className="settings-page__card">
             {items.map((item) => (
@@ -293,6 +314,47 @@ function Settings({
                 <MaterialIcon name="arrow_forward_ios" className="settings-page__item-icon" />
               </button>
             ))}
+          </div>
+        </section>
+
+        <section className="settings-page__section">
+          <header className="settings-page__section-header">
+            <h2>账户信息</h2>
+            <p>查看您的账户基本信息</p>
+          </header>
+          <div className="settings-page__card">
+            <div className="settings-page__item">
+              <div className="settings-page__item-text">
+                <span className="settings-page__item-title">注册邮箱</span>
+                <span className="settings-page__item-subtitle">
+                  {userInfo.email || "加载中..."}
+                </span>
+              </div>
+            </div>
+            <div className="settings-page__item">
+              <div className="settings-page__item-text">
+                <span className="settings-page__item-title">注册日期</span>
+                <span className="settings-page__item-subtitle">
+                  {userInfo.dateJoined
+                    ? new Date(userInfo.dateJoined).toLocaleDateString("zh-CN", {
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                      })
+                    : "加载中..."}
+                </span>
+              </div>
+            </div>
+            <div className="settings-page__item">
+              <div className="settings-page__item-text">
+                <span className="settings-page__item-title">注册编号</span>
+                <span className="settings-page__item-subtitle">
+                  {userInfo.registrationNumber !== null
+                    ? `Echo#${userInfo.registrationNumber}`
+                    : "加载中..."}
+                </span>
+              </div>
+            </div>
           </div>
         </section>
       </main>

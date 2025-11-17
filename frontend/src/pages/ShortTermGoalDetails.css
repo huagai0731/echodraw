@@ -225,6 +225,15 @@
   letter-spacing: 0.04em;
 }
 
+.short-term-details__day-completion-time {
+  display: block;
+  font-size: 0.75rem;
+  color: #98dbc6;
+  letter-spacing: 0.05em;
+  margin-top: 0.25rem;
+  opacity: 0.85;
+}
+
 .short-term-details__day-actions {
   display: inline-flex;
   align-items: center;
@@ -718,6 +727,179 @@ details[open] .short-term-details__day-actions .material-symbols-outlined:last-c
 .short-term-details__confirm-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* 评价弹窗 */
+.short-term-details__review-modal {
+  width: 100%;
+  max-width: 400px;
+  border-radius: 1.25rem;
+  background: rgba(34, 27, 27, 0.95);
+  border: 1px solid rgba(239, 234, 231, 0.2);
+  backdrop-filter: blur(20px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.short-term-details__review-content {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.short-term-details__review-prompt {
+  margin: 0;
+  font-size: 0.95rem;
+  color: rgba(239, 234, 231, 0.85);
+  line-height: 1.6;
+}
+
+.short-term-details__review-textarea {
+  width: 100%;
+  min-height: 6rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(239, 234, 231, 0.25);
+  background: rgba(74, 63, 58, 0.4);
+  color: #efeae7;
+  font-size: 0.95rem;
+  font-family: inherit;
+  line-height: 1.5;
+  resize: vertical;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.short-term-details__review-textarea:focus {
+  outline: none;
+  border-color: rgba(152, 219, 198, 0.5);
+  background: rgba(74, 63, 58, 0.55);
+}
+
+.short-term-details__review-textarea::placeholder {
+  color: rgba(239, 234, 231, 0.4);
+}
+
+.short-term-details__review-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.short-term-details__review-button {
+  flex: 1;
+  height: 2.75rem;
+  border-radius: 0.85rem;
+  border: none;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s ease, opacity 0.2s ease;
+}
+
+.short-term-details__review-button--cancel {
+  background: rgba(74, 63, 58, 0.85);
+  color: rgba(239, 234, 231, 0.72);
+}
+
+.short-term-details__review-button--cancel:hover:not(:disabled) {
+  background: rgba(74, 63, 58, 1);
+}
+
+.short-term-details__review-button--save {
+  background: rgba(152, 219, 198, 0.75);
+  color: #221b1b;
+}
+
+.short-term-details__review-button--save:hover:not(:disabled) {
+  background: rgba(152, 219, 198, 0.9);
+}
+
+.short-term-details__review-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* 完成动画效果 */
+.short-term-details__day--animating {
+  position: relative;
+  overflow: visible;
+}
+
+/* 绿光围绕一圈的动画 */
+.short-term-details__day--animating::before {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 1.25rem;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    transparent 60deg,
+    rgba(152, 219, 198, 0) 90deg,
+    rgba(152, 219, 198, 0.9) 120deg,
+    rgba(152, 219, 198, 1) 150deg,
+    rgba(152, 219, 198, 0.9) 180deg,
+    rgba(152, 219, 198, 0) 210deg,
+    transparent 240deg,
+    transparent 360deg
+  );
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: destination-out;
+  padding: 3px;
+  animation: glowRotate 1.2s linear;
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* 整个卡片边缘发光然后暗淡 */
+.short-term-details__day--animating::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 1.25rem;
+  border: 2px solid rgba(152, 219, 198, 0);
+  box-shadow: 0 0 0 rgba(152, 219, 198, 0);
+  animation: borderGlow 2s ease-in-out;
+  pointer-events: none;
+  z-index: 1;
+}
+
+@keyframes glowRotate {
+  0% {
+    transform: rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(360deg);
+    opacity: 0;
+  }
+}
+
+@keyframes borderGlow {
+  0% {
+    border-color: rgba(152, 219, 198, 0);
+    box-shadow: 0 0 0 rgba(152, 219, 198, 0);
+  }
+  30% {
+    border-color: rgba(152, 219, 198, 0);
+    box-shadow: 0 0 0 rgba(152, 219, 198, 0);
+  }
+  50% {
+    border-color: rgba(152, 219, 198, 0.9);
+    box-shadow: 0 0 25px rgba(152, 219, 198, 0.7), 0 0 50px rgba(152, 219, 198, 0.5), inset 0 0 20px rgba(152, 219, 198, 0.2);
+  }
+  70% {
+    border-color: rgba(152, 219, 198, 0.6);
+    box-shadow: 0 0 15px rgba(152, 219, 198, 0.4), 0 0 30px rgba(152, 219, 198, 0.3);
+  }
+  100% {
+    border-color: rgba(152, 219, 198, 0);
+    box-shadow: 0 0 0 rgba(152, 219, 198, 0);
+  }
 }
 
 @media (min-width: 600px) {

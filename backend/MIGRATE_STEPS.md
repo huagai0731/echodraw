@@ -101,3 +101,4 @@ python3 check_database_status.py
 mysql -u echo -p echo -e "SELECT COUNT(*) FROM core_user;"
 ```
 
+

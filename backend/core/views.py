@@ -14,6 +14,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.mail import send_mail
 from django.core.validators import validate_email
 from django.db import transaction
+from django.db.models import Max
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -29,6 +30,9 @@ from core.email_utils import send_mail_async
 
 # 配置日志记录器
 logger = logging.getLogger(__name__)
+
+# 跟踪已警告的未知成就指标，避免重复警告
+_warned_unknown_metrics: set[str] = set()
 
 # 尝试导入时区库，优先使用 zoneinfo（Python 3.9+），否则使用 pytz
 try:
@@ -90,17 +94,19 @@ from core.models import (
     HolidayMessage,
     LongTermGoal,
     LongTermPlanCopy,
+    Notification,
     ShortTermGoal,
     ShortTermTaskPreset,
     UploadConditionalMessage,
+    UserProfile,
     UserTaskPreset,
     UserUpload,
-    UserProfile,
 )
 from core.serializers import (
     LongTermGoalSerializer,
     LongTermGoalSetupSerializer,
     LongTermPlanCopyPublicSerializer,
+    NotificationPublicSerializer,
     ShortTermGoalSerializer,
     ShortTermTaskPresetPublicSerializer,
     UserTaskPresetPublicSerializer,
@@ -137,6 +143,15 @@ def _extract_error_message(exc: Exception, default_message: str) -> str:
 
 
 def _user_payload(user):
+    # 获取用户资料，包括注册编号
+    profile = None
+    registration_number = None
+    try:
+        profile = user.profile
+        registration_number = profile.registration_number
+    except UserProfile.DoesNotExist:
+        pass
+    
     return {
         "id": user.id,
         "email": user.email,
@@ -144,6 +159,8 @@ def _user_payload(user):
         "is_active": bool(user.is_active),
         "first_name": user.first_name,
         "last_name": user.last_name,
+        "date_joined": user.date_joined.isoformat() if user.date_joined else None,
+        "registration_number": registration_number,
     }
 
 
@@ -436,6 +453,19 @@ def register(request):
             password=password,
         )
         verification.mark_used()
+        
+        # 分配注册编号：获取当前最大注册编号，然后+1
+        max_reg_number = UserProfile.objects.filter(
+            registration_number__isnull=False
+        ).aggregate(
+            max_num=Max("registration_number")
+        )["max_num"] or 0
+        
+        # 创建用户资料并分配注册编号
+        UserProfile.objects.create(
+            user=user,
+            registration_number=max_reg_number + 1,
+        )
 
     token_key = AuthToken.issue_for_user(user)
 
@@ -683,7 +713,10 @@ def _evaluate_achievement_condition(user, condition: dict, user_stats: dict | No
         stats = _get_check_in_stats(user)
         user_value = 1 if stats.get("checked_today", False) else 0
     else:
-        logger.warning(f"Unknown achievement metric: {metric}", extra={"metric": metric})
+        # 只对每个未知指标警告一次，避免日志刷屏
+        if metric not in _warned_unknown_metrics:
+            logger.debug(f"Unknown achievement metric (will only log once): {metric}", extra={"metric": metric})
+            _warned_unknown_metrics.add(metric)
         return False
     
     return _compare_values(user_value, operator, threshold)
@@ -743,12 +776,13 @@ def _get_user_achievement_stats(user) -> dict:
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
-@cache_page(600)
 def profile_achievements(request):
     """
     返回当前用户的成就概览。
     
     根据成就条件计算用户已解锁的成就等级。
+    
+    注意：不使用缓存，因为成就数据是用户特定的，每个用户应该看到不同的结果。
     """
     trace_id = getattr(request, "trace_id", "unknown")
     user = getattr(request, "user", None)
@@ -1616,3 +1650,71 @@ class LongTermGoalView(APIView):
                 "uploaded_at", "id"
             )
         )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def notifications_list(request):
+    """获取通知列表"""
+    notifications = Notification.objects.filter(is_active=True).order_by("-created_at")
+    serializer = NotificationPublicSerializer(notifications, many=True)
+    return Response(serializer.data)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def notification_detail(request, notification_id):
+    """获取通知详情"""
+    notification = get_object_or_404(Notification, id=notification_id, is_active=True)
+    serializer = NotificationPublicSerializer(notification)
+    return Response(serializer.data)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def high_five_count(request):
+    """获取击掌按钮点击总数"""
+    from core.models import HighFiveCounter
+    count = HighFiveCounter.get_count()
+    return Response({"count": count})
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def high_five_increment(request):
+    """增加击掌按钮点击计数（每个用户只能点击一次）"""
+    from core.models import HighFiveCounter
+    
+    user = request.user if request.user.is_authenticated else None
+    session_key = request.session.session_key
+    
+    # 如果没有session key，创建一个
+    if not session_key and not user:
+        request.session.create()
+        session_key = request.session.session_key
+    
+    count, success = HighFiveCounter.increment(user=user, session_key=session_key)
+    
+    if success:
+        return Response({"count": count, "success": True})
+    else:
+        return Response(
+            {"count": count, "success": False, "message": "您已经点击过了"},
+            status=status.HTTP_200_OK
+        )
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def high_five_has_clicked(request):
+    """检查当前用户是否已经点击过"""
+    from core.models import HighFiveCounter
+    
+    user = request.user if request.user.is_authenticated else None
+    session_key = request.session.session_key
+    
+    has_clicked = HighFiveCounter.has_clicked(user=user, session_key=session_key)
+    return Response({"has_clicked": has_clicked})

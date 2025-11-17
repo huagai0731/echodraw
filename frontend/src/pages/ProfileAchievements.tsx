@@ -51,6 +51,13 @@ function gradientFromSlug(slug: string): string {
 }
 
 function resolveBackground(slug: string, metadata?: Record<string, unknown>): string {
+  // 优先使用解锁时使用的图片
+  const unlockImage = typeof metadata?.unlock_image_url === "string" ? metadata.unlock_image_url.trim() : "";
+  if (unlockImage) {
+    return `url("${unlockImage}")`;
+  }
+  
+  // 其次使用封面图片
   const cover = typeof metadata?.cover_image === "string" ? metadata.cover_image.trim() : "";
   if (cover) {
     if (/^(?:linear|radial|conic)-gradient|^paint\(/i.test(cover)) {
@@ -449,15 +456,6 @@ function ProfileAchievements({
             </div>
 
             <div className="achievement-modal__content">
-              <button
-                type="button"
-                className="achievement-modal__close"
-                onClick={() => setSelected(null)}
-                aria-label="关闭"
-              >
-                <MaterialIcon name="close" />
-              </button>
-
               <div className="achievement-modal__header">
                 <p className="achievement-modal__progress">{modalContent.progressLabel}</p>
                 <div className="achievement-modal__progress-track">

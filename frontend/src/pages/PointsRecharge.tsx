@@ -84,6 +84,7 @@ function PointsRecharge({ onBack }: PointsRechargeProps) {
             onClick: onBack,
           }}
           title="充值中心"
+          subtitle="Recharge"
         />
 
         <div className="points-recharge__headline">
@@ -121,11 +122,6 @@ function PointsRecharge({ onBack }: PointsRechargeProps) {
                   className={`points-recharge__payment-method ${isSelected ? "points-recharge__payment-method--selected" : ""}`}
                   onClick={() => setSelectedPayment(method.id)}
                 >
-                  <img
-                    alt={`${method.name} Icon`}
-                    className="points-recharge__payment-icon"
-                    src={method.iconUrl}
-                  />
                   <span className="points-recharge__payment-name">{method.name}</span>
                 </div>
               );

@@ -195,6 +195,8 @@ export type AuthResponse = {
     is_active: boolean;
     first_name: string | null;
     last_name: string | null;
+    date_joined: string | null;
+    registration_number: number | null;
   };
 };
 
@@ -222,7 +224,7 @@ export async function login(payload: { email: string; password: string }) {
   return response.data;
 }
 
-export async function fetchCurrentUser() {
+export async function fetchCurrentUser(): Promise<AuthResponse["user"]> {
   const response = await api.get<AuthResponse["user"]>("/auth/me/");
   return response.data;
 }
@@ -947,6 +949,125 @@ api.interceptors.response.use(
     throw error;
   },
 );
+
+export type Notification = {
+  id: number;
+  title: string;
+  summary: string;
+  content: string;
+  created_at: string;
+  read?: boolean; // 可选字段，后端可能返回或前端管理
+};
+
+export async function fetchNotifications(): Promise<Notification[]> {
+  if (!hasAuthToken()) {
+    throw createUnauthorizedError();
+  }
+  const response = await api.get<Notification[]>("/notifications/");
+  return response.data;
+}
+
+export async function fetchNotificationDetail(id: number): Promise<Notification> {
+  if (!hasAuthToken()) {
+    throw createUnauthorizedError();
+  }
+  const response = await api.get<Notification>(`/notifications/${id}/`);
+  return response.data;
+}
+
+// 通知已读状态管理（使用 localStorage）
+const NOTIFICATION_READ_STORAGE_KEY = "echo-notification-read-ids";
+
+/**
+ * 获取已读通知 ID 集合
+ */
+function getReadNotificationIds(): Set<number> {
+  if (typeof window === "undefined") {
+    return new Set();
+  }
+  try {
+    const raw = window.localStorage.getItem(NOTIFICATION_READ_STORAGE_KEY);
+    if (!raw) {
+      return new Set();
+    }
+    const ids = JSON.parse(raw) as number[];
+    return new Set(ids);
+  } catch {
+    return new Set();
+  }
+}
+
+/**
+ * 标记通知为已读
+ */
+export function markNotificationAsRead(notificationId: number): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    const readIds = getReadNotificationIds();
+    readIds.add(notificationId);
+    window.localStorage.setItem(
+      NOTIFICATION_READ_STORAGE_KEY,
+      JSON.stringify(Array.from(readIds)),
+    );
+  } catch (error) {
+    console.warn("Failed to mark notification as read", error);
+  }
+}
+
+/**
+ * 检查通知是否已读
+ */
+export function isNotificationRead(notificationId: number): boolean {
+  const readIds = getReadNotificationIds();
+  return readIds.has(notificationId);
+}
+
+/**
+ * 为通知列表添加已读状态
+ */
+export function enrichNotificationsWithReadStatus(
+  notifications: Notification[],
+): Notification[] {
+  const readIds = getReadNotificationIds();
+  return notifications.map((notification) => ({
+    ...notification,
+    read: readIds.has(notification.id),
+  }));
+}
+
+/**
+ * 获取未读通知数量
+ */
+export function getUnreadNotificationCount(notifications: Notification[]): number {
+  const readIds = getReadNotificationIds();
+  return notifications.filter((notification) => !readIds.has(notification.id)).length;
+}
+
+/**
+ * 获取击掌按钮点击总数
+ */
+export async function getHighFiveCount(): Promise<number> {
+  const response = await api.get<{ count: number }>("/high-five/count/");
+  return response.data.count;
+}
+
+/**
+ * 增加击掌按钮点击计数
+ */
+export async function incrementHighFiveCount(): Promise<{ count: number; success: boolean; message?: string }> {
+  const response = await api.post<{ count: number; success: boolean; message?: string }>("/high-five/increment/");
+  return response.data;
+}
+
+/**
+ * 检查当前用户是否已经点击过
+ */
+export async function hasHighFiveClicked(): Promise<boolean> {
+  const response = await api.get<{ has_clicked: boolean }>("/high-five/has-clicked/");
+  return response.data.has_clicked;
+}
 
 export default api;
 

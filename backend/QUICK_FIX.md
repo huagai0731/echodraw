@@ -32,3 +32,4 @@ python3 fix_database_types_safe.py
 
 **建议**：如果网站现在能正常工作，可以暂时不修复数据库，代码层面的修复已经足够。
 
+

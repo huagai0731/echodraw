@@ -1,9 +1,11 @@
 import { useMemo, useState, useEffect, type CSSProperties } from "react";
 
 import MaterialIcon from "@/components/MaterialIcon";
+import TopNav from "@/components/TopNav";
 import type { LongTermGoal, LongTermGoalCheckpoint } from "@/services/api";
 import type { Artwork } from "@/types/artwork";
 import { loadStoredArtworks, USER_ARTWORKS_CHANGED_EVENT } from "@/services/artworkStorage";
+import { replaceLocalhostInUrl } from "@/utils/urlUtils";
 
 import "./LongTermGoalDetails.css";
 
@@ -49,7 +51,7 @@ function LongTermGoalDetails({
   };
 
   const handleViewImage = (imageUrl: string) => {
-    setViewingImage(imageUrl);
+    setViewingImage(replaceLocalhostInUrl(imageUrl));
     setShowImageViewer(true);
   };
 
@@ -72,36 +74,36 @@ function LongTermGoalDetails({
       </div>
 
       <div className="long-term-details__shell">
-        <header className="long-term-details__header">
-          <button
-            type="button"
-            className="long-term-details__nav-button"
-            onClick={onClose}
-            aria-label="返回目标页面"
-          >
-            <MaterialIcon name="arrow_back" />
-          </button>
-
-          <div className="long-term-details__action-group">
-            <button
-              type="button"
-              className="long-term-details__action long-term-details__action--primary"
-              onClick={() => onExport?.()}
-            >
-              <MaterialIcon name="ios_share" />
-              导出
-            </button>
-            <button
-              type="button"
-              className="long-term-details__action"
-              onClick={onEdit}
-              disabled={!onEdit}
-            >
-              <MaterialIcon name="tune" />
-              调整
-            </button>
-          </div>
-        </header>
+        <TopNav
+          title="长期计划"
+          subtitle="Long-term Plan"
+          className="top-nav--fixed top-nav--flush"
+          leadingAction={{
+            icon: "arrow_back",
+            label: "返回",
+            onClick: onClose,
+          }}
+          trailingActions={[
+            ...(onEdit
+              ? [
+                  {
+                    icon: "edit",
+                    label: "调整",
+                    onClick: onEdit,
+                  },
+                ]
+              : []),
+            ...(onExport
+              ? [
+                  {
+                    icon: "ios_share",
+                    label: "导出",
+                    onClick: onExport,
+                  },
+                ]
+              : []),
+          ]}
+        />
 
         <section className="long-term-details__intro">
           <h1 className="long-term-details__title">{goal.title}</h1>
@@ -241,11 +243,11 @@ function CheckpointCard({
               <button
                 type="button"
                 className="timeline-card__showcase-image-wrapper"
-                onClick={() => checkpoint.upload?.image && onViewImage?.(checkpoint.upload.image!)}
+                onClick={() => checkpoint.upload?.image && onViewImage?.(replaceLocalhostInUrl(checkpoint.upload.image!))}
                 aria-label="查看大图"
               >
                 <img
-                  src={checkpoint.upload.image}
+                  src={replaceLocalhostInUrl(checkpoint.upload.image)}
                   alt={checkpoint.upload.title || "创作记录"}
                   className="timeline-card__showcase-image"
                 />

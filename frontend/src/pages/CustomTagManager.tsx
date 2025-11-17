@@ -32,7 +32,6 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
   const [editingTagId, setEditingTagId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [feedback, setFeedback] = useState<string>("");
-  const [saving, setSaving] = useState(false);
 
   const refreshPreferences = useCallback(() => {
     const latest = loadTagPreferences(userEmail);
@@ -209,38 +208,6 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
     setFeedback("标签已添加，请保存后在上传页使用。");
   }, [newTagName, validateTagName]);
 
-  const handleSave = useCallback(async () => {
-    try {
-      setSaving(true);
-      saveTagPreferences(userEmail, draftPreferences);
-      const renames: Array<{ oldName: string; newName: string }> = [];
-
-      for (const tag of originalPreferences.customTags) {
-        const next = draftPreferences.customTags.find((item) => item.id === tag.id);
-        if (next && next.name !== tag.name) {
-          renames.push({ oldName: tag.name, newName: next.name });
-        }
-      }
-
-      const removed = originalPreferences.customTags.filter(
-        (tag) => !draftPreferences.customTags.some((item) => item.id === tag.id),
-      );
-
-      for (const rename of renames) {
-        replaceTagNameForStoredArtworks(rename.oldName, rename.newName);
-      }
-
-      for (const tag of removed) {
-        removeTagFromStoredArtworks(tag.name);
-      }
-
-      setOriginalPreferences(clonePreferences(draftPreferences));
-      setFeedback("已保存，自定义标签已更新。");
-    } finally {
-      setSaving(false);
-    }
-  }, [draftPreferences, originalPreferences, userEmail]);
-
   const handleSubmit = useCallback(
     (event: React.FormEvent<HTMLFormElement>) => {
       event.preventDefault();
@@ -249,19 +216,38 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
     [handleAddTag],
   );
 
-  const handleBack = useCallback(() => {
-    if (!dirty) {
-      onBack();
-      return;
-    }
-    if (typeof window !== "undefined" && typeof window.confirm === "function") {
-      const confirmLeave = window.confirm("当前修改尚未保存，确定要返回吗？");
-      if (!confirmLeave) {
-        return;
+  const handleBack = useCallback(async () => {
+    if (dirty) {
+      try {
+        saveTagPreferences(userEmail, draftPreferences);
+        const renames: Array<{ oldName: string; newName: string }> = [];
+
+        for (const tag of originalPreferences.customTags) {
+          const next = draftPreferences.customTags.find((item) => item.id === tag.id);
+          if (next && next.name !== tag.name) {
+            renames.push({ oldName: tag.name, newName: next.name });
+          }
+        }
+
+        const removed = originalPreferences.customTags.filter(
+          (tag) => !draftPreferences.customTags.some((item) => item.id === tag.id),
+        );
+
+        for (const rename of renames) {
+          replaceTagNameForStoredArtworks(rename.oldName, rename.newName);
+        }
+
+        for (const tag of removed) {
+          removeTagFromStoredArtworks(tag.name);
+        }
+
+        setOriginalPreferences(clonePreferences(draftPreferences));
+      } catch (error) {
+        console.warn("[Echo] Failed to save tag preferences on back:", error);
       }
     }
     onBack();
-  }, [dirty, onBack]);
+  }, [dirty, draftPreferences, originalPreferences, userEmail, onBack]);
 
   return (
     <div className="custom-tag-page">
@@ -281,14 +267,6 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
           label: "返回",
           onClick: handleBack,
         }}
-        trailingActions={[
-          {
-            icon: "save",
-            label: "保存",
-            onClick: handleSave,
-            active: dirty && !saving,
-          },
-        ]}
       />
 
       <main className="custom-tag-page__content">
@@ -409,15 +387,6 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
             <span className={feedback ? "custom-tag-hint__message custom-tag-hint__message--active" : "custom-tag-hint__message"}>
               {feedback || "标签名称支持中文与英文，最多 12 个字符。"}
             </span>
-            <button
-              type="button"
-              className="custom-tag-save"
-              onClick={handleSave}
-              disabled={!dirty || saving}
-            >
-              <MaterialIcon name="save" />
-              保存修改
-            </button>
           </div>
         </section>
       </main>

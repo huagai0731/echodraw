@@ -3,12 +3,16 @@ import type { AxiosError } from "axios";
 import { useEffect, useMemo, useState } from "react";
 
 import MaterialIcon from "@/components/MaterialIcon";
+import NotificationModal from "@/components/NotificationModal";
 import TopNav from "@/components/TopNav";
 import {
   AUTH_CHANGED_EVENT,
   CHECK_IN_STATUS_CHANGED_EVENT,
   fetchCheckInStatus,
   fetchHomeMessages,
+  fetchNotifications,
+  fetchProfilePreferences,
+  getUnreadNotificationCount,
   hasAuthToken,
   submitCheckIn,
   type CheckInStatus,
@@ -16,6 +20,78 @@ import {
 } from "@/services/api";
 
 import "./HomeScreen.css";
+
+const STORAGE_KEY = "echodraw-auth";
+const PREFS_STORAGE_KEY = "echodraw-profile-preferences";
+
+type AuthPayload = {
+  token: string;
+  user: {
+    email: string;
+  };
+};
+
+type StoredPreferences = {
+  email: string;
+  displayName: string;
+  signature: string;
+};
+
+function getInitialAuth(): AuthPayload | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw) as AuthPayload;
+    if (parsed?.token && parsed?.user?.email) {
+      return parsed;
+    }
+  } catch (error) {
+    console.warn("Failed to parse stored auth payload", error);
+  }
+
+  return null;
+}
+
+function loadStoredPreferences(email: string): StoredPreferences | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(PREFS_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw) as StoredPreferences;
+    if (parsed?.email && parsed.email === email) {
+      return parsed;
+    }
+  } catch (error) {
+    console.warn("[Echo] Failed to parse stored profile preferences:", error);
+  }
+  return null;
+}
+
+function formatName(email: string): string {
+  const name = email.split("@")[0];
+  if (name.length === 0) {
+    return "回声艺术家";
+  }
+  return name.slice(0, 1).toUpperCase() + name.slice(1);
+}
+
+function truncateName(name: string, maxLength: number = 12): string {
+  if (name.length <= maxLength) {
+    return name;
+  }
+  return name.slice(0, maxLength - 1) + "…";
+}
 
 const LOCAL_LAST_CHECKIN_KEY = "echo-last-checkin-date";
 const LOCAL_CHECKIN_STATUS_KEY = "echo-last-checkin-status";
@@ -110,6 +186,9 @@ function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomePr
   const [checkInError, setCheckInError] = useState<string | null>(null);
   const [checkInStatusRequested, setCheckInStatusRequested] = useState(false);
   const [authVersion, setAuthVersion] = useState(0);
+  const [userName, setUserName] = useState<string | null>(null);
+  const [notificationModalOpen, setNotificationModalOpen] = useState(false);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
 
   function getTodayIso(): string {
     // 始终以中国时区（Asia/Shanghai）计算“今天”，避免用户本地时区影响
@@ -148,6 +227,7 @@ function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomePr
       setCheckInStatusRequested(false);
       setCheckInError(null);
       setLoadingCopy(true);
+      setUserName(null);
       // 清除 localStorage 中的打卡缓存
       try {
         if (typeof window !== "undefined") {
@@ -286,6 +366,107 @@ function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomePr
     };
   }, [authVersion]);
 
+  // 加载用户名
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadUserName() {
+      if (!hasAuthToken()) {
+        if (isMounted) {
+          setUserName(null);
+        }
+        return;
+      }
+
+      try {
+        const auth = getInitialAuth();
+        if (!auth?.user?.email) {
+          if (isMounted) {
+            setUserName(null);
+          }
+          return;
+        }
+
+        const email = auth.user.email;
+        // 先尝试从本地存储加载
+        const stored = loadStoredPreferences(email);
+        if (stored?.displayName) {
+          if (isMounted) {
+            setUserName(stored.displayName);
+          }
+        } else {
+          // 如果没有本地存储，尝试从服务器获取
+          try {
+            const preferences = await fetchProfilePreferences();
+            const displayName = preferences.displayName.trim() || formatName(email);
+            if (isMounted) {
+              setUserName(displayName);
+            }
+          } catch {
+            // 如果获取失败，使用 email 生成默认名称
+            if (isMounted) {
+              setUserName(formatName(email));
+            }
+          }
+        }
+      } catch (error) {
+        console.warn("Failed to load user name", error);
+        if (isMounted) {
+          const auth = getInitialAuth();
+          if (auth?.user?.email) {
+            setUserName(formatName(auth.user.email));
+          } else {
+            setUserName(null);
+          }
+        }
+      }
+    }
+
+    loadUserName();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [authVersion]);
+
+  // 加载未读通知数量
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadUnreadCount() {
+      if (!hasAuthToken()) {
+        if (isMounted) {
+          setUnreadNotificationCount(0);
+        }
+        return;
+      }
+
+      try {
+        const notifications = await fetchNotifications();
+        if (isMounted) {
+          const unreadCount = getUnreadNotificationCount(notifications);
+          setUnreadNotificationCount(unreadCount);
+        }
+      } catch (error) {
+        // 静默失败，不影响主界面
+        if (isMounted) {
+          setUnreadNotificationCount(0);
+        }
+      }
+    }
+
+    loadUnreadCount();
+
+    // 当通知模态框关闭时，重新加载未读数量
+    if (!notificationModalOpen) {
+      loadUnreadCount();
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [authVersion, notificationModalOpen]);
+
   // 添加每天0点自动刷新打卡状态的机制
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -365,21 +546,36 @@ function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomePr
     // 乐观：如果本地记录了当天已打卡，则先行置位，避免刷新后短暂可点击
     try {
       if (typeof window !== "undefined") {
-        // 先读取缓存的打卡统计，避免请求期间显示为 0
-        const cached = window.localStorage.getItem(LOCAL_CHECKIN_STATUS_KEY);
-        if (cached && isMounted) {
-          try {
-            const parsed = JSON.parse(cached) as CheckInStatus;
-            if (parsed && typeof parsed.total_checkins === "number") {
-              setCheckInStatus(parsed);
+        const today = getTodayIso();
+        const localLastCheckinDate = window.localStorage.getItem(LOCAL_LAST_CHECKIN_KEY);
+        
+        // 检查本地存储的打卡日期是否是今天，如果不是，清除缓存
+        const isCacheValid = localLastCheckinDate === today;
+        
+        if (!isCacheValid) {
+          // 如果缓存日期不是今天，清除相关缓存
+          window.localStorage.removeItem(LOCAL_LAST_CHECKIN_KEY);
+          window.localStorage.removeItem(LOCAL_CHECKIN_STATUS_KEY);
+        } else {
+          // 先读取缓存的打卡统计，避免请求期间显示为 0
+          const cached = window.localStorage.getItem(LOCAL_CHECKIN_STATUS_KEY);
+          if (cached && isMounted) {
+            try {
+              const parsed = JSON.parse(cached) as CheckInStatus;
+              // 额外检查：如果缓存显示今天已打卡，但本地日期记录不匹配，也清除缓存
+              if (parsed && typeof parsed.total_checkins === "number") {
+                // 如果缓存显示今天已打卡，但日期记录不是今天，清除缓存
+                if (parsed.checked_today && localLastCheckinDate !== today) {
+                  window.localStorage.removeItem(LOCAL_CHECKIN_STATUS_KEY);
+                  window.localStorage.removeItem(LOCAL_LAST_CHECKIN_KEY);
+                } else {
+                  setCheckInStatus(parsed);
+                }
+              }
+            } catch {
+              // ignore bad cache
             }
-          } catch {
-            // ignore bad cache
           }
-        }
-        const local = window.localStorage.getItem(LOCAL_LAST_CHECKIN_KEY);
-        if (local && local === getTodayIso()) {
-          // 不修改累计与连击，仅用于后续渲染时本地判断“今日已打卡”
         }
       }
     } catch {
@@ -472,6 +668,21 @@ function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomePr
   };
 
   const checkedIn = (() => {
+    // 首先检查本地存储的日期是否是今天，如果不是，清除过期缓存
+    try {
+      if (typeof window !== "undefined") {
+        const local = window.localStorage.getItem(LOCAL_LAST_CHECKIN_KEY);
+        const today = getTodayIso();
+        // 如果本地存储的日期不是今天，清除过期缓存
+        if (local && local !== today) {
+          window.localStorage.removeItem(LOCAL_LAST_CHECKIN_KEY);
+          window.localStorage.removeItem(LOCAL_CHECKIN_STATUS_KEY);
+        }
+      }
+    } catch {
+      // ignore storage errors
+    }
+
     const serverChecked = checkInStatus?.checked_today ?? false;
     // 优先使用服务器返回的状态
     if (serverChecked) {
@@ -509,12 +720,47 @@ function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomePr
         title="EchoDraw"
         subtitle="Home"
         className="top-nav--fixed top-nav--flush"
-        trailingActions={[{ icon: "notifications", label: "通知" }]}
+        trailingSlot={
+          <button
+            type="button"
+            className={clsx(
+              "top-nav__action-button",
+              unreadNotificationCount > 0 && "top-nav__action-button--has-badge",
+            )}
+            aria-label="通知"
+            onClick={() => setNotificationModalOpen(true)}
+          >
+            <MaterialIcon name="notifications" className="top-nav__icon" />
+            {unreadNotificationCount > 0 && (
+              <span className="top-nav__badge" aria-hidden="true" />
+            )}
+          </button>
+        }
+      />
+
+      <NotificationModal
+        open={notificationModalOpen}
+        onClose={() => {
+          setNotificationModalOpen(false);
+          // 关闭时刷新未读数量
+          if (hasAuthToken()) {
+            fetchNotifications()
+              .then((notifications) => {
+                const unreadCount = getUnreadNotificationCount(notifications);
+                setUnreadNotificationCount(unreadCount);
+              })
+              .catch(() => {
+                // 静默失败
+              });
+          }
+        }}
       />
 
       <main className="home-screen__content">
         <header className="home-screen__header">
-          <h1 className="home-screen__title">欢迎回来，创作者</h1>
+          <h1 className="home-screen__title">
+            {userName ? `欢迎回来，${truncateName(userName)}` : "欢迎回来，创作者"}
+          </h1>
           {copy.historyHeadline && (
             <p className="home-screen__subtitle home-screen__subtitle--headline">
               {copy.historyHeadline}
@@ -586,7 +832,7 @@ function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomePr
             >
               <MaterialIcon name="task_alt" className="home-screen__card-icon" />
               <div className="home-screen__card-text">
-                <h2 className="home-screen__card-title">今日目标</h2>
+                <h2 className="home-screen__card-title">测试中心</h2>
                 <p className="home-screen__card-description">心境评估</p>
               </div>
             </button>

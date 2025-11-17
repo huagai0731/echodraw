@@ -68,3 +68,4 @@ WHERE checkpoint_count IS NOT NULL AND checkpoint_count != '';
 -- 注意：这个脚本只修复数据，不修改表结构
 -- 如果表结构本身有问题，需要运行 Django 迁移
 
+

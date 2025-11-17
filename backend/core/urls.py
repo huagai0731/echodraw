@@ -13,6 +13,7 @@ from core.admin_views import (
     HolidayMessageAdminViewSet,
     LongTermPlanCopyAdminViewSet,
     MonthlyReportTemplateAdminViewSet,
+    NotificationAdminViewSet,
     ShortTermTaskPresetAdminViewSet,
     TestAccountCheckInDetailView,
     TestAccountCheckInListCreateView,
@@ -124,6 +125,11 @@ router.register(
     DailyQuizOptionAdminViewSet,
     basename="admin-daily-quiz-options",
 )
+router.register(
+    r"admin/notifications",
+    NotificationAdminViewSet,
+    basename="admin-notifications",
+)
 
 urlpatterns = [
     path("health/", views.health_check, name="health-check"),
@@ -147,6 +153,11 @@ urlpatterns = [
     path("uploads/<int:pk>/", views.UserUploadDetailView.as_view(), name="user-upload-detail"),
     path("uploads/<int:pk>/image/", views.UserUploadImageView.as_view(), name="user-upload-image"),
     path("homepage/messages/", views.homepage_messages, name="homepage-messages"),
+    path("notifications/", views.notifications_list, name="notifications-list"),
+    path("notifications/<int:notification_id>/", views.notification_detail, name="notification-detail"),
+    path("high-five/count/", views.high_five_count, name="high-five-count"),
+    path("high-five/increment/", views.high_five_increment, name="high-five-increment"),
+    path("high-five/has-clicked/", views.high_five_has_clicked, name="high-five-has-clicked"),
     path("goals/calendar/", views.goals_calendar, name="goals-calendar"),
     path("goals/check-in/", views.check_in, name="goals-check-in"),
     path(

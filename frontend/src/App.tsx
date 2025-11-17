@@ -7,6 +7,7 @@ import AchievementsPage from "@/admin/pages/Achievements";
 import AchievementGroupsPage from "@/admin/pages/AchievementGroups";
 import HomeContentPage from "@/admin/pages/HomeContent";
 import MonthlyReportTemplatesPage from "@/admin/pages/MonthlyReportTemplates";
+import NotificationsPage from "@/admin/pages/Notifications";
 import TestAccountsPage from "@/admin/pages/TestAccounts";
 import TestAccountDetailPage from "@/admin/pages/TestAccountDetail";
 import ShortTermTaskPresetsPage from "@/admin/pages/ShortTermTaskPresets";
@@ -22,6 +23,7 @@ function App() {
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<Navigate to="home-content" replace />} />
           <Route path="home-content" element={<HomeContentPage />} />
+          <Route path="notifications" element={<NotificationsPage />} />
           <Route path="monthly-report-templates" element={<MonthlyReportTemplatesPage />} />
           <Route path="achievement-groups" element={<AchievementGroupsPage />} />
           <Route path="achievements" element={<AchievementsPage />} />

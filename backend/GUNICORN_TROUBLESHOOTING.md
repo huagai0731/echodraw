@@ -250,3 +250,4 @@ WorkingDirectory=/path/to/echo/backend
 3. 检查系统日志：`journalctl -u your-service-name -n 50`
 4. 检查 Django 日志：`tail -f backend/logs/django.log`
 
+

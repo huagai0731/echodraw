@@ -11,10 +11,13 @@ import {
   fetchCheckInStatus,
   fetchProfilePreferences,
   fetchUserUploads,
+  hasAuthToken,
   setAuthToken,
   updateProfilePreferences,
 } from "@/services/api";
 import TopNav from "@/components/TopNav";
+import { loadFeaturedArtworkIds } from "@/services/featuredArtworks";
+import type { Artwork } from "@/pages/Gallery";
 
 import "./Profile.css";
 import "./ProfileDashboard.css";
@@ -138,6 +141,7 @@ type ProfileProps = {
   pinnedAchievements?: PinnedAchievement[];
   recentAchievements?: RecentAchievement[];
   forcedLogoutVersion?: number;
+  artworks?: Artwork[];
 };
 
 function Profile({
@@ -145,6 +149,7 @@ function Profile({
   pinnedAchievements = [],
   recentAchievements = [],
   forcedLogoutVersion = 0,
+  artworks = [],
 }: ProfileProps) {
   const initialAuth = useMemo(getInitialAuth, []);
   const [auth, setAuth] = useState<AuthPayload | null>(initialAuth);
@@ -199,6 +204,8 @@ function Profile({
   }, [forcedLogoutVersion, handledForcedLogoutVersion, auth]);
 
   const handleAuthSuccess = useCallback((payload: AuthPayload) => {
+    // 立即设置 token，确保数据加载时 token 已经可用
+    setAuthToken(payload.token);
     setAuth(payload);
     setCachedEmail(payload.user.email);
     setView("dashboard");
@@ -429,6 +436,7 @@ function Profile({
         recentAchievements={recentAchievements}
         membershipTier={membershipTier}
         onOpenMembership={() => setView("membership-options")}
+        artworks={artworks}
       />
     );
   }
@@ -452,6 +460,7 @@ type ProfileDashboardProps = {
   recentAchievements: RecentAchievement[];
   membershipTier: MembershipTier;
   onOpenMembership: () => void;
+  artworks: Artwork[];
 };
 
 function ProfileDashboard({
@@ -465,14 +474,15 @@ function ProfileDashboard({
   recentAchievements,
   membershipTier,
   onOpenMembership,
+  artworks,
 }: ProfileDashboardProps) {
   const effectiveName = displayName.trim() || formatName(email);
   const effectiveSignature = signature.trim() || DEFAULT_SIGNATURE;
   const membershipLabels: Record<MembershipTier, string> = {
-    pending: "待开通",
-    basic: "基础版",
-    premium: "高级版",
-    premiumQuarter: "季度高级版",
+    pending: "加入EchoDraw",
+    basic: "Lite",
+    premium: "Plus",
+    premiumQuarter: "Plus",
   };
   const currentMembershipLabel = membershipLabels[membershipTier] ?? membershipLabels.pending;
   const [stats, setStats] = useState({
@@ -486,6 +496,12 @@ function ProfileDashboard({
     let cancelled = false;
 
     const loadStats = async () => {
+      // 确保 token 已设置后再加载数据
+      if (!hasAuthToken()) {
+        setIsStatsLoading(false);
+        return;
+      }
+
       setIsStatsLoading(true);
 
       try {
@@ -554,6 +570,29 @@ function ProfileDashboard({
   const totalUploadsDisplay = isStatsLoading ? "--" : String(stats.totalUploads);
   const totalDurationDisplay = isStatsLoading ? "--" : formatTotalDuration(stats.totalDurationMinutes);
 
+  // 加载用户选择的"作品"
+  const [featuredArtworks, setFeaturedArtworks] = useState<Artwork[]>([]);
+
+  useEffect(() => {
+    const featuredIds = loadFeaturedArtworkIds();
+    const featured = artworks.filter((art) => featuredIds.includes(art.id));
+    setFeaturedArtworks(featured);
+  }, [artworks]);
+
+  // 监听"作品"变化事件
+  useEffect(() => {
+    const handleFeaturedChanged = () => {
+      const featuredIds = loadFeaturedArtworkIds();
+      const featured = artworks.filter((art) => featuredIds.includes(art.id));
+      setFeaturedArtworks(featured);
+    };
+
+    window.addEventListener("echodraw-featured-artworks-changed", handleFeaturedChanged);
+    return () => {
+      window.removeEventListener("echodraw-featured-artworks-changed", handleFeaturedChanged);
+    };
+  }, [artworks]);
+
   return (
     <div className="profile-page">
       <div className="profile-page__bg">
@@ -574,7 +613,6 @@ function ProfileDashboard({
             className={clsx("profile-membership-trigger", `profile-membership-trigger--${membershipTier}`)}
             onClick={onOpenMembership}
           >
-            <span className="profile-membership-trigger__dot" />
             <span className="profile-membership-trigger__label">{currentMembershipLabel}</span>
           </button>
         }
@@ -620,15 +658,27 @@ function ProfileDashboard({
 
         <section className="profile-page__gallery">
           <header>
-            <h2>精选作品</h2>
+            <h2>作品</h2>
           </header>
-          <div className="profile-page__gallery-track">
-            {ARTWORKS.map((art) => (
-              <div key={art} className="profile-page__gallery-item">
-                <img src={art} alt="作品" />
+          {featuredArtworks.length > 0 ? (
+            <div className="profile-page__gallery-track">
+              {featuredArtworks.map((art) => (
+                <div key={art.id} className="profile-page__gallery-item">
+                  <img src={art.imageSrc} alt={art.alt || art.title} />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="profile-page__gallery-placeholder">
+              <div className="profile-page__gallery-placeholder-content">
+                <span className="profile-page__gallery-placeholder-icon">--</span>
+                <div>
+                  <h3>尚未设置作品</h3>
+                  <p>可以前往画集页面设置图片展示在这里</p>
+                </div>
               </div>
-            ))}
-          </div>
+            </div>
+          )}
         </section>
 
         <section className="profile-page__achievements">
@@ -702,13 +752,6 @@ function formatTotalDuration(minutesTotal: number) {
   }
   return `${minutes}m`;
 }
-
-const ARTWORKS = [
-  "https://lh3.googleusercontent.com/aida-public/AB6AXuB1I_zpwlGFUabfTrtmJuEN3el3jPlQFaOA7dIYYaODa6G6pi5lONSlpD4MNBPFHymDfca5k-InKeQWj0Rn73HTuLwM1zET6Q0WXtgNatasTjtxHudIfbjKq0jf8TKt0YPaSblFakfInAPPhyg8vmd_DdRroOM8ADfb92mwQM3gzAdiNFpMsCHAnPh0405EzDWJjKP4dXCswgTSfA1Zs5ayMniupRYBSCF6coT0czzj1lV1GCcI-esNiVXBYx5NHN0KkDnWxycF8Xa2",
-  "https://lh3.googleusercontent.com/aida-public/AB6AXuA6pP3F7cEEh_vF3PkWgYp1_pfj0dWjkuJmvV1vqXwrOMqeKiifA36_8QOU09MbnAj5x-osnYVrrJ537mSLSnPP4pjnl5ixLGPwk_o8WQ3E40ZHEiJWLta7AwKcWvZbLixAms6a3jrrCJnE9loniS6x5DhDtdOAUq1qbHe-mEK70CwUxl3jAXRwyNB2WNSC6IbBo95aZeGs1i40QsI3KLxinFuHS7bNfyVAy5nQawdkRAvB9FICP2RG8w7q92Esn_Q_VeUPaK5eqecU",
-  "https://lh3.googleusercontent.com/aida-public/AB6AXuCzg1O0iZTNCwklEeh6uBTIC2LdARLfPihLmWJhxkdzqMd3mZjJLLNHv98vxIBGkVVggWzpxygb4MYFW8CcJuA3MT67uAm_8wV1bu0awERw2n0sWfIuI-LLnYK4YWlUl_HH7iqdxvH9Bjfzm4sHDL5laCWJ5nJtybjRM_UcwJiArATLs1XC7lcDWqkEg3XzyTgE8DY3vA1Wid0OQf7BZ3jz5YDRBv2aYd8BByGctVGIWyTh4spxfwj4uH_W8PaJXGN31KF4xbwjzHtG",
-  "https://lh3.googleusercontent.com/aida-public/AB6AXuB1I_zpwlGFUabfTrtmJuEN3el3jPlQFaOA7dIYYaODa6G6pi5lONSlpD4MNBPFHymDfca5k-InKeQWj0Rn73HTuLwM1zET6Q0WXtgNatasTjtxHudIfbjKq0jf8TKt0YPaSblFakfInAPPhyg8vmd_DdRroOM8ADfb92mwQM3gzAdiNFpMsCHAnPh0405EzDWJjKP4dXCswgTSfA1Zs5ayMniupRYBSCF6coT0czzj1lV1GCcI-esNiVXBYx5NHN0KkDnWxycF8Xa2",
-];
 
 export default Profile;
 

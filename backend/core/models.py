@@ -155,6 +155,12 @@ class UserProfile(models.Model):
         blank=True,
         help_text="个人签名或座右铭。",
     )
+    registration_number = models.PositiveIntegerField(
+        unique=True,
+        null=True,
+        blank=True,
+        help_text="用户注册编号，从1开始递增。",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -1674,3 +1680,152 @@ class MonthlyReportTemplate(models.Model):
             text = text.replace("{trend}", trend)
         
         return text
+
+
+class Notification(models.Model):
+    """
+    系统通知：管理员可以创建并推送通知给所有用户。
+    """
+    title = models.CharField(
+        max_length=256,
+        help_text="通知标题。",
+    )
+    summary = models.CharField(
+        max_length=512,
+        help_text="通知摘要，显示在通知列表中。",
+    )
+    content = models.TextField(
+        help_text="通知正文，显示在通知详情页。",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="是否启用此通知。",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["-created_at"]),
+            models.Index(fields=["is_active", "-created_at"]),
+        ]
+        verbose_name = "系统通知"
+        verbose_name_plural = "系统通知"
+
+    def __str__(self) -> str:
+        return self.title
+
+
+class HighFiveCounter(models.Model):
+    """击掌按钮点击计数器（单例模式）"""
+    count = models.PositiveIntegerField(default=0, verbose_name="点击总数")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+
+    class Meta:
+        verbose_name = "击掌计数器"
+        verbose_name_plural = "击掌计数器"
+
+    def __str__(self) -> str:
+        return f"击掌计数: {self.count}"
+
+    @classmethod
+    def get_or_create_singleton(cls):
+        """获取或创建单例实例"""
+        obj, created = cls.objects.get_or_create(pk=1)
+        return obj
+
+    @classmethod
+    def increment(cls, user=None, session_key=None):
+        """增加计数（每个用户只能点击一次）"""
+        # 延迟导入避免循环引用
+        from core.models import HighFiveClick
+        
+        # 检查用户是否已经点击过
+        if user and user.is_authenticated:
+            # 已登录用户：检查是否已点击
+            if HighFiveClick.objects.filter(user=user).exists():
+                counter = cls.get_or_create_singleton()
+                return counter.count, False  # 返回当前计数和是否成功
+        elif session_key:
+            # 未登录用户：使用session_key检查
+            if HighFiveClick.objects.filter(session_key=session_key).exists():
+                counter = cls.get_or_create_singleton()
+                return counter.count, False
+        
+        # 如果用户未点击过，增加计数并记录
+        counter = cls.get_or_create_singleton()
+        counter.count += 1
+        counter.save(update_fields=["count", "updated_at"])
+        
+        # 记录点击
+        HighFiveClick.objects.create(
+            user=user if user and user.is_authenticated else None,
+            session_key=session_key if not (user and user.is_authenticated) else None,
+        )
+        
+        return counter.count, True
+
+    @classmethod
+    def get_count(cls):
+        """获取当前计数"""
+        counter = cls.get_or_create_singleton()
+        return counter.count
+
+    @classmethod
+    def has_clicked(cls, user=None, session_key=None):
+        """检查用户是否已经点击过"""
+        # 延迟导入避免循环引用
+        from core.models import HighFiveClick
+        
+        if user and user.is_authenticated:
+            return HighFiveClick.objects.filter(user=user).exists()
+        elif session_key:
+            return HighFiveClick.objects.filter(session_key=session_key).exists()
+        return False
+
+
+class HighFiveClick(models.Model):
+    """击掌点击记录（防止重复点击）"""
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="high_five_clicks",
+        verbose_name="用户",
+    )
+    session_key = models.CharField(
+        max_length=40,
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name="Session Key（未登录用户）",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="点击时间")
+
+    class Meta:
+        verbose_name = "击掌点击记录"
+        verbose_name_plural = "击掌点击记录"
+        indexes = [
+            models.Index(fields=["user"]),
+            models.Index(fields=["session_key"]),
+        ]
+        # 确保每个用户或session只能有一条记录
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user"],
+                condition=models.Q(user__isnull=False),
+                name="unique_user_high_five",
+            ),
+            models.UniqueConstraint(
+                fields=["session_key"],
+                condition=models.Q(session_key__isnull=False),
+                name="unique_session_high_five",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        if self.user:
+            return f"{self.user.email} - {self.created_at}"
+        return f"Session {self.session_key} - {self.created_at}"

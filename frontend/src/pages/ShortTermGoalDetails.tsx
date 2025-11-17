@@ -4,6 +4,7 @@ import MaterialIcon from "@/components/MaterialIcon";
 import type { ShortTermGoal, ShortTermGoalTask, UserUploadRecord } from "@/services/api";
 import { deleteShortTermGoal, fetchUserUploads, submitCheckIn } from "@/services/api";
 import { formatDateKey } from "@/services/artworkStorage";
+import { replaceLocalhostInUrl } from "@/utils/urlUtils";
 
 import "./ShortTermGoalDetails.css";
 
@@ -178,6 +179,7 @@ function ShortTermGoalDetails({
     }
   });
   const [recentUploads, setRecentUploads] = useState<UserUploadRecord[]>([]);
+  const [allUploads, setAllUploads] = useState<UserUploadRecord[]>([]);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [viewingImage, setViewingImage] = useState<UserUploadRecord | null>(null);
   const [loadingUploads, setLoadingUploads] = useState(false);
@@ -185,6 +187,10 @@ function ShortTermGoalDetails({
   const [showMoreOptions, setShowMoreOptions] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewText, setReviewText] = useState("");
+  const [pendingCompleteDay, setPendingCompleteDay] = useState<DayEntry | null>(null);
+  const [animatingDay, setAnimatingDay] = useState<string | null>(null);
   
   // 在组件挂载时验证 localStorage
   useEffect(() => {
@@ -203,10 +209,11 @@ function ShortTermGoalDetails({
     fetchUserUploads()
       .then((uploads) => {
         if (!cancelled) {
-          const recent = uploads
-            .sort((a, b) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime())
-            .slice(0, 16);
+          const sorted = uploads
+            .sort((a, b) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime());
+          const recent = sorted.slice(0, 16);
           setRecentUploads(recent);
+          setAllUploads(sorted);
 
           // 从 localStorage 恢复任务图片关联
           // key格式：dateKey-taskId
@@ -352,15 +359,20 @@ function ShortTermGoalDetails({
     setViewingImage(upload);
   }, []);
 
-  const handleCompleteToday = useCallback(async (day: DayEntry) => {
-    console.log("[ShortTermGoalDetails] handleCompleteToday called", { day: day.dateKey, completingDay });
-    
-    if (completingDay === day.dateKey) {
-      console.log("[ShortTermGoalDetails] Already completing, returning");
+  const handleCompleteTodayClick = useCallback((day: DayEntry) => {
+    // 先显示评价弹窗
+    setPendingCompleteDay(day);
+    setReviewText("");
+    setShowReviewModal(true);
+  }, []);
+
+  const handleReviewSave = useCallback(async () => {
+    if (!pendingCompleteDay) {
       return;
     }
 
-    console.log("[ShortTermGoalDetails] Setting completingDay to", day.dateKey);
+    const day = pendingCompleteDay;
+    setShowReviewModal(false);
     setCompletingDay(day.dateKey);
     
     try {
@@ -369,6 +381,7 @@ function ShortTermGoalDetails({
       if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
         console.error("[ShortTermGoalDetails] Invalid date format:", dateKey);
         setCompletingDay(null);
+        setPendingCompleteDay(null);
         return;
       }
 
@@ -397,6 +410,17 @@ function ShortTermGoalDetails({
         });
       }
 
+      // 保存评价到 localStorage（如果后端不支持，先保存在本地）
+      if (reviewText.trim()) {
+        try {
+          const reviewKey = `short-term-goal-${goal.id}-review-${dateKey}`;
+          localStorage.setItem(reviewKey, reviewText.trim());
+          console.log("[ShortTermGoalDetails] Saved review", { dateKey, review: reviewText.trim() });
+        } catch (error) {
+          console.warn("[ShortTermGoalDetails] Failed to save review", error);
+        }
+      }
+
       console.log("[ShortTermGoalDetails] Submitting check-in", { date: dateKey, source: "short-term-goal" });
       const result = await submitCheckIn({ date: dateKey, source: "short-term-goal" });
       console.log("[ShortTermGoalDetails] Check-in successful", result);
@@ -409,13 +433,22 @@ function ShortTermGoalDetails({
         return next;
       });
       
+      // 触发动画
+      setAnimatingDay(day.dateKey);
+      
       // 通知父组件刷新打卡记录
       if (onComplete) {
         onComplete(day.dateKey);
       }
       
-      setCompletingDay(null);
-      console.log("[ShortTermGoalDetails] Completed successfully");
+      // 动画结束后清理状态
+      setTimeout(() => {
+        setAnimatingDay(null);
+        setCompletingDay(null);
+        setPendingCompleteDay(null);
+        setReviewText("");
+        console.log("[ShortTermGoalDetails] Completed successfully");
+      }, 2000); // 动画持续2秒
     } catch (error) {
       console.error("[ShortTermGoalDetails] Failed to complete today", error);
       // 如果是AxiosError，尝试获取详细的错误信息
@@ -427,8 +460,16 @@ function ShortTermGoalDetails({
         }
       }
       setCompletingDay(null);
+      setPendingCompleteDay(null);
+      setAnimatingDay(null);
     }
-  }, [completingDay, taskImages, saveTaskImages, onComplete]);
+  }, [pendingCompleteDay, reviewText, taskImages, saveTaskImages, onComplete, goal.id]);
+
+  const handleReviewCancel = useCallback(() => {
+    setShowReviewModal(false);
+    setPendingCompleteDay(null);
+    setReviewText("");
+  }, []);
 
   const handleCloseImageModal = useCallback(() => {
     setViewingImage(null);
@@ -488,6 +529,38 @@ function ShortTermGoalDetails({
     }
   }, [deleting, goal.id, onClose, onDeleted]);
 
+  // 获取完成时间
+  const getCompletionTime = useCallback((dateKey: string): string | null => {
+    // 从 allUploads 中找到对应日期的上传记录（使用最早的那条，因为可能有多条）
+    const uploadsForDate = allUploads.filter((u) => {
+      if (!u.uploaded_at) return false;
+      const uploadDate = new Date(u.uploaded_at);
+      const uploadDateKey = formatDateKey(uploadDate);
+      return uploadDateKey === dateKey;
+    });
+    
+    if (uploadsForDate.length === 0) return null;
+    
+    // 使用最早的上传记录作为完成时间
+    const upload = uploadsForDate.sort((a, b) => 
+      new Date(a.uploaded_at).getTime() - new Date(b.uploaded_at).getTime()
+    )[0];
+    
+    if (!upload?.uploaded_at) return null;
+    
+    try {
+      const date = new Date(upload.uploaded_at);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      const hours = String(date.getHours()).padStart(2, "0");
+      const minutes = String(date.getMinutes()).padStart(2, "0");
+      return `${year}-${month}-${day} ${hours}:${minutes}`;
+    } catch {
+      return null;
+    }
+  }, [allUploads]);
+
   return (
     <div className="short-term-details">
       <div className="short-term-details__background">
@@ -534,13 +607,24 @@ function ShortTermGoalDetails({
         </section>
 
         <section className="short-term-details__days">
-          {snapshot.days.map((day) => {
+          {snapshot.days.map((day, dayIndex) => {
             const isActive = day.status === "active";
             const isCompleted = day.status === "completed";
+            const isUpcoming = day.status === "upcoming";
+            // 检查前一天是否已完成
+            const prevDay = dayIndex > 0 ? snapshot.days[dayIndex - 1] : null;
+            const prevDayCompleted = prevDay?.hasUpload ?? false;
+            // 判断是否应该显示"明日启动！"
+            const shouldShowTomorrow = isUpcoming && prevDayCompleted;
+            // 获取完成时间
+            const completionTime = isCompleted ? getCompletionTime(day.dateKey) : null;
+            
             return (
               <details
                 key={day.dayNumber}
-                className={`short-term-details__day short-term-details__day--${day.status}`}
+                className={`short-term-details__day short-term-details__day--${day.status} ${
+                  animatingDay === day.dateKey ? "short-term-details__day--animating" : ""
+                }`}
                 open={isActive}
               >
                 <summary>
@@ -550,6 +634,9 @@ function ShortTermGoalDetails({
                         第 {day.dayNumber} 天
                       </span>
                       <span className="short-term-details__day-title">{day.summary}</span>
+                      {completionTime ? (
+                        <span className="short-term-details__day-completion-time">{completionTime}</span>
+                      ) : null}
                     </p>
                     <div className="short-term-details__day-actions">
                       {isCompleted ? (
@@ -613,16 +700,18 @@ function ShortTermGoalDetails({
                   </div>
                 )}
 
-                {isActive ? (
+                {(isActive || shouldShowTomorrow) ? (
                   <button
                     type="button"
                     className={`short-term-details__complete-button ${
+                      !shouldShowTomorrow &&
                       day.tasks.length > 0 &&
                       day.tasks.every((task) => taskImages[`${day.dateKey}-${task.taskId}`])
                         ? "short-term-details__complete-button--enabled"
                         : ""
                     }`}
                     disabled={
+                      shouldShowTomorrow ||
                       !day.tasks.every((task) => taskImages[`${day.dateKey}-${task.taskId}`]) ||
                       day.tasks.length === 0 ||
                       completingDay === day.dateKey ||
@@ -631,6 +720,11 @@ function ShortTermGoalDetails({
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
+                      
+                      // 如果是"明日启动！"状态，不应该执行
+                      if (shouldShowTomorrow) {
+                        return;
+                      }
                       
                       console.log("[ShortTermGoalDetails] Button clicked", {
                         day: day.dateKey,
@@ -655,21 +749,21 @@ function ShortTermGoalDetails({
                         return;
                       }
                       
-                      console.log("[ShortTermGoalDetails] Calling handleCompleteToday");
-                      handleCompleteToday(day).catch((err) => {
-                        console.error("[ShortTermGoalDetails] Unhandled error in handleCompleteToday", err);
-                      });
+                      console.log("[ShortTermGoalDetails] Calling handleCompleteTodayClick");
+                      handleCompleteTodayClick(day);
                     }}
                     onMouseDown={(e) => {
                       // 防止 mousedown 事件触发 details 的切换
                       e.stopPropagation();
                     }}
                   >
-                    {completingDay === day.dateKey
-                      ? "标记中..."
-                      : day.hasUpload
-                        ? "今日已完成"
-                        : "完成今日目标"}
+                    {shouldShowTomorrow
+                      ? "明日启动！"
+                      : completingDay === day.dateKey
+                        ? "标记中..."
+                        : day.hasUpload
+                          ? "今日已完成"
+                          : "完成今日目标"}
                   </button>
                 ) : null}
               </details>
@@ -716,7 +810,7 @@ function ShortTermGoalDetails({
                     onClick={() => handleImageSelect(upload)}
                   >
                     {upload.image ? (
-                      <img src={upload.image} alt={upload.title || "作品"} />
+                      <img src={replaceLocalhostInUrl(upload.image)} alt={upload.title || "作品"} />
                     ) : (
                       <div className="short-term-details__image-placeholder">无图片</div>
                     )}
@@ -740,7 +834,7 @@ function ShortTermGoalDetails({
               <MaterialIcon name="close" />
             </button>
             {viewingImage.image ? (
-              <img src={viewingImage.image} alt={viewingImage.title || "作品"} />
+              <img src={replaceLocalhostInUrl(viewingImage.image)} alt={viewingImage.title || "作品"} />
             ) : (
               <div className="short-term-details__image-empty">无图片</div>
             )}
@@ -807,6 +901,55 @@ function ShortTermGoalDetails({
               >
                 {deleting ? "删除中..." : "确认"}
               </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* 评价弹窗 */}
+      {showReviewModal ? (
+        <div className="short-term-details__modal-overlay" onClick={handleReviewCancel}>
+          <div className="short-term-details__review-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="short-term-details__modal-header">
+              <h2>完成今日目标</h2>
+              <button
+                type="button"
+                className="short-term-details__modal-close"
+                onClick={handleReviewCancel}
+                aria-label="关闭"
+              >
+                <MaterialIcon name="close" />
+              </button>
+            </div>
+            <div className="short-term-details__review-content">
+              <p className="short-term-details__review-prompt">
+                为今天的练习留一句话或评价吧（可选）
+              </p>
+              <textarea
+                className="short-term-details__review-textarea"
+                placeholder="今天有什么想说的吗？"
+                value={reviewText}
+                onChange={(e) => setReviewText(e.target.value)}
+                rows={4}
+                maxLength={200}
+              />
+              <div className="short-term-details__review-actions">
+                <button
+                  type="button"
+                  className="short-term-details__review-button short-term-details__review-button--cancel"
+                  onClick={handleReviewCancel}
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  className="short-term-details__review-button short-term-details__review-button--save"
+                  onClick={handleReviewSave}
+                  disabled={completingDay === pendingCompleteDay?.dateKey}
+                >
+                  {completingDay === pendingCompleteDay?.dateKey ? "保存中..." : "保存"}
+                </button>
+              </div>
             </div>
           </div>
         </div>

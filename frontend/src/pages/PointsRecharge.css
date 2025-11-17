@@ -26,18 +26,21 @@
   flex-direction: column;
   height: 100%;
   min-height: 100svh;
+  max-height: 100svh;
+  overflow-y: auto;
 }
 
 
 .points-recharge__headline {
-  padding: 2rem 1.5rem 1.5rem;
-  padding-top: calc(var(--top-nav-height, 64px) + 2rem);
+  padding: 1.5rem 1.5rem 1rem;
+  padding-top: calc(var(--top-nav-height, 64px) + 1rem);
+  flex-shrink: 0;
 }
 
 .points-recharge__headline-title {
   margin: 0;
-  margin-bottom: 0.75rem;
-  font-size: 1.75rem;
+  margin-bottom: 0.5rem;
+  font-size: 1.5rem;
   font-weight: 400;
   line-height: 1.4;
   text-align: left;
@@ -47,7 +50,7 @@
 
 .points-recharge__headline-subtitle {
   margin: 0;
-  font-size: 1rem;
+  font-size: 0.9rem;
   font-weight: 300;
   line-height: 1.5;
   color: #efeae7;
@@ -56,22 +59,23 @@
 .points-recharge__pricing {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  padding: 0.75rem 1.5rem;
+  gap: 0.75rem;
+  padding: 0.5rem 1.5rem 1rem;
+  flex-shrink: 0;
 }
 
 .points-recharge__pricing-card {
   display: flex;
-  flex: 1;
   flex-direction: column;
-  gap: 1rem;
-  padding: 1.5rem;
+  gap: 0.75rem;
+  padding: 1rem;
   border-radius: 0.5rem;
   border: 1px solid rgba(74, 63, 74, 0.5);
   background: rgba(74, 63, 74, 0.3);
   backdrop-filter: blur(12px);
   transition: all 0.3s ease;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .points-recharge__pricing-card:hover {
@@ -92,7 +96,7 @@
 
 .points-recharge__pricing-points {
   margin: 0;
-  font-size: 1.125rem;
+  font-size: 1rem;
   font-weight: 400;
   line-height: 1.4;
   color: #efeae7;
@@ -103,7 +107,7 @@
   align-items: baseline;
   gap: 0.25rem;
   margin: 0;
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   font-weight: 700;
   line-height: 1.4;
   letter-spacing: -0.033em;
@@ -118,13 +122,14 @@
 }
 
 .points-recharge__payment-section {
-  padding: 2rem 1.5rem 0.5rem;
+  padding: 1rem 1.5rem;
+  flex-shrink: 0;
 }
 
 .points-recharge__payment-title {
   margin: 0;
-  margin-bottom: 0.5rem;
-  font-size: 1.125rem;
+  margin-bottom: 0.75rem;
+  font-size: 1rem;
   font-weight: 400;
   line-height: 1.4;
   letter-spacing: -0.015em;
@@ -134,8 +139,8 @@
 .points-recharge__payment-methods {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 1rem;
-  padding: 0.75rem 0;
+  gap: 0.75rem;
+  padding: 0;
 }
 
 .points-recharge__payment-method {
@@ -143,14 +148,15 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  padding: 1rem;
+  gap: 0;
+  padding: 0.875rem;
   border-radius: 0.5rem;
   border: 1px solid transparent;
   background: rgba(74, 63, 74, 0.3);
   backdrop-filter: blur(4px);
   transition: all 0.3s ease;
   cursor: pointer;
+  min-height: 48px;
 }
 
 .points-recharge__payment-method:hover {
@@ -162,20 +168,16 @@
   border-color: #98dbc6;
 }
 
-.points-recharge__payment-icon {
-  width: 2rem;
-  height: 2rem;
-  object-fit: contain;
-}
-
 .points-recharge__payment-name {
   font-size: 0.875rem;
-  font-weight: 300;
+  font-weight: 400;
   color: #efeae7;
+  text-align: center;
 }
 
 .points-recharge__spacer-grow {
   flex-grow: 1;
+  min-height: 0;
 }
 
 .points-recharge__footer {
@@ -183,8 +185,9 @@
   bottom: 0;
   width: 100%;
   background: linear-gradient(to top, #221b1b 0%, rgba(34, 27, 27, 0.8) 50%, transparent 100%);
-  padding: 1.5rem;
-  padding-top: 1rem;
+  padding: 1rem 1.5rem;
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  flex-shrink: 0;
 }
 
 .points-recharge__pay-button {
@@ -192,7 +195,7 @@
   width: 100%;
   min-width: 84px;
   max-width: 100%;
-  height: 3.5rem;
+  height: 3rem;
   align-items: center;
   justify-content: center;
   padding: 0 1rem;
@@ -200,7 +203,7 @@
   background: #98dbc6;
   border: none;
   cursor: pointer;
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 700;
   line-height: 1.5;
   letter-spacing: 0.015em;

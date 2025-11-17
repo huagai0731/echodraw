@@ -26,6 +26,7 @@ from core.models import (
     LongTermGoal,
     LongTermPlanCopy,
     MonthlyReportTemplate,
+    Notification,
     ShortTermGoal,
     ShortTermTaskPreset,
     TestAccountProfile,
@@ -1780,4 +1781,33 @@ class DailyQuizSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["created_at", "updated_at"]
+
+
+class NotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notification
+        fields = [
+            "id",
+            "title",
+            "summary",
+            "content",
+            "is_active",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class NotificationPublicSerializer(serializers.ModelSerializer):
+    """用户端使用的通知序列化器，不包含 is_active 字段"""
+    class Meta:
+        model = Notification
+        fields = [
+            "id",
+            "title",
+            "summary",
+            "content",
+            "created_at",
+        ]
+        read_only_fields = ["id", "created_at"]
 

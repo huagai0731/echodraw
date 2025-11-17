@@ -113,6 +113,7 @@
 .custom-tag-pill input {
   width: 16px;
   height: 16px;
+  accent-color: #98DBC6;
 }
 
 .custom-tag-pill--muted {

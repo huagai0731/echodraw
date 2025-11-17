@@ -19,6 +19,7 @@ from core.models import (
     HolidayMessage,
     LongTermPlanCopy,
     MonthlyReportTemplate,
+    Notification,
     ShortTermTaskPreset,
     Test,
     TestAccountProfile,
@@ -42,6 +43,7 @@ from core.serializers import (
     HolidayMessageSerializer,
     LongTermPlanCopySerializer,
     MonthlyReportTemplateSerializer,
+    NotificationSerializer,
     ShortTermTaskPresetSerializer,
     TestAccountCheckInSerializer,
     TestAccountSerializer,
@@ -299,7 +301,7 @@ class TestDimensionAdminViewSet(viewsets.ModelViewSet):
 
 
 class TestAdminViewSet(viewsets.ModelViewSet):
-    queryset = Test.objects.prefetch_related("dimensions", "questions__options").all().order_by("display_order", "slug")
+    queryset = Test.objects.prefetch_related("dimensions", "questions__option_texts__options").all().order_by("display_order", "slug")
     serializer_class = TestSerializer
     permission_classes = [IsStaffUser]
     pagination_class = None
@@ -366,4 +368,11 @@ class DailyQuizOptionAdminViewSet(viewsets.ModelViewSet):
     def get_parser_classes(self):
         from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
         return [MultiPartParser, FormParser, JSONParser]
+
+
+class NotificationAdminViewSet(viewsets.ModelViewSet):
+    queryset = Notification.objects.all().order_by("-created_at")
+    serializer_class = NotificationSerializer
+    permission_classes = [IsStaffUser]
+    pagination_class = None
 

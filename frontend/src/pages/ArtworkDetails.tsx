@@ -22,6 +22,7 @@ type ArtworkDetailsProps = {
   onShare?: (artwork: ArtworkDetailsProps["artwork"]) => void;
   onDelete?: (artwork: ArtworkDetailsProps["artwork"]) => void;
   onEdit?: (artwork: ArtworkDetailsProps["artwork"]) => void;
+  onSetAsFeatured?: (artwork: ArtworkDetailsProps["artwork"]) => void;
   onNavigate?: (direction: "prev" | "next") => void;
   hasPrev?: boolean;
   hasNext?: boolean;
@@ -33,6 +34,7 @@ function ArtworkDetails({
   onShare,
   onDelete,
   onEdit,
+  onSetAsFeatured,
   onNavigate,
   hasPrev = false,
   hasNext = false,
@@ -41,6 +43,18 @@ function ArtworkDetails({
   const touchEndX = useRef<number | null>(null);
   const swipeThreshold = 48;
   const [menuOpen, setMenuOpen] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showFeaturedToast, setShowFeaturedToast] = useState(false);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 组件挂载时确保滚动到顶部
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      requestAnimationFrame(() => {
+        window.scrollTo(0, 0);
+      });
+    }
+  }, []);
 
   const handleToggleMenu = useCallback(() => {
     setMenuOpen((prev) => !prev);
@@ -70,6 +84,33 @@ function ArtworkDetails({
       document.removeEventListener("pointerdown", handlePointerDown);
     };
   }, [menuOpen]);
+
+  useEffect(() => {
+    if (!showDeleteConfirm) {
+      return;
+    }
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setShowDeleteConfirm(false);
+      }
+    };
+
+    document.addEventListener("keydown", handleEscape);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", handleEscape);
+      document.body.style.overflow = "";
+    };
+  }, [showDeleteConfirm]);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) {
+        clearTimeout(toastTimerRef.current);
+      }
+    };
+  }, []);
 
   const topNavActions = useMemo<TopNavAction[]>(
     () => [
@@ -133,25 +174,22 @@ function ArtworkDetails({
 
       <div className="artwork-details-screen__topbar">
         <TopNav
-          title={artwork.title}
+          title="画作"
           subtitle="Artwork Details"
           leadingAction={{ icon: "arrow_back", label: "返回", onClick: onBack }}
           trailingActions={topNavActions}
           className="top-nav--fixed top-nav--flush"
         />
+        {showFeaturedToast ? (
+          <div className="artwork-featured-toast">
+            <div className="artwork-featured-toast__content">
+              <MaterialIcon name="star" className="artwork-featured-toast__icon" filled />
+              <span className="artwork-featured-toast__text">"{artwork.title}" 已设置为作品，将在个人页面展示</span>
+            </div>
+          </div>
+        ) : null}
         {menuOpen ? (
           <div className="artwork-details-menu" role="menu">
-            <button
-              type="button"
-              className="artwork-details-menu__item"
-              onClick={() => {
-                setMenuOpen(false);
-                onDelete?.(artwork);
-              }}
-            >
-              <MaterialIcon name="delete" className="artwork-details-menu__icon artwork-details-menu__icon--danger" />
-              删除此作
-            </button>
             <button
               type="button"
               className="artwork-details-menu__item"
@@ -162,6 +200,37 @@ function ArtworkDetails({
             >
               <MaterialIcon name="edit" className="artwork-details-menu__icon" />
               编辑
+            </button>
+            <button
+              type="button"
+              className="artwork-details-menu__item"
+              onClick={() => {
+                setMenuOpen(false);
+                onSetAsFeatured?.(artwork);
+                setShowFeaturedToast(true);
+                if (toastTimerRef.current) {
+                  clearTimeout(toastTimerRef.current);
+                }
+                toastTimerRef.current = setTimeout(() => {
+                  setShowFeaturedToast(false);
+                  toastTimerRef.current = null;
+                }, 5000);
+              }}
+            >
+              <MaterialIcon name="star" className="artwork-details-menu__icon" />
+              展示为作品
+            </button>
+            <div className="artwork-details-menu__divider" />
+            <button
+              type="button"
+              className="artwork-details-menu__item"
+              onClick={() => {
+                setMenuOpen(false);
+                setShowDeleteConfirm(true);
+              }}
+            >
+              <MaterialIcon name="delete" className="artwork-details-menu__icon artwork-details-menu__icon--danger" />
+              删除
             </button>
           </div>
         ) : null}
@@ -192,12 +261,8 @@ function ArtworkDetails({
           )}
           
           <div className="artwork-details-screen__title-block">
-            <p className="artwork-details-screen__date">{artwork.date}</p>
             <h1 className="artwork-details-screen__title">{artwork.title}</h1>
-            <div className="artwork-details-screen__duration">
-              <MaterialIcon name="schedule" className="artwork-details-screen__stat-icon" />
-              {artwork.duration}
-            </div>
+            <p className="artwork-details-screen__date">{artwork.date}</p>
           </div>
 
           {hasNext ? (
@@ -253,6 +318,44 @@ function ArtworkDetails({
           </button>
         </div>
       </main>
+
+      {showDeleteConfirm ? (
+        <div className="artwork-delete-confirm-overlay" onClick={() => setShowDeleteConfirm(false)}>
+          <div className="artwork-delete-confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <h2 className="artwork-delete-confirm-title">要删除这幅作品吗？</h2>
+            <div className="artwork-delete-confirm-content">
+              <p className="artwork-delete-confirm-text">
+                删除后，它记录的创作时长会从你的总时长里一并消失。
+              </p>
+              <p className="artwork-delete-confirm-text">
+                很多画在当下看不顺眼，可它们都是你一路积累下来的痕迹。
+              </p>
+              <p className="artwork-delete-confirm-text artwork-delete-confirm-text--highlight">
+                如果不是误传，再考虑一下吗
+              </p>
+            </div>
+            <div className="artwork-delete-confirm-actions">
+              <button
+                type="button"
+                className="artwork-delete-confirm-button artwork-delete-confirm-button--cancel"
+                onClick={() => setShowDeleteConfirm(false)}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="artwork-delete-confirm-button artwork-delete-confirm-button--confirm"
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  onDelete?.(artwork);
+                }}
+              >
+                确认删除
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

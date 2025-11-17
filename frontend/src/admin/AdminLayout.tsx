@@ -14,6 +14,7 @@ type AdminUser = {
 
 const NAV_ITEMS = [
   { to: "home-content", label: "首页文案", description: "历史上的今天、用户行为文案、通用文案" },
+  { to: "notifications", label: "系统通知", description: "创建并推送通知给所有用户" },
   { to: "monthly-report-templates", label: "月报文案模板", description: "管理月报各部分的个性化文案模板" },
   { to: "achievement-groups", label: "成就组", description: "管理成就分组、图标与排序" },
   { to: "achievements", label: "成就系统", description: "配置成就名称、描述与条件" },
