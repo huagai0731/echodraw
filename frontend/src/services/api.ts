@@ -36,6 +36,12 @@ type HttpLikeError = Error & {
   response?: {
     status?: number;
   };
+  config?: {
+    metadata?: {
+      retryCount?: number;
+    };
+    method?: string;
+  };
 };
 
 function createUnauthorizedError(): HttpLikeError {
@@ -241,6 +247,7 @@ export type CheckInStatus = {
 export type CheckInMutationResponse = CheckInStatus & {
   created: boolean;
   checked_date: string;
+  checked_at?: string; // 完成时间（ISO格式）
 };
 
 export type HomeMessagesResponse = {
@@ -355,6 +362,7 @@ type SubmitCheckInOptions = {
   source?: string;
   goal_id?: number;
   task_images?: Record<string, number>; // taskId -> uploadId
+  notes?: string;
 };
 
 export async function submitCheckIn(options: SubmitCheckInOptions = {}) {
@@ -1032,10 +1040,11 @@ api.interceptors.request.use(
   (config) => {
     // 为每个请求添加重试计数
     if (!config.metadata) {
-      config.metadata = {};
+      (config as { metadata?: { retryCount?: number } }).metadata = {};
     }
-    if (config.metadata.retryCount === undefined) {
-      config.metadata.retryCount = 0;
+    const metadata = (config as { metadata?: { retryCount?: number } }).metadata;
+    if (metadata && metadata.retryCount === undefined) {
+      metadata.retryCount = 0;
     }
     return config;
   },
@@ -1060,7 +1069,11 @@ api.interceptors.response.use(
     // 检查是否应该重试（只对幂等方法重试，确保不会重复提交）
     if (originalRequest && shouldRetry(error, originalRequest.metadata?.retryCount || 0, originalRequest.method)) {
       const retryCount = (originalRequest.metadata?.retryCount || 0) + 1;
-      originalRequest.metadata = { ...originalRequest.metadata, retryCount };
+      if (originalRequest.metadata) {
+        originalRequest.metadata.retryCount = retryCount;
+      } else {
+        (originalRequest as { metadata?: { retryCount?: number } }).metadata = { retryCount };
+      }
       
       // 使用指数退避策略，避免重试风暴
       // 对于429错误，使用更长的延迟时间

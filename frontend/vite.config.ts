@@ -46,6 +46,9 @@ export default defineConfig({
         drop_console: true, // 生产环境移除 console
         drop_debugger: true,
       },
+      format: {
+        comments: false, // 移除注释
+      },
     },
     // 启用 CSS 代码分割
     cssCodeSplit: true,

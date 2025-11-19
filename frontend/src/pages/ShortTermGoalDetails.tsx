@@ -303,11 +303,16 @@ function ShortTermGoalDetails({
           // 收集所有有任务完成记录的日期
           const completedDates = new Set<string>();
           
-          // 保存完成时间
-          setCheckInTimes((prev) => ({
-            ...prev,
-            ...checkinTimes,
-          }));
+          // 保存完成时间（确保类型正确）
+          setCheckInTimes((prev) => {
+            const next: Record<string, string> = { ...prev };
+            Object.entries(checkinTimes).forEach(([key, value]) => {
+              if (typeof value === 'string') {
+                next[key] = value;
+              }
+            });
+            return next;
+          });
           
           Object.entries(completions).forEach(([dateKey, tasks]) => {
             // 后端返回的日期键是ISO格式（YYYY-MM-DD），前端生成的dateKey也是相同格式
@@ -325,21 +330,29 @@ function ShortTermGoalDetails({
             }
             
             Object.entries(tasks).forEach(([taskId, completion]) => {
+              // 确保 completion 是 TaskCompletionRecord 类型
+              if (!completion || typeof completion !== 'object' || !('id' in completion)) {
+                return;
+              }
+              
+              // 类型断言，确保 completion 是 TaskCompletionRecord
+              const taskCompletion = completion as import('@/services/api').TaskCompletionRecord;
+              
               // 使用标准化后的日期键（如果与原始不同，也保存原始格式的键）
               const taskKey = normalizedDateKey !== dateKey ? `${normalizedDateKey}-${taskId}` : `${dateKey}-${taskId}`;
               // 构建UserUploadRecord对象
               const uploadRecord: UserUploadRecord = {
-                id: completion.id,
-                title: completion.title,
+                id: taskCompletion.id,
+                title: taskCompletion.title,
                 description: "",
-                uploaded_at: completion.uploaded_at,
+                uploaded_at: taskCompletion.uploaded_at,
                 self_rating: null,
                 mood_label: "",
                 tags: [],
                 duration_minutes: null,
-                image: completion.image,
-                created_at: completion.uploaded_at,
-                updated_at: completion.uploaded_at,
+                image: taskCompletion.image,
+                created_at: taskCompletion.uploaded_at,
+                updated_at: taskCompletion.uploaded_at,
               };
               // 保存到标准化日期键
               loadedTaskImages[taskKey] = uploadRecord;
@@ -488,7 +501,7 @@ function ShortTermGoalDetails({
         }
 
         // 保存完成时间（从服务器返回的时间，如果没有则使用当前时间）
-        const completionTime = result.checked_at || new Date().toISOString();
+        const completionTime = result.checked_at || result.checked_date || new Date().toISOString();
         setCheckInTimes((prev) => ({
           ...prev,
           [checkedDate]: completionTime,

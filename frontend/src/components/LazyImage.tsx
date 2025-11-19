@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, ImgHTMLAttributes } from "react";
+import { useState, useEffect, useRef, type ImgHTMLAttributes } from "react";
 
 interface LazyImageProps extends ImgHTMLAttributes<HTMLImageElement> {
   src: string;
@@ -20,7 +20,6 @@ export default function LazyImage({
 }: LazyImageProps) {
   const [imageSrc, setImageSrc] = useState<string>(placeholder);
   const [isLoaded, setIsLoaded] = useState(false);
-  const [hasError, setHasError] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
 
   useEffect(() => {
@@ -65,7 +64,6 @@ export default function LazyImage({
   };
 
   const handleError = () => {
-    setHasError(true);
     setIsLoaded(false);
   };
 
