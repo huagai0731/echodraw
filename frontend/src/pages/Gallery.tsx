@@ -724,7 +724,7 @@ function Gallery({ artworks, onOpenUpload, onDeleteArtwork, onEditArtwork, onSet
             
             // 如果总数超过最大渲染数，调整可见范围到底部
             if (sortedArtworks.length > MAX_RENDERED_COUNT) {
-              setVisibleRange((prev) => {
+              setVisibleRange(() => {
                 const newEnd = newCount;
                 const newStart = Math.max(0, newEnd - MAX_RENDERED_COUNT);
                 return { start: newStart, end: newEnd };
@@ -792,10 +792,6 @@ function Gallery({ artworks, onOpenUpload, onDeleteArtwork, onEditArtwork, onSet
         
         // 计算应该渲染的起始索引
         const estimatedStart = Math.max(0, Math.floor(viewportTop / estimatedItemHeight) - bufferItems);
-        const estimatedEnd = Math.min(
-          sortedArtworks.length,
-          Math.ceil(viewportBottom / estimatedItemHeight) + bufferItems
-        );
 
         // 限制在最大渲染数量内
         const newStart = Math.max(0, Math.min(estimatedStart, sortedArtworks.length - MAX_RENDERED_COUNT));
@@ -954,7 +950,9 @@ function Gallery({ artworks, onOpenUpload, onDeleteArtwork, onEditArtwork, onSet
         try {
           imageObserver.unobserve(el);
           el.removeAttribute("data-observed");
-          elementPositionsRef.current.delete(artworkId);
+          if (artworkId) {
+            elementPositionsRef.current.delete(artworkId);
+          }
         } catch (error) {
           console.debug("[Gallery] Failed to unobserve element", error);
         }
@@ -1460,10 +1458,8 @@ function Gallery({ artworks, onOpenUpload, onDeleteArtwork, onEditArtwork, onSet
           <>
             <div ref={containerRef} className="gallery-screen__masonry">
               <div className="gallery-screen__masonry-column">
-                {distributedArtworks.leftColumn.map((artwork, localIndex) => {
+                {distributedArtworks.leftColumn.map((artwork) => {
                   const shouldLoadImage = loadedImages.has(artwork.id);
-                  // 计算全局索引（用于详情页导航）
-                  const globalIndex = distributedArtworks.globalStart + localIndex * 2; // 左列是偶数索引
                   return (
                     <figure key={artwork.id} className="gallery-item">
                       <button
@@ -1547,10 +1543,8 @@ function Gallery({ artworks, onOpenUpload, onDeleteArtwork, onEditArtwork, onSet
                 })}
               </div>
               <div className="gallery-screen__masonry-column">
-                {distributedArtworks.rightColumn.map((artwork, localIndex) => {
+                {distributedArtworks.rightColumn.map((artwork) => {
                   const shouldLoadImage = loadedImages.has(artwork.id);
-                  // 计算全局索引（用于详情页导航）
-                  const globalIndex = distributedArtworks.globalStart + localIndex * 2 + 1; // 右列是奇数索引
                   return (
                     <figure key={artwork.id} className="gallery-item">
                       <button

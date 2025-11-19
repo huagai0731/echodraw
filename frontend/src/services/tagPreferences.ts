@@ -102,7 +102,7 @@ export function getStorageKey(email?: string | null) {
 
 export async function loadTagPreferencesAsync(email?: string | null): Promise<TagPreferences> {
   // 从后端获取标签
-  const { presetTags, customTags } = await loadTagsFromAPI();
+  const { customTags } = await loadTagsFromAPI();
   
   // 从localStorage加载隐藏偏好
   const hiddenPrefs = loadHiddenPreferences(email);
@@ -204,15 +204,13 @@ export function saveTagPreferences(email: string | null, preferences: TagPrefere
 
 export async function buildTagOptionsAsync(preferences: TagPreferences): Promise<TagOption[]> {
   // 从后端获取标签
-  const { presetTags, customTags } = await loadTagsFromAPI();
+  const { customTags } = await loadTagsFromAPI();
   
   const hiddenPresetSet = new Set(preferences.hiddenPresetTagIds);
   const hiddenCustomSet = new Set(preferences.hiddenCustomTagIds);
 
   // 构建预设标签选项（使用PRESET_TAGS作为源，但名称从后端获取）
   const presetOptions: TagOption[] = PRESET_TAGS.map((preset) => {
-    // 尝试从后端获取的预设标签中找到匹配的标签（按名称匹配）
-    const backendTag = presetTags.find(tag => tag.name === preset.name);
     return {
       id: preset.id, // 使用PRESET_TAGS的ID（字符串）
       name: preset.name,

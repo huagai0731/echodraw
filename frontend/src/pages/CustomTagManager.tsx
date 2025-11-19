@@ -15,7 +15,6 @@ import {
   createTag,
   updateTag,
   deleteTag,
-  type Tag,
 } from "@/services/api";
 
 import "./CustomTagManager.css";
@@ -35,7 +34,6 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
   const [editingName, setEditingName] = useState("");
   const [feedback, setFeedback] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
 
   const refreshPreferences = useCallback(async () => {
     setIsLoading(true);
@@ -166,7 +164,6 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
         return;
       }
 
-      setIsSaving(true);
       try {
         // 调用后端API更新标签
         await updateTag(tag.id, { name: trimmed });
@@ -197,8 +194,6 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
       } catch (error) {
         console.warn("[CustomTagManager] Failed to update tag:", error);
         setFeedback("更新失败，请重试。");
-      } finally {
-        setIsSaving(false);
       }
     },
     [editingName, validateTagName, refreshPreferences],
@@ -212,7 +207,6 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
       }
     }
 
-    setIsSaving(true);
     try {
       // 调用后端API删除标签
       await deleteTag(tag.id);
@@ -243,8 +237,6 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
       } else {
         setFeedback("删除失败，请重试。");
       }
-    } finally {
-      setIsSaving(false);
     }
   }, [editingTagId, refreshPreferences]);
 
@@ -256,7 +248,6 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
     }
 
     const trimmed = newTagName.trim();
-    setIsSaving(true);
     try {
       // 调用后端API创建标签
       const createdTag = await createTag({ name: trimmed });
@@ -281,8 +272,6 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
     } catch (error) {
       console.warn("[CustomTagManager] Failed to create tag:", error);
       setFeedback("添加失败，请重试。");
-    } finally {
-      setIsSaving(false);
     }
   }, [newTagName, validateTagName, refreshPreferences]);
 

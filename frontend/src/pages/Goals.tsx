@@ -552,82 +552,6 @@ function saveCachedCalendar(year: number, month: number, days: GoalsCalendarDay[
   }
 }
 
-// 检查今天是否有新数据（上传或打卡）
-function shouldForceRefreshToday(): boolean {
-  if (typeof window === "undefined") {
-    return false;
-  }
-  try {
-    // 检查今天是否有新上传
-    const todayStr = formatISODateInShanghai(new Date());
-    if (!todayStr) {
-      return false;
-    }
-    
-    // 检查本地上传数据
-    const stored = loadStoredArtworks();
-    const hasTodayUpload = stored.some((artwork) => {
-      const dateKey = normalizeUploadedDate(
-        artwork.uploadedDate ?? null,
-        artwork.uploadedAt ?? null
-      );
-      return dateKey === todayStr;
-    });
-    
-    if (hasTodayUpload) {
-      // 检查缓存时间，如果缓存是今天之前的，需要刷新
-      const now = new Date();
-      const currentYear = now.getFullYear();
-      const currentMonth = now.getMonth() + 1;
-      const cached = loadCachedCalendar(currentYear, currentMonth);
-      if (cached) {
-        // 检查缓存中今天的数据是否是最新的
-        const todayInCache = cached.find((day) => day.date === todayStr);
-        if (!todayInCache || todayInCache.status === "none") {
-          // 缓存中没有今天的数据或状态不对，需要刷新
-          return true;
-        }
-      } else {
-        // 没有缓存，需要刷新
-        return true;
-      }
-    }
-    
-    // 检查是否有今天的打卡记录（从localStorage检查）
-    // 这里可以检查短期目标的完成日期
-    const goalKeys = Object.keys(localStorage).filter((key) =>
-      key.startsWith("short-term-goal-") && key.endsWith("-completed-dates")
-    );
-    for (const key of goalKeys) {
-      try {
-        const stored = localStorage.getItem(key);
-        if (stored) {
-          const completedDates = JSON.parse(stored) as string[];
-          if (completedDates.includes(todayStr)) {
-            // 有今天的打卡记录，检查缓存是否需要更新
-            const now = new Date();
-            const currentYear = now.getFullYear();
-            const currentMonth = now.getMonth() + 1;
-            const cached = loadCachedCalendar(currentYear, currentMonth);
-            if (cached) {
-              const todayInCache = cached.find((day) => day.date === todayStr);
-              if (!todayInCache || (todayInCache.status !== "check" && todayInCache.status !== "upload")) {
-                return true;
-              }
-            } else {
-              return true;
-            }
-          }
-        }
-      } catch {
-        // ignore
-      }
-    }
-  } catch {
-    // ignore errors
-  }
-  return false;
-}
 
 // 短期目标相关的缓存和状态管理已移动到 useShortTermGoals hook
 
@@ -1095,23 +1019,6 @@ function Goals() {
       } else {
         setCalendarLoading(true);
       }
-
-      // 检查是否需要强制刷新（今天有新数据）
-      // 如果当前月份是当前月份，且今天有新数据，需要强制刷新
-      const now = new Date();
-      const todayStr = formatISODateInShanghai(now);
-      let currentYear = now.getFullYear();
-      let currentMonth = now.getMonth() + 1;
-      if (todayStr) {
-        const parsed = parseISODateInShanghai(todayStr);
-        if (parsed) {
-          currentYear = parsed.getFullYear();
-          currentMonth = parsed.getMonth() + 1;
-        }
-      }
-      const forceRefresh = shouldForceRefreshToday() && 
-        year === currentYear && 
-        month === currentMonth;
 
       try {
         const data = await fetchGoalsCalendar({ year, month });

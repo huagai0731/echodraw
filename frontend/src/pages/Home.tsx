@@ -962,18 +962,23 @@ function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomePr
         setCheckInError("请求超时，请检查网络连接后重试。");
       } else if (axiosError.code === "ERR_NETWORK") {
         setCheckInError("网络错误，请检查网络连接。");
-      } else if (axiosError.response?.status === 429) {
-        // 处理频率限制错误
-        const detail = (axiosError.response.data as any)?.detail;
-        setCheckInError(detail || "请求过于频繁，请稍后再试。");
-        // 如果是因为重复打卡，刷新状态
-        if (detail && typeof detail === "string" && (detail.includes("已经打卡") || detail.includes("刚刚已经打卡"))) {
-          try {
-            const status = await fetchCheckInStatus();
-            setCheckInStatus(status);
-          } catch {
-            // ignore refresh error
+      } else if (axiosError.response) {
+        const response = axiosError.response as { status: number; data: any };
+        if (response.status === 429) {
+          // 处理频率限制错误
+          const detail = response.data?.detail;
+          setCheckInError(detail || "请求过于频繁，请稍后再试。");
+          // 如果是因为重复打卡，刷新状态
+          if (detail && typeof detail === "string" && (detail.includes("已经打卡") || detail.includes("刚刚已经打卡"))) {
+            try {
+              const status = await fetchCheckInStatus();
+              setCheckInStatus(status);
+            } catch {
+              // ignore refresh error
+            }
           }
+        } else {
+          setCheckInError("打卡失败，请稍后再试。");
         }
       } else {
         setCheckInError("打卡失败，请稍后再试。");

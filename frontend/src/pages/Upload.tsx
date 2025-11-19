@@ -6,14 +6,11 @@ import { getActiveUserEmail } from "@/services/authStorage";
 import {
   buildTagOptionsAsync,
   loadTagPreferencesAsync,
-  saveTagPreferences,
   clearTagsCache,
   TAG_PREFERENCES_CHANGED_EVENT,
   type TagOption,
-  type TagPreferences,
 } from "@/services/tagPreferences";
 import { createTag } from "@/services/api";
-import { PRESET_TAGS } from "@/constants/tagPresets";
 import { loadStoredArtworks, USER_ARTWORKS_CHANGED_EVENT } from "@/services/artworkStorage";
 import type { Artwork } from "@/types/artwork";
 
@@ -70,7 +67,6 @@ function Upload({ onClose, onSave }: UploadProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [tagOptions, setTagOptions] = useState<TagOption[]>([]);
   const [selectedTags, setSelectedTags] = useState<(string | number)[]>([]);
-  const [isLoadingTags, setIsLoadingTags] = useState(true);
   const [selectedMood, setSelectedMood] = useState<string>("心旷神怡");
   const [durationHours, setDurationHours] = useState<number>(1);
   const [durationMinutes, setDurationMinutes] = useState<number>(30);
@@ -517,7 +513,6 @@ function Upload({ onClose, onSave }: UploadProps) {
 
   useEffect(() => {
     const loadTags = async () => {
-      setIsLoadingTags(true);
       try {
         const email = getActiveUserEmail();
         const preferences = await loadTagPreferencesAsync(email);
@@ -536,9 +531,7 @@ function Upload({ onClose, onSave }: UploadProps) {
         });
       } catch (error) {
         console.warn("[Upload] Failed to load tags:", error);
-      } finally {
-        setIsLoadingTags(false);
-        }
+      }
     };
 
     loadTags();
