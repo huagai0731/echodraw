@@ -38,8 +38,18 @@ class AuthTokenAuthentication(BaseAuthentication):
         if token.is_expired:
             raise exceptions.AuthenticationFailed("认证令牌已过期，请重新登录")
 
-        # 更新最近使用时间
-        AuthToken.objects.filter(pk=token.pk).update(last_used_at=timezone.now())
+        # 更新最近使用时间（如果数据库可写）
+        # 如果数据库是只读的，忽略此错误，不影响认证流程
+        try:
+            AuthToken.objects.filter(pk=token.pk).update(last_used_at=timezone.now())
+        except Exception:
+            # 数据库可能是只读的，记录警告但不影响认证
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                f"无法更新 token {token.pk} 的 last_used_at: 数据库可能是只读的",
+                exc_info=True
+            )
 
         return token.user, token
 
