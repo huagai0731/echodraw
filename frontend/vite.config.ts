@@ -39,17 +39,19 @@ export default defineConfig({
         },
       },
     },
-    // 启用压缩
-    minify: 'terser',
-    terserOptions: {
-      compress: {
-        drop_console: true, // 生产环境移除 console
-        drop_debugger: true,
-      },
-      format: {
-        comments: false, // 移除注释
-      },
-    },
+    // 启用压缩（使用 esbuild，更快且类型安全）
+    minify: 'esbuild',
+    // 如果需要 terser，使用类型断言
+    // minify: 'terser',
+    // terserOptions: {
+    //   compress: {
+    //     drop_console: true,
+    //     drop_debugger: true,
+    //   },
+    //   format: {
+    //     comments: false,
+    //   },
+    // } as any,
     // 启用 CSS 代码分割
     cssCodeSplit: true,
     // 优化 chunk 大小警告阈值

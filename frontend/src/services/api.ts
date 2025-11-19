@@ -1039,12 +1039,14 @@ function shouldRetry(error: HttpLikeError, retryCount: number, method?: string):
 api.interceptors.request.use(
   (config) => {
     // 为每个请求添加重试计数
-    if (!config.metadata) {
-      (config as { metadata?: { retryCount?: number } }).metadata = {};
+    const configWithMetadata = config as typeof config & {
+      metadata?: { retryCount?: number };
+    };
+    if (!configWithMetadata.metadata) {
+      configWithMetadata.metadata = {};
     }
-    const metadata = (config as { metadata?: { retryCount?: number } }).metadata;
-    if (metadata && metadata.retryCount === undefined) {
-      metadata.retryCount = 0;
+    if (configWithMetadata.metadata.retryCount === undefined) {
+      configWithMetadata.metadata.retryCount = 0;
     }
     return config;
   },
@@ -1064,7 +1066,10 @@ api.interceptors.response.use(
     }
     
     // 获取原始请求配置
-    const originalRequest = error.config;
+    const originalRequest = error.config as typeof error.config & {
+      metadata?: { retryCount?: number };
+      method?: string;
+    };
     
     // 检查是否应该重试（只对幂等方法重试，确保不会重复提交）
     if (originalRequest && shouldRetry(error, originalRequest.metadata?.retryCount || 0, originalRequest.method)) {
@@ -1072,7 +1077,7 @@ api.interceptors.response.use(
       if (originalRequest.metadata) {
         originalRequest.metadata.retryCount = retryCount;
       } else {
-        (originalRequest as { metadata?: { retryCount?: number } }).metadata = { retryCount };
+        originalRequest.metadata = { retryCount };
       }
       
       // 使用指数退避策略，避免重试风暴
