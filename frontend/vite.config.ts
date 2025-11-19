@@ -27,4 +27,37 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    // 启用代码分割
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // 将 React 相关库单独打包
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          // 将工具库单独打包
+          'utils': ['axios'],
+        },
+      },
+    },
+    // 启用压缩
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true, // 生产环境移除 console
+        drop_debugger: true,
+      },
+    },
+    // 启用 CSS 代码分割
+    cssCodeSplit: true,
+    // 优化 chunk 大小警告阈值
+    chunkSizeWarningLimit: 1000,
+    // 启用 source map（生产环境可以关闭以提高性能）
+    sourcemap: false,
+    // 优化构建输出
+    assetsInlineLimit: 4096, // 小于 4kb 的资源内联为 base64
+  },
+  // 优化依赖预构建
+  optimizeDeps: {
+    include: ['react', 'react-dom', 'react-router-dom', 'axios'],
+  },
 })

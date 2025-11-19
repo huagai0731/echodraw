@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import MaterialIcon from "@/components/MaterialIcon";
+import LazyImage from "@/components/LazyImage";
 import type { ShortTermGoal, ShortTermGoalTask, UserUploadRecord } from "@/services/api";
 import { fetchUserUploads, submitCheckIn, fetchShortTermGoalTaskCompletions, deleteShortTermGoal } from "@/services/api";
 import { replaceLocalhostInUrl } from "@/utils/urlUtils";
@@ -264,10 +265,11 @@ function ShortTermGoalDetails({
     });
   }, [uploadDates]);
 
-  // 加载上传记录
+  // 加载上传记录（使用 API 缓存）
   useEffect(() => {
     let cancelled = false;
-    fetchUserUploads()
+    
+    fetchUserUploads(true) // 使用缓存
       .then((uploads) => {
         if (!cancelled) {
           const sorted = uploads.sort(
@@ -670,8 +672,8 @@ function ShortTermGoalDetails({
     return `剩余 ${daysRemaining} 天可完成`;
   }, [cycleState.status, goal]);
 
-  // 映射状态到 UI 样式类名
-  const getStatusClass = (status: CardStatus): string => {
+  // 映射状态到 UI 样式类名（使用 useMemo 缓存）
+  const getStatusClass = useCallback((status: CardStatus): string => {
     switch (status) {
       case "completed":
         return "completed";
@@ -682,7 +684,7 @@ function ShortTermGoalDetails({
       default:
         return "upcoming";
     }
-  };
+  }, []);
 
   return (
     <div className="short-term-details">
@@ -853,7 +855,7 @@ function ShortTermGoalDetails({
                                   onClick={() => handleImageView(taskImage!)}
                                   aria-label={`查看任务「${task.title}」作品`}
                                 >
-                                  <img
+                                  <LazyImage
                                     src={taskImage!.image ? replaceLocalhostInUrl(taskImage!.image) : ""}
                                     alt={task.title}
                                   />
@@ -957,7 +959,7 @@ function ShortTermGoalDetails({
                     onClick={() => handleImageSelect(upload)}
                   >
                     {upload.image ? (
-                      <img
+                      <LazyImage
                         src={replaceLocalhostInUrl(upload.image)}
                         alt={upload.title || "作品"}
                       />
@@ -1109,7 +1111,7 @@ function ShortTermGoalDetails({
               <MaterialIcon name="close" />
             </button>
             {viewingImage.image ? (
-              <img
+              <LazyImage
                 src={replaceLocalhostInUrl(viewingImage.image)}
                 alt={viewingImage.title || "作品"}
               />

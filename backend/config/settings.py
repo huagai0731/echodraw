@@ -11,7 +11,6 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 import os
-import warnings
 from pathlib import Path
 
 from dotenv import load_dotenv  # type: ignore
@@ -28,58 +27,19 @@ load_dotenv(BASE_DIR / ".env.development", override=True)
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
-if not SECRET_KEY:
-    if DEBUG:
-        # 开发环境允许使用默认值，但会警告
-        SECRET_KEY = "django-insecure-dev-key-change-in-production"
-        warnings.warn(
-            "SECRET_KEY未设置，使用开发环境默认值。生产环境必须设置DJANGO_SECRET_KEY环境变量！",
-            RuntimeWarning,
-        )
-    else:
-        # 生产环境必须设置SECRET_KEY
-        raise ValueError(
-            "SECRET_KEY未设置！生产环境必须设置DJANGO_SECRET_KEY环境变量。"
-            "请使用强随机生成的密钥（至少50字符）。"
-        )
+SECRET_KEY = os.getenv(
+    "DJANGO_SECRET_KEY",
+    "django-insecure-cek3ua7xe03xkv)eoj&(f30fc8=_^#&l9slh-)vl85$q(qr_o1",
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-# 默认关闭DEBUG，生产环境必须明确设置DJANGO_DEBUG=false
-_debug_env = os.getenv("DJANGO_DEBUG", "").lower()
-if _debug_env == "true":
-    DEBUG = True
-elif _debug_env == "false":
-    DEBUG = False
-else:
-    # 未设置时，根据环境判断：本地开发环境默认True，其他环境默认False
-    _is_local = os.getenv("ENVIRONMENT", "").lower() in {"local", "development", "dev"}
-    DEBUG = _is_local
-    if not _is_local:
-        warnings.warn(
-            "DJANGO_DEBUG未设置，已默认关闭DEBUG模式。"
-            "如需开启，请明确设置DJANGO_DEBUG=true（仅限开发环境）",
-            RuntimeWarning,
-        )
-
-# 生产环境安全检查：如果DEBUG=True且不在本地环境，发出警告
-if DEBUG and os.getenv("ENVIRONMENT", "").lower() not in {"local", "development", "dev", ""}:
-    warnings.warn(
-        "⚠️ 警告：生产环境检测到DEBUG=True！这可能导致敏感信息泄露。"
-        "请确保这是开发/测试环境，或设置DJANGO_DEBUG=false",
-        RuntimeWarning,
-    )
+DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() == "true"
 
 _allowed_hosts = os.getenv("DJANGO_ALLOWED_HOSTS", "")
 ALLOWED_HOSTS = [host.strip() for host in _allowed_hosts.split(",") if host.strip()]
 
 if DEBUG and not ALLOWED_HOSTS:
     ALLOWED_HOSTS = ["*"]
-
-_loopback_hosts = {"127.0.0.1", "localhost"}
-for _host in _loopback_hosts:
-    if _host not in ALLOWED_HOSTS:
-        ALLOWED_HOSTS.append(_host)
 
 
 # Application definition
@@ -98,9 +58,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    "django.middleware.gzip.GZipMiddleware",
     "django.middleware.security.SecurityMiddleware",
-    "config.middleware.TraceIdMiddleware",  # 请求追踪中间件，必须在最前面
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -133,67 +91,12 @@ WSGI_APPLICATION = "config.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-_db_engine = os.getenv("DB_ENGINE", "sqlite").strip().lower()
-if _db_engine in {"postgres", "postgresql", "psql"}:
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.postgresql",
-            "HOST": os.getenv("DB_HOST", "127.0.0.1"),
-            "PORT": int(os.getenv("DB_PORT", "5432")),
-            "NAME": os.getenv("DB_NAME", "echo"),
-            "USER": os.getenv("DB_USER", "postgres"),
-            "PASSWORD": os.getenv("DB_PASSWORD", ""),
-            "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "60")),
-            "OPTIONS": {
-                # 避免 DNS 反复解析
-                "connect_timeout": int(os.getenv("DB_CONNECT_TIMEOUT", "5")),
-            },
-        }
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": BASE_DIR / "db.sqlite3",
     }
-elif _db_engine in {"mysql", "mariadb"}:
-    # 使用自定义后端以兼容 MySQL 5.7（生产环境建议升级到 MySQL 8.0+）
-    _mysql_engine = os.getenv("MYSQL_USE_CUSTOM_BACKEND", "true").lower() == "true"
-    if _mysql_engine:
-        DATABASES = {
-            "default": {
-                "ENGINE": "core.db_backend",
-                "HOST": os.getenv("DB_HOST", "127.0.0.1"),
-                "PORT": int(os.getenv("DB_PORT", "3306")),
-                "NAME": os.getenv("DB_NAME", "echo"),
-                "USER": os.getenv("DB_USER", "root"),
-                "PASSWORD": os.getenv("DB_PASSWORD", ""),
-                "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "60")),
-                "OPTIONS": {
-                    "charset": "utf8mb4",
-                    "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
-                    "connect_timeout": int(os.getenv("DB_CONNECT_TIMEOUT", "5")),
-                },
-            }
-        }
-    else:
-        DATABASES = {
-            "default": {
-                "ENGINE": "django.db.backends.mysql",
-                "HOST": os.getenv("DB_HOST", "127.0.0.1"),
-                "PORT": int(os.getenv("DB_PORT", "3306")),
-                "NAME": os.getenv("DB_NAME", "echo"),
-                "USER": os.getenv("DB_USER", "root"),
-                "PASSWORD": os.getenv("DB_PASSWORD", ""),
-                "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "60")),
-                "OPTIONS": {
-                    "charset": "utf8mb4",
-                    "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
-                    "connect_timeout": int(os.getenv("DB_CONNECT_TIMEOUT", "5")),
-                },
-            }
-        }
-else:
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "db.sqlite3",
-        }
-    }
+}
 
 
 # Password validation
@@ -220,7 +123,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = "en-us"
 
-TIME_ZONE = "Asia/Shanghai"
+TIME_ZONE = "UTC"
 
 USE_I18N = True
 
@@ -247,31 +150,6 @@ TOS_BUCKET = os.getenv("TOS_BUCKET")
 TOS_MEDIA_LOCATION = os.getenv("TOS_MEDIA_LOCATION", "uploads")
 TOS_CUSTOM_DOMAIN = os.getenv("TOS_CUSTOM_DOMAIN", "")
 
-_required_tos_settings = {
-    "TOS_ACCESS_KEY_ID": TOS_ACCESS_KEY_ID,
-    "TOS_SECRET_ACCESS_KEY": TOS_SECRET_ACCESS_KEY,
-    "TOS_BUCKET": TOS_BUCKET,
-    "TOS_ENDPOINT_URL": TOS_ENDPOINT_URL,
-}
-
-_tos_flag = os.getenv("DJANGO_USE_TOS_STORAGE")
-if _tos_flag is None:
-    USE_TOS_STORAGE = all(value not in {None, ""} for value in _required_tos_settings.values())
-else:
-    USE_TOS_STORAGE = _tos_flag.lower() == "true"
-
-if USE_TOS_STORAGE and any(value in {None, ""} for value in _required_tos_settings.values()):
-    missing_keys = [key for key, value in _required_tos_settings.items() if value in {None, ""}]
-    warnings.warn(
-        "TOS 存储配置不完整，已自动回退到本地媒体存储。缺失的配置项："
-        + ", ".join(missing_keys),
-        RuntimeWarning,
-    )
-    USE_TOS_STORAGE = False
-
-# 图片 URL 代理配置：当 TOS 存储桶未配置 CORS 时，可通过此选项强制使用代理 URL
-FORCE_IMAGE_PROXY_URL = os.getenv("DJANGO_FORCE_IMAGE_PROXY_URL", "false").lower() == "true"
-
 if USE_TOS_STORAGE:
     DEFAULT_FILE_STORAGE = "config.storage.TOSMediaStorage"
     AWS_ACCESS_KEY_ID = TOS_ACCESS_KEY_ID
@@ -280,15 +158,6 @@ if USE_TOS_STORAGE:
     AWS_S3_ENDPOINT_URL = TOS_ENDPOINT_URL
     AWS_S3_SIGNATURE_VERSION = "s3v4"
     AWS_S3_ADDRESSING_STYLE = "virtual"
-
-    STORAGES = {
-        "default": {
-            "BACKEND": "config.storage.TOSMediaStorage",
-        },
-        "staticfiles": {
-            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
-        },
-    }
 
     _media_prefix = f"{TOS_MEDIA_LOCATION.strip('/')}/" if TOS_MEDIA_LOCATION else ""
     if _media_prefix == "/":
@@ -325,25 +194,11 @@ if not CORS_ALLOWED_ORIGIN_REGEXES and DEBUG:
 
 CORS_ALLOW_CREDENTIALS = True
 
-# CORS配置：生产环境必须明确配置允许的来源
 _cors_allow_all = os.getenv("DJANGO_CORS_ALLOW_ALL", "")
 if _cors_allow_all:
     CORS_ALLOW_ALL_ORIGINS = _cors_allow_all.lower() == "true"
 elif DEBUG:
-    # 仅在DEBUG模式下允许所有来源（开发环境）
     CORS_ALLOW_ALL_ORIGINS = True
-    warnings.warn(
-        "DEBUG模式下CORS允许所有来源。生产环境请设置DJANGO_CORS_ALLOWED_ORIGINS明确指定允许的来源。",
-        RuntimeWarning,
-    )
-else:
-    # 生产环境默认不允许所有来源
-    CORS_ALLOW_ALL_ORIGINS = False
-    if not CORS_ALLOWED_ORIGINS:
-        warnings.warn(
-            "生产环境未配置CORS允许的来源。请设置DJANGO_CORS_ALLOWED_ORIGINS环境变量。",
-            RuntimeWarning,
-        )
 
 _csrf_trusted = os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "")
 CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in _csrf_trusted.split(",") if origin.strip()]
@@ -366,26 +221,12 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
-    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.LimitOffsetPagination",
-    "PAGE_SIZE": 20,
-    "DEFAULT_THROTTLE_CLASSES": [
-        "rest_framework.throttling.AnonRateThrottle",
-        "rest_framework.throttling.UserRateThrottle",
-    ],
-    "DEFAULT_THROTTLE_RATES": {
-        "anon": "30/min",  # 匿名用户每分钟30次
-        "user": "120/min",  # 已认证用户每分钟120次
-    },
-    # 增强：针对特定端点设置更严格的限流
-    # 可以通过视图类级别的throttle_classes和throttle_scope自定义
 }
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-
-FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "http://192.168.3.3:8000").rstrip("/")
 
 
 # Email configuration
@@ -401,111 +242,6 @@ if _use_tls and _use_ssl:
 EMAIL_USE_TLS = _use_tls
 EMAIL_USE_SSL = _use_ssl
 EMAIL_HOST_USER = os.getenv("SMTP_USERNAME", "echodraw@163.com")
-EMAIL_HOST_PASSWORD = os.getenv("SMTP_PASSWORD")
-if not EMAIL_HOST_PASSWORD:
-    warnings.warn(
-        "SMTP_PASSWORD未设置，邮件发送功能可能无法正常工作。",
-        RuntimeWarning,
-    )
+EMAIL_HOST_PASSWORD = os.getenv("SMTP_PASSWORD", "RLTFvFP3ReVTGhh8")
 DEFAULT_FROM_EMAIL = os.getenv("SMTP_FROM_EMAIL", EMAIL_HOST_USER)
-EMAIL_TIMEOUT = int(os.getenv("SMTP_TIMEOUT", "10"))
-
-# Celery / Redis (可选)
-CELERY_ENABLED = os.getenv("CELERY_ENABLED", "false").lower() == "true"
-CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://127.0.0.1:6379/0")
-CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://127.0.0.1:6379/1")
-CELERY_TASK_ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "false").lower() == "true"
-CELERY_TASK_TIME_LIMIT = int(os.getenv("CELERY_TASK_TIME_LIMIT", "60"))
-CELERY_TASK_SOFT_TIME_LIMIT = int(os.getenv("CELERY_TASK_SOFT_TIME_LIMIT", "45"))
-
-# File upload size limits (10MB)
-# 限制文件上传大小，防止内存溢出
-DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB
-FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB
-
-# Logging configuration
-LOGGING = {
-    "version": 1,
-    "disable_existing_loggers": False,
-    "formatters": {
-        "verbose": {
-            "format": "[{levelname}] {asctime} [{name}] {message}",
-            "style": "{",
-            "datefmt": "%Y-%m-%d %H:%M:%S",
-        },
-        "with_trace": {
-            "format": "[{levelname}] {asctime} [{name}] [trace_id={trace_id}] {message}",
-            "style": "{",
-            "datefmt": "%Y-%m-%d %H:%M:%S",
-        },
-    },
-    "filters": {
-        "require_trace_id": {
-            "()": "config.logging_filters.RequireTraceIdFilter",
-        },
-    },
-    "handlers": {
-        "console": {
-            "class": "logging.StreamHandler",
-            "formatter": "with_trace",
-            "filters": ["require_trace_id"],
-        },
-        "file": {
-            "class": "logging.handlers.RotatingFileHandler",
-            "filename": str(BASE_DIR / "logs" / "django.log"),
-            "maxBytes": 10 * 1024 * 1024,  # 10MB
-            "backupCount": 5,
-            "formatter": "with_trace",
-            "filters": ["require_trace_id"],
-        },
-    },
-    "loggers": {
-        "django": {
-            "handlers": ["console", "file"],
-            "level": "INFO",
-            "propagate": False,
-        },
-        "core": {
-            "handlers": ["console", "file"],
-            "level": "DEBUG" if DEBUG else "INFO",
-            "propagate": False,
-        },
-    },
-    "root": {
-        "handlers": ["console"],
-        "level": "WARNING",
-    },
-}
-
-# 确保日志目录存在
-_logs_dir = BASE_DIR / "logs"
-if not _logs_dir.exists():
-    _logs_dir.mkdir(exist_ok=True)
-
-# ==================== 安全配置 ====================
-
-# Session安全配置
-SESSION_COOKIE_SECURE = not DEBUG  # 生产环境使用HTTPS时设置为True
-SESSION_COOKIE_HTTPONLY = True  # 防止XSS攻击
-SESSION_COOKIE_SAMESITE = 'Lax'  # CSRF保护
-SESSION_COOKIE_AGE = 60 * 60 * 24 * 7  # 7天过期
-
-# CSRF安全配置
-CSRF_COOKIE_SECURE = not DEBUG  # 生产环境使用HTTPS时设置为True
-CSRF_COOKIE_HTTPONLY = True
-CSRF_COOKIE_SAMESITE = 'Lax'
-CSRF_USE_SESSIONS = False  # 使用Cookie而不是Session存储CSRF token
-
-# 安全头配置（通过SecurityMiddleware）
-if not DEBUG:
-    # 生产环境启用严格的安全头
-    SECURE_BROWSER_XSS_FILTER = True
-    SECURE_CONTENT_TYPE_NOSNIFF = True
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-    SECURE_HSTS_SECONDS = 31536000  # 1年
-    SECURE_HSTS_PRELOAD = True
-    X_FRAME_OPTIONS = 'DENY'  # 防止点击劫持
-    SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
-else:
-    # 开发环境使用较宽松的配置
-    X_FRAME_OPTIONS = 'SAMEORIGIN'
+EMAIL_TIMEOUT = int(os.getenv("SMTP_TIMEOUT", "15"))

@@ -1,13 +1,5 @@
-import axios, { type InternalAxiosRequestConfig } from "axios";
-
-// 扩展 axios 请求配置类型以支持 metadata
-declare module "axios" {
-  export interface InternalAxiosRequestConfig {
-    metadata?: {
-      retryCount?: number;
-    };
-  }
-}
+import axios from "axios";
+import { getCachedData, setCachedData } from "@/utils/apiCache";
 
 function stripTrailingSlash(url: string) {
   return url.endsWith("/") ? url.slice(0, -1) : url;
@@ -44,7 +36,6 @@ type HttpLikeError = Error & {
   response?: {
     status?: number;
   };
-  config?: InternalAxiosRequestConfig;
 };
 
 function createUnauthorizedError(): HttpLikeError {
@@ -250,7 +241,6 @@ export type CheckInStatus = {
 export type CheckInMutationResponse = CheckInStatus & {
   created: boolean;
   checked_date: string;
-  checked_at?: string; // 完成时间（ISO格式）
 };
 
 export type HomeMessagesResponse = {
@@ -365,7 +355,6 @@ type SubmitCheckInOptions = {
   source?: string;
   goal_id?: number;
   task_images?: Record<string, number>; // taskId -> uploadId
-  notes?: string; // 用户备注
 };
 
 export async function submitCheckIn(options: SubmitCheckInOptions = {}) {
@@ -403,12 +392,28 @@ type CreateUserUploadInput = {
   durationMinutes: number;
 };
 
-export async function fetchUserUploads() {
+export async function fetchUserUploads(useCache: boolean = true) {
   if (!hasAuthToken()) {
     return [];
   }
+  
+  // 尝试从缓存获取
+  if (useCache) {
+    const cached = getCachedData<UserUploadRecord[]>("/uploads/");
+    if (cached) {
+      return cached;
+    }
+  }
+  
   const response = await api.get<UserUploadRecord[]>("/uploads/");
-  return response.data;
+  const data = response.data;
+  
+  // 保存到缓存（5分钟有效期）
+  if (useCache) {
+    setCachedData("/uploads/", data, undefined, 5 * 60 * 1000);
+  }
+  
+  return data;
 }
 
 function mapProfilePreferences(payload: ProfilePreferenceResponse): ProfilePreferences {
@@ -939,10 +944,7 @@ export type TaskCompletionRecord = {
   uploaded_at: string;
 };
 
-export type TaskCompletionsResponse = {
-  completions: Record<string, Record<string, TaskCompletionRecord>>;
-  checkin_times: Record<string, string>; // dateKey -> checkedAt (ISO)
-};
+export type TaskCompletionsResponse = Record<string, Record<string, TaskCompletionRecord>>;
 
 export async function fetchShortTermGoalTaskCompletions(goalId: number) {
   const response = await api.get<TaskCompletionsResponse>(
