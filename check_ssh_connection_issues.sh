@@ -34,3 +34,4 @@ echo ""
 echo "=== 5. 检查SELinux状态（如果启用可能阻止连接）==="
 getenforce 2>/dev/null || echo "SELinux未安装或未启用"
 
+

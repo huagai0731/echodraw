@@ -6,6 +6,50 @@ import { isFeaturedArtwork } from "@/services/featuredArtworks";
 
 import "./ArtworkDetails.css";
 
+// 安全验证：验证图片URL是否安全（防止XSS和SSRF攻击）
+function isValidImageUrl(url: string | undefined | null): boolean {
+  if (!url || typeof url !== "string") {
+    return false;
+  }
+
+  // 允许相对路径（以/开头）
+  if (url.startsWith("/")) {
+    return true;
+  }
+
+  // 允许data URL（base64图片）
+  if (url.startsWith("data:image/")) {
+    // 验证data URL格式
+    const dataUrlPattern = /^data:image\/(png|jpeg|jpg|gif|webp);base64,[A-Za-z0-9+/=]+$/;
+    return dataUrlPattern.test(url);
+  }
+
+  // 允许blob URL（本地文件预览）
+  if (url.startsWith("blob:")) {
+    return true;
+  }
+
+  // 对于绝对URL，只允许同源或受信任的域名
+  try {
+    const urlObj = new URL(url, window.location.origin);
+    // 只允许http和https协议
+    if (!["http:", "https:"].includes(urlObj.protocol)) {
+      return false;
+    }
+    // 允许同源URL
+    if (urlObj.origin === window.location.origin) {
+      return true;
+    }
+    // 对于生产环境，可以在这里添加受信任的CDN域名白名单
+    // 例如：return urlObj.hostname === "cdn.example.com";
+    // 目前为了安全，只允许同源URL
+    return false;
+  } catch {
+    // URL解析失败，可能是无效的URL
+    return false;
+  }
+}
+
 // 将数字转换为罗马数字
 function toRomanNumeral(num: number): string {
   if (num <= 0 || !Number.isFinite(num)) return "";
@@ -109,11 +153,33 @@ function ArtworkDetails({
   const [toastMessage, setToastMessage] = useState("");
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isFeatured, setIsFeatured] = useState(() => isFeaturedArtwork(artwork.id));
+  const [imageError, setImageError] = useState(false);
+  const [imageSrc, setImageSrc] = useState<string>(() => {
+    // 验证并清理图片URL
+    const url = artwork.imageSrc;
+    if (!url || !isValidImageUrl(url)) {
+      return "";
+    }
+    return url;
+  });
 
   // 当 artwork.id 改变时，更新 isFeatured 状态
   useEffect(() => {
     setIsFeatured(isFeaturedArtwork(artwork.id));
   }, [artwork.id]);
+
+  // 当 artwork.imageSrc 改变时，验证并更新图片URL
+  useEffect(() => {
+    const url = artwork.imageSrc;
+    if (!url || !isValidImageUrl(url)) {
+      console.warn("[ArtworkDetails] Invalid image URL:", url);
+      setImageSrc("");
+      setImageError(true);
+    } else {
+      setImageSrc(url);
+      setImageError(false);
+    }
+  }, [artwork.imageSrc]);
 
   // 监听 featured artworks 变化
   useEffect(() => {
@@ -369,7 +435,48 @@ function ArtworkDetails({
         </div>
 
         <div className="artwork-details-screen__image-frame">
-          <img src={artwork.imageSrc} alt={artwork.alt} className="artwork-details-screen__image" />
+          {imageError || !imageSrc ? (
+            <div
+              className="artwork-details-screen__image artwork-details-screen__image--placeholder"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: "rgba(152, 219, 198, 0.1)",
+                minHeight: "300px",
+              }}
+              aria-label="图片加载失败"
+            >
+              <div
+                style={{
+                  textAlign: "center",
+                  color: "rgba(239, 234, 231, 0.5)",
+                  fontSize: "0.9rem",
+                }}
+              >
+                <MaterialIcon
+                  name="broken_image"
+                  className="artwork-details-screen__placeholder-icon"
+                />
+                <div>图片加载失败</div>
+              </div>
+            </div>
+          ) : (
+            <img
+              src={imageSrc}
+              alt={artwork.alt || artwork.title || "作品图片"}
+              className="artwork-details-screen__image"
+              onError={(e) => {
+                // 图片加载失败时显示占位符
+                console.warn("[ArtworkDetails] Image load error:", imageSrc);
+                setImageError(true);
+                const target = e.currentTarget;
+                target.style.display = "none";
+              }}
+              loading="lazy"
+              decoding="async"
+            />
+          )}
         </div>
 
         <section className="artwork-details-screen__meta">

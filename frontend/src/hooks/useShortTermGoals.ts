@@ -64,7 +64,11 @@ function saveCachedGoals(goals: ShortTermGoal[]) {
  * 管理短期目标的状态和加载逻辑
  */
 export function useShortTermGoals() {
-  const [goals, setGoals] = useState<ShortTermGoal[]>([]);
+  // 初始化时先从缓存加载，避免闪烁
+  const [goals, setGoals] = useState<ShortTermGoal[]>(() => {
+    const cached = loadCachedGoals();
+    return cached || [];
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [authVersion, setAuthVersion] = useState(0);

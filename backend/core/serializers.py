@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 from io import BytesIO
 
@@ -12,6 +13,8 @@ from rest_framework import serializers
 from django.utils import timezone
 from django.core.files.base import ContentFile
 from PIL import Image, ImageOps
+
+logger = logging.getLogger(__name__)
 
 from core.models import (
     Achievement,
@@ -29,6 +32,7 @@ from core.models import (
     Notification,
     ShortTermGoal,
     ShortTermTaskPreset,
+    Tag,
     TestAccountProfile,
     Test,
     TestDimension,
@@ -41,6 +45,59 @@ from core.models import (
     UserUpload,
     UserProfile,
 )
+class TagSerializer(serializers.ModelSerializer):
+    """标签序列化器"""
+    class Meta:
+        model = Tag
+        fields = [
+            "id",
+            "name",
+            "is_preset",
+            "is_hidden",
+            "display_order",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+    
+    def validate_name(self, value: str) -> str:
+        text = (value or "").strip()
+        if not text:
+            raise serializers.ValidationError("标签名称不能为空。")
+        if len(text) > 24:
+            raise serializers.ValidationError("标签名称不可超过 24 字符。")
+        return text
+    
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        # 确保用户自定义标签不能设置is_preset=True
+        request = self.context.get("request")
+        user = getattr(request, "user", None) if request else None
+        
+        if self.instance:
+            # 更新时，不能将用户标签改为预设标签
+            if self.instance.user and attrs.get("is_preset", False):
+                raise serializers.ValidationError({"is_preset": "用户自定义标签不能设置为预设标签。"})
+        else:
+            # 创建时，用户只能创建自定义标签
+            if user and attrs.get("is_preset", False):
+                raise serializers.ValidationError({"is_preset": "用户不能创建预设标签。"})
+        
+        return attrs
+    
+    def create(self, validated_data: dict[str, Any]) -> Tag:
+        request = self.context.get("request")
+        user = getattr(request, "user", None) if request else None
+        
+        if not user:
+            raise serializers.ValidationError("用户未认证。")
+        
+        # 用户只能创建自定义标签
+        validated_data["user"] = user
+        validated_data["is_preset"] = False
+        
+        return super().create(validated_data)
+
+
 class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserProfile
@@ -88,11 +145,16 @@ class UserUploadSerializer(serializers.ModelSerializer):
         trim_whitespace=True,
     )
     image = serializers.ImageField(required=False, allow_null=True, use_url=True)
-    tags = serializers.ListField(
-        child=serializers.CharField(max_length=64),
+    # 接收标签ID列表（用于创建/更新）
+    tag_ids = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=Tag.objects.all(),
+        source="tags",
         required=False,
         allow_empty=True,
     )
+    # 返回标签名称列表（用于序列化输出，保持向后兼容）
+    tags = serializers.SerializerMethodField()
 
     # 允许的图片MIME类型
     ALLOWED_IMAGE_MIME_TYPES = [
@@ -189,12 +251,17 @@ class UserUploadSerializer(serializers.ModelSerializer):
             "self_rating",
             "mood_label",
             "tags",
+            "tag_ids",
             "duration_minutes",
             "image",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "uploaded_at", "created_at", "updated_at"]
+        read_only_fields = ["id", "uploaded_at", "created_at", "updated_at", "tags"]
+    
+    def get_tags(self, obj):
+        """返回标签名称列表，保持向后兼容"""
+        return list(obj.tags.values_list("name", flat=True))
 
     @staticmethod
     def _rename_with_format(original_name: str, fmt: str) -> str:
@@ -350,7 +417,13 @@ class UserUploadSerializer(serializers.ModelSerializer):
                 fmt="WEBP",
                 quality=82,
             )
-        return super().create(validated_data)
+        
+        # 处理标签关联（ManyToManyField需要在对象创建后设置）
+        tags = validated_data.pop("tags", [])
+        upload = super().create(validated_data)
+        if tags:
+            upload.tags.set(tags)
+        return upload
 
     def update(self, instance: UserUpload, validated_data: dict[str, Any]) -> UserUpload:
         image_file = validated_data.get("image", None)
@@ -361,7 +434,13 @@ class UserUploadSerializer(serializers.ModelSerializer):
                 fmt="WEBP",
                 quality=82,
             )
-        return super().update(instance, validated_data)
+        
+        # 处理标签关联
+        tags = validated_data.pop("tags", None)
+        upload = super().update(instance, validated_data)
+        if tags is not None:
+            upload.tags.set(tags)
+        return upload
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -412,15 +491,33 @@ class UserUploadSerializer(serializers.ModelSerializer):
         # 对于包含文件的 multipart/form-data，避免使用 copy() 因为文件对象不能被 pickle
         # 直接修改 data 的字段，而不是先 copy
         
-        # 处理 tags
-        tags_value = data.get("tags")
-        if isinstance(tags_value, str):
-            parsed = self._parse_tags(tags_value)
-            if parsed is not None:
-                if hasattr(data, "setlist"):
-                    data.setlist("tags", parsed)
-                elif hasattr(data, "__setitem__"):
-                    data["tags"] = parsed
+        # 处理 tags/tag_ids：支持旧版字符串数组和新版ID数组
+        tags_value = data.get("tags") or data.get("tag_ids")
+        if tags_value:
+            if isinstance(tags_value, str):
+                # 尝试解析JSON字符串
+                parsed = self._parse_tags(tags_value)
+                if parsed is not None:
+                    # 如果是字符串数组（旧格式），需要转换为Tag对象
+                    # 这里先保存，在validate中处理
+                    if hasattr(data, "setlist"):
+                        data.setlist("tag_ids", parsed)
+                    elif hasattr(data, "__setitem__"):
+                        data["tag_ids"] = parsed
+            elif isinstance(tags_value, list):
+                # 检查是ID列表还是名称列表
+                if tags_value and isinstance(tags_value[0], (int, str)) and str(tags_value[0]).isdigit():
+                    # ID列表
+                    if hasattr(data, "setlist"):
+                        data.setlist("tag_ids", tags_value)
+                    elif hasattr(data, "__setitem__"):
+                        data["tag_ids"] = tags_value
+                else:
+                    # 名称列表（旧格式），需要转换为Tag对象
+                    if hasattr(data, "setlist"):
+                        data.setlist("tag_ids", tags_value)
+                    elif hasattr(data, "__setitem__"):
+                        data["tag_ids"] = tags_value
 
         # 处理 title
         title_value = data.get("title")
@@ -468,15 +565,54 @@ class UserUploadSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("标题长度不可超过 120 字符。")
         return value
 
-    def validate_tags(self, value: list[str]) -> list[str]:
-        sanitized: list[str] = []
+    def validate_tag_ids(self, value):
+        """验证标签ID列表，如果是字符串数组则转换为Tag对象"""
+        if not value:
+            return []
+        
+        request = self.context.get("request")
+        user = getattr(request, "user", None) if request else None
+        
+        tag_objects = []
         for item in value:
-            if not isinstance(item, str):
-                raise serializers.ValidationError("标签必须为字符串。")
-            trimmed = item.strip()
-            if trimmed:
-                sanitized.append(trimmed)
-        return sanitized
+            if isinstance(item, Tag):
+                # 已经是Tag对象
+                tag_objects.append(item)
+            elif isinstance(item, (int, str)) and str(item).isdigit():
+                # 是ID
+                try:
+                    tag = Tag.objects.get(pk=int(item))
+                    tag_objects.append(tag)
+                except Tag.DoesNotExist:
+                    raise serializers.ValidationError(f"标签ID {item} 不存在。")
+            elif isinstance(item, str):
+                # 是标签名称（旧格式兼容），需要查找或创建Tag
+                tag_name = item.strip()
+                if not tag_name:
+                    continue
+                
+                # 先查找预设标签
+                preset_tag = Tag.objects.filter(name=tag_name, is_preset=True, user__isnull=True).first()
+                if preset_tag:
+                    tag_objects.append(preset_tag)
+                elif user:
+                    # 查找或创建用户自定义标签
+                    custom_tag, _ = Tag.objects.get_or_create(
+                        name=tag_name,
+                        user=user,
+                        is_preset=False,
+                        defaults={
+                            "display_order": 100,
+                            "is_hidden": False,
+                        }
+                    )
+                    tag_objects.append(custom_tag)
+                else:
+                    raise serializers.ValidationError(f"无法创建标签 '{tag_name}'：用户未认证。")
+            else:
+                raise serializers.ValidationError(f"无效的标签格式: {item}")
+        
+        return tag_objects
 
 
 class ShortTermGoalTaskItemSerializer(serializers.Serializer):
@@ -1050,7 +1186,7 @@ class LongTermGoalSerializer(serializers.ModelSerializer):
             "durationMinutes": upload.duration_minutes,
             "selfRating": upload.self_rating,
             "moodLabel": upload.mood_label,
-            "tags": upload.tags,
+            "tags": list(upload.tags.values_list("name", flat=True)),
             "image": image_url,
         }
 

@@ -12,6 +12,9 @@
   background: var(--top-nav-background, rgba(12, 15, 18, 0.68));
   border-bottom: 1px solid var(--top-nav-border, rgba(255, 255, 255, 0.08));
   backdrop-filter: blur(16px);
+  /* 优化iOS上的滚动性能 */
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
 }
 
 .top-nav--fixed {
@@ -21,6 +24,10 @@
   right: 0;
   width: 100%;
   z-index: 80;
+  /* 确保在iOS上真正固定 */
+  transform: translateZ(0);
+  will-change: transform;
+  -webkit-transform: translateZ(0);
 }
 
 .top-nav__leading {

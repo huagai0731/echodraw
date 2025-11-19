@@ -25,6 +25,9 @@ body {
   margin: 0;
   min-height: 100vh;
   background-color: #221b1b;
+  /* 优化iOS上的滚动性能，确保固定定位元素不会移动 */
+  -webkit-overflow-scrolling: touch;
+  overflow-x: hidden;
 }
 
 a {

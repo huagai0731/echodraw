@@ -15,6 +15,7 @@ import {
   setAuthToken,
   updateProfilePreferences,
 } from "@/services/api";
+import { clearAllUserCache } from "@/utils/clearUserCache";
 import TopNav from "@/components/TopNav";
 import { loadFeaturedArtworkIds } from "@/services/featuredArtworks";
 import type { Artwork } from "@/pages/Gallery";
@@ -45,11 +46,20 @@ type ViewState =
 const STORAGE_KEY = "echodraw-auth";
 const DEFAULT_SIGNATURE = "一副完整的画，一个崭新落成的次元";
 const PREFS_STORAGE_KEY = "echodraw-profile-preferences";
+const STATS_STORAGE_KEY = "echodraw-profile-stats";
 
 type StoredPreferences = {
   email: string;
   displayName: string;
   signature: string;
+};
+
+type StoredStats = {
+  email: string;
+  totalCheckInDays: number;
+  totalDurationMinutes: number;
+  totalUploads: number;
+  timestamp: number;
 };
 
 function loadStoredPreferences(email: string): StoredPreferences | null {
@@ -126,6 +136,87 @@ function clearStoredPreferences() {
       console.warn("[Echo] localStorage access denied or unavailable");
     } else {
       console.warn("[Echo] Failed to clear stored profile preferences:", error);
+    }
+  }
+}
+
+function loadStoredStats(email: string): StoredStats | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(STATS_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw) as StoredStats;
+    // 检查是否是同一用户的数据，且缓存时间不超过5分钟
+    const now = Date.now();
+    const CACHE_EXPIRY = 5 * 60 * 1000; // 5分钟
+    if (
+      parsed?.email &&
+      parsed.email === email &&
+      parsed.timestamp &&
+      now - parsed.timestamp < CACHE_EXPIRY
+    ) {
+      return parsed;
+    }
+  } catch (error) {
+    console.warn("[Echo] Failed to parse stored profile stats:", error);
+  }
+  return null;
+}
+
+function storeStats(
+  email: string,
+  totalCheckInDays: number,
+  totalDurationMinutes: number,
+  totalUploads: number,
+) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const payload: StoredStats = {
+    email,
+    totalCheckInDays,
+    totalDurationMinutes,
+    totalUploads,
+    timestamp: Date.now(),
+  };
+
+  try {
+    window.localStorage.setItem(STATS_STORAGE_KEY, JSON.stringify(payload));
+  } catch (error) {
+    // 处理localStorage配额超出错误
+    if (error instanceof DOMException && error.name === "QuotaExceededError") {
+      console.warn("[Echo] localStorage quota exceeded, attempting to clear old stats");
+      try {
+        window.localStorage.removeItem(STATS_STORAGE_KEY);
+        window.localStorage.setItem(STATS_STORAGE_KEY, JSON.stringify(payload));
+      } catch (retryError) {
+        console.warn("[Echo] Failed to persist profile stats after cleanup:", retryError);
+      }
+    } else {
+      console.warn("[Echo] Failed to persist profile stats:", error);
+    }
+  }
+}
+
+function clearStoredStats() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.removeItem(STATS_STORAGE_KEY);
+  } catch (error) {
+    // localStorage可能被禁用或不可用，静默处理
+    if (error instanceof DOMException) {
+      console.warn("[Echo] localStorage access denied or unavailable");
+    } else {
+      console.warn("[Echo] Failed to clear stored profile stats:", error);
     }
   }
 }
@@ -229,6 +320,9 @@ function Profile({
     setDisplayName("");
     setSignature(DEFAULT_SIGNATURE);
     clearStoredPreferences();
+    clearStoredStats();
+    // 清除所有用户相关的缓存
+    clearAllUserCache();
     setHandledForcedLogoutVersion(forcedLogoutVersion);
   }, [forcedLogoutVersion, handledForcedLogoutVersion, auth]);
 
@@ -238,6 +332,8 @@ function Profile({
     setAuth(payload);
     setCachedEmail(payload.user.email);
     setView("dashboard");
+    // 清除旧的缓存，确保新用户不会看到之前用户的数据
+    clearAllUserCache();
   }, []);
 
   const userEmail = auth?.user.email ?? null;
@@ -247,6 +343,7 @@ function Profile({
       setDisplayName("");
       setSignature(DEFAULT_SIGNATURE);
       clearStoredPreferences();
+      clearStoredStats();
       return;
     }
 
@@ -404,6 +501,8 @@ function Profile({
     setAuth(null);
     setView("welcome");
     setPendingTier(null);
+    // 清除所有用户相关的缓存
+    clearAllUserCache();
   }, []);
 
   if (view === "login") {
@@ -563,12 +662,23 @@ function ProfileDashboard({
     premiumQuarter: "Plus",
   };
   const currentMembershipLabel = membershipLabels[membershipTier] ?? membershipLabels.pending;
-  const [stats, setStats] = useState({
-    totalCheckInDays: 0,
-    totalDurationMinutes: 0,
-    totalUploads: 0,
+  // 先从缓存加载统计数据，避免闪烁
+  const [stats, setStats] = useState(() => {
+    const cached = loadStoredStats(email);
+    if (cached) {
+      return {
+        totalCheckInDays: cached.totalCheckInDays,
+        totalDurationMinutes: cached.totalDurationMinutes,
+        totalUploads: cached.totalUploads,
+      };
+    }
+    return {
+      totalCheckInDays: 0,
+      totalDurationMinutes: 0,
+      totalUploads: 0,
+    };
   });
-  const [isStatsLoading, setIsStatsLoading] = useState(true);
+  const [isStatsLoading, setIsStatsLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -587,7 +697,11 @@ function ProfileDashboard({
         return;
       }
 
-      setIsStatsLoading(true);
+      // 如果已有缓存数据，不显示加载状态，静默更新
+      const cached = loadStoredStats(email);
+      if (!cached) {
+        setIsStatsLoading(true);
+      }
 
       try {
         const [checkInResult, uploadsResult] = await Promise.allSettled([
@@ -642,15 +756,27 @@ function ProfileDashboard({
 
         if (!cancelled && !requestAbortController.signal.aborted) {
           setStats(nextStats);
+          // 保存到缓存，供下次快速显示
+          storeStats(
+            email,
+            nextStats.totalCheckInDays,
+            nextStats.totalDurationMinutes,
+            nextStats.totalUploads,
+          );
         }
       } catch (error) {
         if (!cancelled && !requestAbortController.signal.aborted) {
           console.warn("[Echo] Failed to load profile stats:", error);
-          setStats({
-            totalCheckInDays: 0,
-            totalDurationMinutes: 0,
-            totalUploads: 0,
-          });
+          // 如果加载失败，但有缓存数据，保持缓存数据不变
+          const cached = loadStoredStats(email);
+          if (!cached) {
+            // 只有在没有缓存时才设置为0
+            setStats({
+              totalCheckInDays: 0,
+              totalDurationMinutes: 0,
+              totalUploads: 0,
+            });
+          }
         }
       } finally {
         if (!cancelled && !requestAbortController.signal.aborted) {

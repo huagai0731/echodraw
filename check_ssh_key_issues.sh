@@ -32,3 +32,4 @@ echo ""
 echo "=== 5. 检查SSH服务是否正常运行 ==="
 systemctl status sshd --no-pager | head -3
 
+

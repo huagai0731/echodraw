@@ -225,6 +225,10 @@ urlpatterns = [
     path("tests/<int:test_id>/", views.user_test_detail, name="user-test-detail"),
     path("tests/submit/", views.user_test_submit, name="user-test-submit"),
     path("tests/results/<int:result_id>/", views.user_test_result, name="user-test-result"),
+    # 标签管理 API
+    path("tags/", views.tags_list, name="tags-list"),
+    path("tags/manage/", views.TagListCreateView.as_view(), name="tags-manage"),
+    path("tags/manage/<int:pk>/", views.TagDetailView.as_view(), name="tags-manage-detail"),
     path("", include(router.urls)),
 ]
 

@@ -1045,8 +1045,16 @@ function ShortTermGoalDetails({
             </p>
             <textarea
               value={dayNote}
-              onChange={(e) => setDayNote(e.target.value)}
-              placeholder="今天有什么想说的吗?"
+              onChange={(e) => {
+                // 限制备注长度，防止过长文本
+                const maxLength = 500;
+                const value = e.target.value;
+                if (value.length <= maxLength) {
+                  setDayNote(value);
+                }
+              }}
+              placeholder="今天有什么想说的吗? (最多500字)"
+              maxLength={500}
               style={{
                 width: "100%",
                 minHeight: "120px",
@@ -1061,6 +1069,16 @@ function ShortTermGoalDetails({
                 outline: "none",
               }}
             />
+            {dayNote.length > 0 && (
+              <p style={{ 
+                margin: 0, 
+                color: dayNote.length > 450 ? "rgba(255, 200, 200, 0.8)" : "rgba(255, 255, 255, 0.5)", 
+                fontSize: "0.75rem",
+                textAlign: "right"
+              }}>
+                {dayNote.length}/500
+              </p>
+            )}
             <div
               style={{
                 display: "flex",

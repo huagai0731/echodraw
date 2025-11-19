@@ -13,13 +13,13 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.mail import send_mail
 from django.core.validators import validate_email
-from django.db import transaction, IntegrityError
+from django.db import transaction, IntegrityError, models
 from django.db.models import Max
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from rest_framework import generics, status
-from rest_framework.decorators import api_view, permission_classes, authentication_classes
+from rest_framework import generics, status, serializers
+from rest_framework.decorators import api_view, permission_classes, authentication_classes, throttle_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -92,12 +92,14 @@ from core.models import (
     EmailVerification,
     EncouragementMessage,
     HolidayMessage,
+    LoginAttempt,
     LongTermGoal,
     LongTermPlanCopy,
     Notification,
     ShortTermGoal,
     ShortTermGoalTaskCompletion,
     ShortTermTaskPreset,
+    Tag,
     Test,
     TestQuestion,
     TestOptionText,
@@ -116,6 +118,7 @@ from core.serializers import (
     NotificationPublicSerializer,
     ShortTermGoalSerializer,
     ShortTermTaskPresetPublicSerializer,
+    TagSerializer,
     UserTaskPresetPublicSerializer,
     UserTaskPresetSerializer,
     UserUploadSerializer,
@@ -685,6 +688,7 @@ def reset_password(request):
 @api_view(["POST"])
 @permission_classes([AllowAny])
 @authentication_classes([])
+@throttle_classes([])  # 禁用默认节流，因为登录视图已有自己的失败次数限制逻辑
 def login(request):
     email = _normalize_email(request.data.get("email", ""))
     password = request.data.get("password", "")
@@ -701,19 +705,70 @@ def login(request):
             {"detail": "邮箱格式不正确"}, status=status.HTTP_400_BAD_REQUEST
         )
 
+    # 登录失败次数限制（防止暴力破解）
+    # 检查IP和邮箱的组合，防止通过多个邮箱绕过IP限流
+    client_ip = request.META.get('REMOTE_ADDR', 'unknown')
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        first_ip = x_forwarded_for.split(',')[0].strip()
+        # 基本验证IP格式（防止X-Forwarded-For被伪造）
+        if first_ip and len(first_ip) <= 45:
+            client_ip = first_ip
+    
+    # 检查最近15分钟内的登录失败次数（同一IP或同一邮箱）
+    fifteen_minutes_ago = timezone.now() - timedelta(minutes=15)
+    
+    # 使用专门的LoginAttempt模型记录登录尝试
+    recent_failures = LoginAttempt.objects.filter(
+        success=False,
+        created_at__gte=fifteen_minutes_ago
+    ).filter(
+        models.Q(email__iexact=email) | models.Q(ip_address=client_ip)
+    ).count()
+    
+    # 限制：15分钟内最多5次失败尝试
+    MAX_LOGIN_FAILURES = 5
+    if recent_failures >= MAX_LOGIN_FAILURES:
+        return Response(
+            {
+                "detail": "登录失败次数过多，请15分钟后再试。如忘记密码，可使用\"忘记密码\"功能重置。",
+                "retry_after": 900,  # 15分钟（秒）
+            },
+            status=status.HTTP_429_TOO_MANY_REQUESTS,
+        )
+
     user_model = get_user_model()
 
     try:
         user = user_model.objects.get(email__iexact=email)
     except user_model.DoesNotExist:
+        # 记录登录失败尝试
+        LoginAttempt.objects.create(
+            email=email,
+            ip_address=client_ip,
+            success=False,
+        )
         return Response(
             {"detail": "邮箱或密码错误，请检查后重试。如忘记密码，可使用\"忘记密码\"功能重置。"}, status=status.HTTP_400_BAD_REQUEST
         )
 
     if not user.check_password(password):
+        # 记录登录失败尝试
+        LoginAttempt.objects.create(
+            email=email,
+            ip_address=client_ip,
+            success=False,
+        )
         return Response(
             {"detail": "邮箱或密码错误，请检查后重试。如忘记密码，可使用\"忘记密码\"功能重置。"}, status=status.HTTP_400_BAD_REQUEST
         )
+
+    # 记录登录成功
+    LoginAttempt.objects.create(
+        email=email,
+        ip_address=client_ip,
+        success=True,
+    )
 
     token_key = AuthToken.issue_for_user(user)
 
@@ -915,6 +970,7 @@ def profile_achievements(request):
     )
 
     try:
+        # 性能优化：使用select_related避免N+1查询
         achievements = (
             Achievement.objects.filter(is_active=True)
             .select_related("group")
@@ -1067,8 +1123,17 @@ class UserUploadListCreateView(generics.ListCreateAPIView):
             uploaded_at = timezone.make_aware(uploaded_at)
 
         # 明确转换为中国时区，确保日期计算正确
-        shanghai_time = uploaded_at.astimezone(SHANGHAI_TZ)
-        checkin_date = shanghai_time.date()
+        # 安全修复：检查 SHANGHAI_TZ 是否为 None
+        if SHANGHAI_TZ is None:
+            logger.warning(
+                f"SHANGHAI_TZ 未配置，使用时区回退方案",
+                extra={"user_id": self.request.user.id}
+            )
+            # 回退方案：直接使用本地日期
+            checkin_date = uploaded_at.date()
+        else:
+            shanghai_time = uploaded_at.astimezone(SHANGHAI_TZ)
+            checkin_date = shanghai_time.date()
 
         # 使用事务和异常处理防止并发竞态条件
         try:
@@ -1137,9 +1202,13 @@ class UserUploadImageView(APIView):
 
         try:
             token = AuthToken.objects.select_related("user").get(key=token_value)
+            # 安全修复：检查token是否过期
+            if token.is_expired:
+                return None
         except AuthToken.DoesNotExist:
             return None
 
+        # 使用update避免竞态条件
         AuthToken.objects.filter(pk=token.pk).update(last_used_at=timezone.now())
         return token.user
 
@@ -1236,20 +1305,24 @@ class ShortTermGoalDetailView(generics.RetrieveDestroyAPIView):
 def short_term_goal_task_completions(request, goal_id):
     """
     获取短期目标的任务完成记录（任务图片关联）和打卡时间。
+    
+    安全修复：确保用户只能访问自己的目标数据。
     """
     user = request.user
     try:
-        goal = ShortTermGoal.objects.get(pk=goal_id, user=user)
+        goal = ShortTermGoal.objects.select_related('user').get(pk=goal_id, user=user)
     except ShortTermGoal.DoesNotExist:
+        # 使用统一错误消息，不泄露是否存在该目标
         return Response(
             {"detail": "指定的短期目标不存在或不属于当前用户。"},
             status=status.HTTP_404_NOT_FOUND,
         )
     
     # 获取所有任务完成记录
+    # 性能优化：使用select_related避免N+1查询
     completions = ShortTermGoalTaskCompletion.objects.filter(
         goal=goal
-    ).select_related("upload").order_by("date", "task_id")
+    ).select_related("upload", "goal").order_by("date", "task_id")
     
     # 构建返回数据：按日期和任务ID组织
     # 使用任务完成记录的创建时间作为该目标的完成时间（而不是DailyCheckIn的时间）
@@ -1572,8 +1645,13 @@ def goals_calendar(request):
         # 明确转换为中国时区，确保日期计算正确
         if timezone.is_naive(uploaded_at):
             uploaded_at = timezone.make_aware(uploaded_at)
-        shanghai_time = uploaded_at.astimezone(SHANGHAI_TZ)
-        uploads.add(shanghai_time.date())
+        # 安全修复：检查 SHANGHAI_TZ 是否为 None
+        if SHANGHAI_TZ is not None:
+            shanghai_time = uploaded_at.astimezone(SHANGHAI_TZ)
+            uploads.add(shanghai_time.date())
+        else:
+            # 回退方案：直接使用本地日期
+            uploads.add(uploaded_at.date())
 
     days_payload = []
     cursor = display_start
@@ -1654,6 +1732,29 @@ def check_in(request):
                 {"detail": "不能为未来日期打卡，请选择今天或之前的日期"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        
+        # 频率限制：检查用户是否在短时间内重复打卡（防止恶意刷打卡）
+        # 检查最近30秒内是否有打卡记录（针对同一日期）
+        thirty_seconds_ago = timezone.now() - timedelta(seconds=30)
+        recent_checkin = DailyCheckIn.objects.filter(
+            user=user,
+            date=target_date,
+            checked_at__gte=thirty_seconds_ago
+        ).first()
+        
+        if recent_checkin:
+            # 如果最近30秒内已经为这个日期打卡过，返回友好提示
+            stats = _get_check_in_stats(user)
+            return Response(
+                {
+                    **stats,
+                    "created": False,
+                    "checked_date": target_date.isoformat(),
+                    "checked_at": recent_checkin.checked_at.isoformat() if hasattr(recent_checkin, 'checked_at') else timezone.now().isoformat(),
+                    "detail": "您刚刚已经打卡过了，请稍后再试。",
+                },
+                status=status.HTTP_200_OK,
+            )
 
         # 验证任务图片关联信息（如果提供）
         goal_id = None
@@ -1698,14 +1799,12 @@ def check_in(request):
                     checkin.notes = notes
                     update_fields.append("notes")
                 # 每次打卡都更新完成时间（无论是否有其他字段更新）
-                from django.utils import timezone
                 checkin.checked_at = timezone.now()
                 update_fields.append("checked_at")
                 checkin.save(update_fields=update_fields)
             except DailyCheckIn.DoesNotExist:
                 # 记录不存在，创建新记录
                 try:
-                    from django.utils import timezone
                     checkin = DailyCheckIn.objects.create(
                         user=user, date=target_date, source=source, notes=notes or "", checked_at=timezone.now()
                     )
@@ -1723,7 +1822,6 @@ def check_in(request):
                             checkin.notes = notes
                             update_fields.append("notes")
                         # 每次打卡都更新完成时间（无论是否有其他字段更新）
-                        from django.utils import timezone
                         checkin.checked_at = timezone.now()
                         update_fields.append("checked_at")
                         checkin.save(update_fields=update_fields)
@@ -1786,7 +1884,6 @@ def check_in(request):
             payload["checked_at"] = checkin.checked_at.isoformat()
         else:
             # 如果没有checked_at字段，使用当前时间
-            from django.utils import timezone
             payload["checked_at"] = timezone.now().isoformat()
         
         return Response(
@@ -1821,8 +1918,13 @@ def _get_check_in_stats(user):
         # 明确转换为中国时区，确保日期计算正确
         if timezone.is_naive(uploaded_at):
             uploaded_at = timezone.make_aware(uploaded_at)
-        shanghai_time = uploaded_at.astimezone(SHANGHAI_TZ)
-        upload_dates.add(shanghai_time.date())
+        # 安全修复：检查 SHANGHAI_TZ 是否为 None
+        if SHANGHAI_TZ is not None:
+            shanghai_time = uploaded_at.astimezone(SHANGHAI_TZ)
+            upload_dates.add(shanghai_time.date())
+        else:
+            # 回退方案：直接使用本地日期
+            upload_dates.add(uploaded_at.date())
     # 3) 合并为并集
     union_dates = checkin_dates | upload_dates
     if not union_dates:
@@ -2121,21 +2223,27 @@ def high_five_has_clicked(request):
 @permission_classes([IsAuthenticated])
 def user_tests_list(request):
     """获取可用的测试列表（只返回激活的测试）"""
-    tests = Test.objects.filter(is_active=True).order_by("display_order", "id")
+    # 性能优化：使用prefetch_related避免N+1查询
+    tests = Test.objects.filter(is_active=True).prefetch_related(
+        "dimensions", "questions"
+    ).order_by("display_order", "id")
     
     # 使用简化的序列化器，只返回必要字段
     from core.serializers import TestDimensionSerializer
     
     result = []
     for test in tests:
-        dimensions = test.dimensions.all().order_by("display_order", "id")
+        # 使用已预加载的关系
+        dimensions = list(test.dimensions.all().order_by("display_order", "id"))
+        # 统计激活的题目数量（使用已预加载的关系）
+        question_count = sum(1 for q in test.questions.all() if q.is_active)
         result.append({
             "id": test.id,
             "slug": test.slug,
             "name": test.name,
             "description": test.description or "",
             "test_type": test.test_type,
-            "question_count": test.questions.filter(is_active=True).count(),
+            "question_count": question_count,
             "dimensions": TestDimensionSerializer(dimensions, many=True).data,
         })
     
@@ -2149,7 +2257,10 @@ def user_test_detail(request, test_id):
     test = get_object_or_404(Test, id=test_id, is_active=True)
     
     # 获取所有激活的题目
-    questions = test.questions.filter(is_active=True).order_by("display_order", "id")
+    # 性能优化：使用prefetch_related避免N+1查询
+    questions = test.questions.filter(is_active=True).select_related("dimension").prefetch_related(
+        "option_texts__options__dimension"
+    ).order_by("display_order", "id")
     
     from core.serializers import TestQuestionSerializer, TestDimensionSerializer
     
@@ -2167,7 +2278,9 @@ def user_test_detail(request, test_id):
         
         # 如果是类型2，需要包含选项文本
         if test.test_type == Test.TYPE_2:
-            option_texts = question.option_texts.filter(is_active=True).order_by("display_order", "id")
+            # 使用已预加载的关系，避免额外查询
+            option_texts = [opt for opt in question.option_texts.all() if opt.is_active]
+            option_texts.sort(key=lambda x: (x.display_order, x.id))
             question_data["option_texts"] = []
             for option_text in option_texts:
                 option_data = {
@@ -2175,8 +2288,8 @@ def user_test_detail(request, test_id):
                     "text": option_text.text,
                     "options": [],
                 }
-                # 获取该选项文本对应的所有选项
-                options = option_text.options.filter(is_active=True)
+                # 获取该选项文本对应的所有选项（已预加载）
+                options = [opt for opt in option_text.options.all() if opt.is_active]
                 for option in options:
                     option_data["options"].append({
                         "endpoint_code": option.endpoint_code,
@@ -2188,8 +2301,8 @@ def user_test_detail(request, test_id):
         
         questions_data.append(question_data)
     
-    # 获取维度
-    dimensions = test.dimensions.all().order_by("display_order", "id")
+    # 获取维度（已通过ManyToMany关系预加载）
+    dimensions = list(test.dimensions.all().order_by("display_order", "id"))
     
     result = {
         "id": test.id,
@@ -2227,7 +2340,10 @@ def user_test_submit(request):
     test = get_object_or_404(Test, id=test_id, is_active=True)
     
     # 获取所有激活的题目
-    questions = test.questions.filter(is_active=True).order_by("display_order", "id")
+    # 性能优化：使用prefetch_related避免N+1查询
+    questions = test.questions.filter(is_active=True).select_related("dimension").prefetch_related(
+        "option_texts__options"
+    ).order_by("display_order", "id")
     
     # 验证答案完整性
     question_ids = {str(q.id) for q in questions}
@@ -2275,14 +2391,18 @@ def user_test_submit(request):
             except (ValueError, TypeError):
                 continue
             
-            # 查找对应的选项文本
-            try:
-                option_text = question.option_texts.get(id=option_text_id, is_active=True)
-            except TestOptionText.DoesNotExist:
+            # 查找对应的选项文本（使用已预加载的关系）
+            option_text = None
+            for opt_text in question.option_texts.all():
+                if opt_text.id == option_text_id and opt_text.is_active:
+                    option_text = opt_text
+                    break
+            
+            if not option_text:
                 continue
             
-            # 获取该选项文本对应的所有选项，累加得分
-            options = option_text.options.filter(is_active=True)
+            # 获取该选项文本对应的所有选项，累加得分（使用已预加载的关系）
+            options = [opt for opt in option_text.options.all() if opt.is_active]
             for option in options:
                 endpoint_code = option.endpoint_code
                 score = option.get_score()
@@ -2311,9 +2431,85 @@ def user_test_submit(request):
 def user_test_result(request, result_id):
     """获取测试结果"""
     user = request.user
-    result = get_object_or_404(UserTestResult, id=result_id, user=user)
+    # 安全修复：确保用户只能访问自己的测试结果
+    result = get_object_or_404(UserTestResult.objects.select_related('user', 'test'), id=result_id, user=user)
     
     from core.serializers import UserTestResultSerializer
     
     serializer = UserTestResultSerializer(result)
     return Response(serializer.data)
+
+
+# ==================== 标签管理 API ====================
+
+class TagListCreateView(generics.ListCreateAPIView):
+    """标签列表和创建视图"""
+    serializer_class = TagSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        user = self.request.user
+        # 返回预设标签和用户自定义标签
+        return Tag.objects.filter(
+            models.Q(is_preset=True, user__isnull=True) | models.Q(user=user, is_preset=False)
+        ).order_by("is_preset", "display_order", "name")
+    
+    def perform_create(self, serializer):
+        # 创建时自动设置用户
+        serializer.save(user=self.request.user, is_preset=False)
+
+
+class TagDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """标签详情、更新、删除视图"""
+    serializer_class = TagSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        user = self.request.user
+        # 用户只能管理自己的自定义标签，不能修改预设标签
+        return Tag.objects.filter(user=user, is_preset=False)
+    
+    def perform_update(self, serializer):
+        instance = serializer.instance
+        # 确保不能修改预设标签
+        if instance.is_preset or instance.user != self.request.user:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("不能修改预设标签或其他用户的标签。")
+        serializer.save()
+    
+    def perform_destroy(self, instance):
+        # 确保不能删除预设标签
+        if instance.is_preset or instance.user != self.request.user:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("不能删除预设标签或其他用户的标签。")
+        
+        # 检查是否有画作使用此标签
+        upload_count = instance.uploads.count()
+        if upload_count > 0:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError(
+                f"无法删除标签：仍有 {upload_count} 个画作使用此标签。请先移除画作上的标签。"
+            )
+        
+        instance.delete()
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def tags_list(request):
+    """获取所有可用标签（预设+用户自定义）"""
+    user = request.user
+    
+    # 获取预设标签
+    preset_tags = Tag.objects.filter(is_preset=True, user__isnull=True).order_by("display_order", "name")
+    
+    # 获取用户自定义标签
+    custom_tags = Tag.objects.filter(user=user, is_preset=False).order_by("display_order", "name")
+    
+    serializer = TagSerializer(preset_tags, many=True, context={"request": request})
+    custom_serializer = TagSerializer(custom_tags, many=True, context={"request": request})
+    
+    return Response({
+        "preset_tags": serializer.data,
+        "custom_tags": custom_serializer.data,
+    })

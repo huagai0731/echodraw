@@ -103,6 +103,8 @@ function clearStoredAuth() {
 
   try {
     window.localStorage.removeItem(AUTH_STORAGE_KEY);
+    // 注意：完整的缓存清除应该通过 clearAllUserCache() 函数完成
+    // 这里只清除认证信息，避免循环依赖
   } catch (error) {
     console.warn("[Echo] Failed to clear stored auth token:", error);
   }
@@ -971,7 +973,16 @@ export async function createUserUpload(input: CreateUserUploadInput) {
   formData.append("mood_label", input.moodLabel);
   formData.append("self_rating", String(input.selfRating));
   formData.append("duration_minutes", String(input.durationMinutes));
-  formData.append("tags", JSON.stringify(input.tags));
+  // 支持标签ID数组（新格式）或标签名称数组（旧格式兼容）
+  if (Array.isArray(input.tags) && input.tags.length > 0) {
+    // 检查是否是ID数组（数字）还是名称数组（字符串）
+    const isIdArray = input.tags.every(tag => typeof tag === 'number' || (typeof tag === 'string' && /^\d+$/.test(tag)));
+    if (isIdArray) {
+      formData.append("tag_ids", JSON.stringify(input.tags.map(id => Number(id))));
+    } else {
+      formData.append("tags", JSON.stringify(input.tags));
+    }
+  }
 
   const response = await api.post<UserUploadRecord>("/uploads/", formData, {
     headers: {
@@ -1330,6 +1341,120 @@ export async function fetchUserTestResult(resultId: number): Promise<UserTestRes
 export async function fetchUserTestResults(): Promise<UserTestResult[]> {
   const response = await api.get<UserTestResult[]>("/tests/results/");
   return response.data;
+}
+
+// ==================== 标签管理 API ====================
+
+export type TagResponse = {
+  id: number;
+  name: string;
+  is_preset: boolean;
+  is_hidden: boolean;
+  display_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type TagsListResponse = {
+  preset_tags: TagResponse[];
+  custom_tags: TagResponse[];
+};
+
+export type Tag = {
+  id: number;
+  name: string;
+  isPreset: boolean;
+  isHidden: boolean;
+  displayOrder: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CreateTagInput = {
+  name: string;
+  isHidden?: boolean;
+};
+
+export type UpdateTagInput = {
+  name?: string;
+  isHidden?: boolean;
+};
+
+/**
+ * 获取所有标签（预设+用户自定义）
+ */
+export async function fetchTags(): Promise<TagsListResponse> {
+  if (!hasAuthToken()) {
+    throw createUnauthorizedError();
+  }
+  const response = await api.get<TagsListResponse>("/tags/");
+  return response.data;
+}
+
+/**
+ * 获取标签列表（用于管理）
+ */
+export async function fetchTagList(): Promise<Tag[]> {
+  if (!hasAuthToken()) {
+    throw createUnauthorizedError();
+  }
+  const response = await api.get<TagResponse[]>("/tags/manage/");
+  return response.data.map(mapTag);
+}
+
+/**
+ * 创建标签
+ */
+export async function createTag(input: CreateTagInput): Promise<Tag> {
+  if (!hasAuthToken()) {
+    throw createUnauthorizedError();
+  }
+  const payload = {
+    name: input.name.trim(),
+    is_hidden: input.isHidden ?? false,
+  };
+  const response = await api.post<TagResponse>("/tags/manage/", payload);
+  return mapTag(response.data);
+}
+
+/**
+ * 更新标签
+ */
+export async function updateTag(id: number, input: UpdateTagInput): Promise<Tag> {
+  if (!hasAuthToken()) {
+    throw createUnauthorizedError();
+  }
+  const payload: Record<string, unknown> = {};
+  if (input.name !== undefined) {
+    payload.name = input.name.trim();
+  }
+  if (input.isHidden !== undefined) {
+    payload.is_hidden = input.isHidden;
+  }
+  const response = await api.patch<TagResponse>(`/tags/manage/${id}/`, payload);
+  return mapTag(response.data);
+}
+
+/**
+ * 删除标签
+ */
+export async function deleteTag(id: number): Promise<void> {
+  if (!hasAuthToken()) {
+    throw createUnauthorizedError();
+  }
+  await api.delete(`/tags/manage/${id}/`);
+}
+
+function mapTag(tag: TagResponse): Tag {
+  return {
+    id: tag.id,
+    name: tag.name,
+    isPreset: tag.is_preset,
+    isHidden: tag.is_hidden,
+    displayOrder: tag.display_order,
+    createdAt: tag.created_at,
+    updatedAt: tag.updated_at,
+  };
 }
 
 export default api;

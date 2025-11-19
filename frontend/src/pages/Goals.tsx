@@ -47,6 +47,10 @@ const LONG_TERM_GOAL_CACHE_KEY = "echo-long-term-goal-cache";
 const LONG_TERM_GOAL_CACHE_TIMESTAMP_KEY = "echo-long-term-goal-cache-timestamp";
 const CACHE_MAX_AGE = 5 * 60 * 1000; // 5分钟缓存有效期
 
+const CALENDAR_CACHE_KEY_PREFIX = "echo-goals-calendar-cache-";
+const CALENDAR_CACHE_TIMESTAMP_KEY_PREFIX = "echo-goals-calendar-timestamp-";
+const CALENDAR_CACHE_MAX_AGE = 5 * 60 * 1000; // 5分钟缓存有效期
+
 const FALLBACK_COVER_GRADIENTS = [
   "linear-gradient(135deg, rgba(152, 219, 198, 0.45), rgba(74, 63, 58, 0.55))",
   "linear-gradient(135deg, rgba(255, 197, 164, 0.5), rgba(116, 90, 84, 0.5))",
@@ -505,6 +509,126 @@ function saveCachedLongTermGoal(goal: LongTermGoal | null) {
   }
 }
 
+function getCalendarCacheKey(year: number, month: number): string {
+  return `${CALENDAR_CACHE_KEY_PREFIX}${year}-${month}`;
+}
+
+function getCalendarTimestampKey(year: number, month: number): string {
+  return `${CALENDAR_CACHE_TIMESTAMP_KEY_PREFIX}${year}-${month}`;
+}
+
+function loadCachedCalendar(year: number, month: number): GoalsCalendarDay[] | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  try {
+    const cacheKey = getCalendarCacheKey(year, month);
+    const timestampKey = getCalendarTimestampKey(year, month);
+    const cached = window.sessionStorage.getItem(cacheKey);
+    const timestamp = window.sessionStorage.getItem(timestampKey);
+    if (cached && timestamp) {
+      const age = Date.now() - Number.parseInt(timestamp, 10);
+      if (age < CALENDAR_CACHE_MAX_AGE) {
+        return JSON.parse(cached) as GoalsCalendarDay[];
+      }
+    }
+  } catch {
+    // ignore cache errors
+  }
+  return null;
+}
+
+function saveCachedCalendar(year: number, month: number, days: GoalsCalendarDay[]) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    const cacheKey = getCalendarCacheKey(year, month);
+    const timestampKey = getCalendarTimestampKey(year, month);
+    window.sessionStorage.setItem(cacheKey, JSON.stringify(days));
+    window.sessionStorage.setItem(timestampKey, String(Date.now()));
+  } catch {
+    // ignore cache errors
+  }
+}
+
+// 检查今天是否有新数据（上传或打卡）
+function shouldForceRefreshToday(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  try {
+    // 检查今天是否有新上传
+    const todayStr = formatISODateInShanghai(new Date());
+    if (!todayStr) {
+      return false;
+    }
+    
+    // 检查本地上传数据
+    const stored = loadStoredArtworks();
+    const hasTodayUpload = stored.some((artwork) => {
+      const dateKey = normalizeUploadedDate(
+        artwork.uploadedDate ?? null,
+        artwork.uploadedAt ?? null
+      );
+      return dateKey === todayStr;
+    });
+    
+    if (hasTodayUpload) {
+      // 检查缓存时间，如果缓存是今天之前的，需要刷新
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth() + 1;
+      const cached = loadCachedCalendar(currentYear, currentMonth);
+      if (cached) {
+        // 检查缓存中今天的数据是否是最新的
+        const todayInCache = cached.find((day) => day.date === todayStr);
+        if (!todayInCache || todayInCache.status === "none") {
+          // 缓存中没有今天的数据或状态不对，需要刷新
+          return true;
+        }
+      } else {
+        // 没有缓存，需要刷新
+        return true;
+      }
+    }
+    
+    // 检查是否有今天的打卡记录（从localStorage检查）
+    // 这里可以检查短期目标的完成日期
+    const goalKeys = Object.keys(localStorage).filter((key) =>
+      key.startsWith("short-term-goal-") && key.endsWith("-completed-dates")
+    );
+    for (const key of goalKeys) {
+      try {
+        const stored = localStorage.getItem(key);
+        if (stored) {
+          const completedDates = JSON.parse(stored) as string[];
+          if (completedDates.includes(todayStr)) {
+            // 有今天的打卡记录，检查缓存是否需要更新
+            const now = new Date();
+            const currentYear = now.getFullYear();
+            const currentMonth = now.getMonth() + 1;
+            const cached = loadCachedCalendar(currentYear, currentMonth);
+            if (cached) {
+              const todayInCache = cached.find((day) => day.date === todayStr);
+              if (!todayInCache || (todayInCache.status !== "check" && todayInCache.status !== "upload")) {
+                return true;
+              }
+            } else {
+              return true;
+            }
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+  } catch {
+    // ignore errors
+  }
+  return false;
+}
+
 // 短期目标相关的缓存和状态管理已移动到 useShortTermGoals hook
 
 function Goals() {
@@ -512,12 +636,34 @@ function Goals() {
   const [showWizard, setShowWizard] = useState(false);
   const [showLongTermSetup, setShowLongTermSetup] = useState(false);
   const [showLongTermMetaEdit, setShowLongTermMetaEdit] = useState(false);
-  const [longTermGoal, setLongTermGoal] = useState<LongTermGoal | null>(null);
+  // 初始化长期目标：先从缓存加载，避免闪烁
+  const [longTermGoal, setLongTermGoal] = useState<LongTermGoal | null>(() => {
+    return loadCachedLongTermGoal();
+  });
   const [longTermLoading, setLongTermLoading] = useState(false);
   const [longTermError, setLongTermError] = useState<string | null>(null);
   const [longTermRetryable, setLongTermRetryable] = useState(true);
   const [activeLongTermGoal, setActiveLongTermGoal] = useState<LongTermGoal | null>(null);
-  const [calendarDays, setCalendarDays] = useState<GoalsCalendarDay[]>([]);
+  
+  // 初始化打卡日历：先从缓存加载，避免闪烁
+  const [calendarDays, setCalendarDays] = useState<GoalsCalendarDay[]>(() => {
+    const now = new Date();
+    const todayStr = formatISODateInShanghai(now);
+    if (todayStr) {
+      const parsed = parseISODateInShanghai(todayStr);
+      if (parsed) {
+        const year = parsed.getFullYear();
+        const month = parsed.getMonth() + 1;
+        const cached = loadCachedCalendar(year, month);
+        if (cached) {
+          return cached;
+        }
+      }
+    }
+    // 如果没有缓存，返回骨架数据
+    const month = new Date(now.getFullYear(), now.getMonth(), 1);
+    return buildMonthSkeleton(month);
+  });
   const [calendarLoading, setCalendarLoading] = useState(false);
   const [calendarError, setCalendarError] = useState<string | null>(null);
   const [activeMonth, setActiveMonth] = useState(() => {
@@ -801,14 +947,10 @@ function Goals() {
     let active = true;
 
     async function loadInitialLongTermGoal() {
-      // 先尝试从缓存加载，避免闪烁
+      // 初始化时已经从缓存加载了，这里只需要在后台更新
+      // 如果缓存存在，不显示加载状态
       const cached = loadCachedLongTermGoal();
-      if (cached && active) {
-        setLongTermGoal(cached);
-        setLongTermError(null);
-        setLongTermRetryable(true);
-        setLongTermLoading(false);
-      } else {
+      if (!cached) {
         setLongTermLoading(true);
       }
 
@@ -876,10 +1018,54 @@ function Goals() {
         return;
       }
       refreshUploadData();
+      // 清除当前月的日历缓存，确保下次加载时获取最新数据
+      const now = new Date();
+      const todayStr = formatISODateInShanghai(now);
+      if (todayStr) {
+        const parsed = parseISODateInShanghai(todayStr);
+        if (parsed) {
+          const year = parsed.getFullYear();
+          const month = parsed.getMonth() + 1;
+          const cacheKey = getCalendarCacheKey(year, month);
+          const timestampKey = getCalendarTimestampKey(year, month);
+          try {
+            window.sessionStorage.removeItem(cacheKey);
+            window.sessionStorage.removeItem(timestampKey);
+          } catch {
+            // ignore
+          }
+          // 如果当前显示的就是当前月，立即刷新
+          if (activeMonth.getFullYear() === year && activeMonth.getMonth() + 1 === month) {
+            setAuthVersion((prev) => prev + 1);
+          }
+        }
+      }
     };
 
     const handleArtworksChanged = () => {
       refreshUploadData();
+      // 清除当前月的日历缓存，确保下次加载时获取最新数据
+      const now = new Date();
+      const todayStr = formatISODateInShanghai(now);
+      if (todayStr) {
+        const parsed = parseISODateInShanghai(todayStr);
+        if (parsed) {
+          const year = parsed.getFullYear();
+          const month = parsed.getMonth() + 1;
+          const cacheKey = getCalendarCacheKey(year, month);
+          const timestampKey = getCalendarTimestampKey(year, month);
+          try {
+            window.sessionStorage.removeItem(cacheKey);
+            window.sessionStorage.removeItem(timestampKey);
+          } catch {
+            // ignore
+          }
+          // 如果当前显示的就是当前月，立即刷新
+          if (activeMonth.getFullYear() === year && activeMonth.getMonth() + 1 === month) {
+            setAuthVersion((prev) => prev + 1);
+          }
+        }
+      }
     };
 
     window.addEventListener("storage", handleStorage);
@@ -888,7 +1074,7 @@ function Goals() {
       window.removeEventListener("storage", handleStorage);
       window.removeEventListener(USER_ARTWORKS_CHANGED_EVENT, handleArtworksChanged);
     };
-  }, [refreshUploadData]);
+  }, [refreshUploadData, activeMonth]);
 
   useEffect(() => {
     let isMounted = true;
@@ -900,7 +1086,33 @@ function Goals() {
         return;
       }
 
-      setCalendarLoading(true);
+      // 先尝试从缓存加载，避免闪烁
+      const cached = loadCachedCalendar(year, month);
+      if (cached && isMounted) {
+        setCalendarDays(cached);
+        setCalendarError(null);
+        setCalendarLoading(false);
+      } else {
+        setCalendarLoading(true);
+      }
+
+      // 检查是否需要强制刷新（今天有新数据）
+      // 如果当前月份是当前月份，且今天有新数据，需要强制刷新
+      const now = new Date();
+      const todayStr = formatISODateInShanghai(now);
+      let currentYear = now.getFullYear();
+      let currentMonth = now.getMonth() + 1;
+      if (todayStr) {
+        const parsed = parseISODateInShanghai(todayStr);
+        if (parsed) {
+          currentYear = parsed.getFullYear();
+          currentMonth = parsed.getMonth() + 1;
+        }
+      }
+      const forceRefresh = shouldForceRefreshToday() && 
+        year === currentYear && 
+        month === currentMonth;
+
       try {
         const data = await fetchGoalsCalendar({ year, month });
         if (!isMounted) {
@@ -908,6 +1120,8 @@ function Goals() {
         }
         setCalendarDays(data.days);
         setCalendarError(null);
+        // 保存到缓存
+        saveCachedCalendar(year, month, data.days);
       } catch (error) {
         if (!isMounted) {
           return;
@@ -918,8 +1132,13 @@ function Goals() {
           setCalendarError("登录后可查看打卡记录。");
         } else {
           console.warn("Failed to load goals calendar", error);
-          setCalendarDays([]);
-          setCalendarError("获取打卡记录失败，请稍后重试。");
+          // 如果加载失败但有缓存，保持使用缓存
+          if (!cached) {
+            setCalendarDays([]);
+            setCalendarError("获取打卡记录失败，请稍后重试。");
+          } else {
+            setCalendarError(null);
+          }
         }
       } finally {
         if (isMounted) {
@@ -1007,6 +1226,25 @@ function Goals() {
       // 立即更新打卡记录状态
       addCheckInDate(dateKey);
 
+      // 清除该日期所在月份的日历缓存，确保下次加载时获取最新数据
+      try {
+        const parsed = parseISODateInShanghai(dateKey);
+        if (parsed) {
+          const year = parsed.getFullYear();
+          const month = parsed.getMonth() + 1;
+          const cacheKey = getCalendarCacheKey(year, month);
+          const timestampKey = getCalendarTimestampKey(year, month);
+          window.sessionStorage.removeItem(cacheKey);
+          window.sessionStorage.removeItem(timestampKey);
+          // 如果当前显示的就是该月份，立即刷新
+          if (activeMonth.getFullYear() === year && activeMonth.getMonth() + 1 === month) {
+            setAuthVersion((prev) => prev + 1);
+          }
+        }
+      } catch {
+        // ignore
+      }
+
       // 刷新打卡记录，确保与服务器同步
       try {
         const dateRange = activeGoalDetail ? getGoalDateRange(activeGoalDetail) : null;
@@ -1019,7 +1257,7 @@ function Goals() {
         console.error("[Goals] Failed to refresh check-in dates after goal completion", error);
       }
     },
-    [activeGoalDetail, addCheckInDate, refreshCheckInDates, getGoalDateRange]
+    [activeGoalDetail, addCheckInDate, refreshCheckInDates, getGoalDateRange, activeMonth]
   );
 
   const handleGoalClose = useCallback(() => {

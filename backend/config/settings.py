@@ -27,19 +27,59 @@ load_dotenv(BASE_DIR / ".env.development", override=True)
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv(
-    "DJANGO_SECRET_KEY",
-    "django-insecure-cek3ua7xe03xkv)eoj&(f30fc8=_^#&l9slh-)vl85$q(qr_o1",
-)
+# 生产环境必须设置 DJANGO_SECRET_KEY 环境变量，不允许使用默认值
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
+if not SECRET_KEY:
+    import sys
+    print(
+        "错误: 生产环境必须设置 DJANGO_SECRET_KEY 环境变量！",
+        file=sys.stderr
+    )
+    print(
+        "提示: 可以使用以下命令生成密钥: python -c \"import secrets; print(secrets.token_urlsafe(50))\"",
+        file=sys.stderr
+    )
+    # 仅在开发环境允许使用默认值（不推荐）
+    _is_dev = os.getenv("DJANGO_ENVIRONMENT", "").lower() == "development"
+    if _is_dev:
+        SECRET_KEY = "django-insecure-cek3ua7xe03xkv)eoj&(f30fc8=_^#&l9slh-)vl85$q(qr_o1"
+        print("警告: 使用不安全的默认SECRET_KEY，仅用于开发环境", file=sys.stderr)
+    else:
+        raise ValueError("DJANGO_SECRET_KEY 环境变量未设置！生产环境必须设置此变量。")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() == "true"
+# 生产环境默认为False，必须通过环境变量明确设置为True才能启用DEBUG
+DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() == "true"
 
 _allowed_hosts = os.getenv("DJANGO_ALLOWED_HOSTS", "")
 ALLOWED_HOSTS = [host.strip() for host in _allowed_hosts.split(",") if host.strip()]
 
-if DEBUG and not ALLOWED_HOSTS:
-    ALLOWED_HOSTS = ["*"]
+# 开发环境自动添加本地地址
+if DEBUG:
+    # 开发环境允许所有主机，或添加常见的本地地址
+    if not ALLOWED_HOSTS:
+        ALLOWED_HOSTS = ["*"]
+    else:
+        # 如果已设置，确保包含本地地址
+        local_hosts = ["localhost", "127.0.0.1", "0.0.0.0"]
+        for host in local_hosts:
+            if host not in ALLOWED_HOSTS:
+                ALLOWED_HOSTS.append(host)
+else:
+    # 生产环境必须设置ALLOWED_HOSTS
+    if not ALLOWED_HOSTS:
+        import sys
+        print(
+            "错误: 生产环境必须设置 DJANGO_ALLOWED_HOSTS 环境变量！",
+            file=sys.stderr
+        )
+        print(
+            "示例: DJANGO_ALLOWED_HOSTS=yourdomain.com,www.yourdomain.com",
+            file=sys.stderr
+        )
+        # 生产环境不允许空ALLOWED_HOSTS，但为了不阻止启动，先设置为空列表
+        # 实际部署时应该设置正确的值
+        ALLOWED_HOSTS = []
 
 
 # Application definition
@@ -91,12 +131,63 @@ WSGI_APPLICATION = "config.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+# 数据库配置：支持SQLite（开发）和MySQL/PostgreSQL（生产）
+# 如果设置了数据库环境变量，使用MySQL/PostgreSQL；否则使用SQLite（仅开发环境）
+_db_engine = os.getenv("DJANGO_DB_ENGINE", "").lower()
+_db_name = os.getenv("DB_NAME", "")
+_db_user = os.getenv("DB_USER", "")
+_db_password = os.getenv("DB_PASSWORD", "")
+_db_host = os.getenv("DB_HOST", "localhost")
+_db_port = os.getenv("DB_PORT", "")
+
+if _db_engine and _db_name and _db_user:
+    # 使用MySQL或PostgreSQL
+    if _db_engine in ["mysql", "django.db.backends.mysql"]:
+        DATABASES = {
+            "default": {
+                "ENGINE": "django.db.backends.mysql",
+                "NAME": _db_name,
+                "USER": _db_user,
+                "PASSWORD": _db_password,
+                "HOST": _db_host,
+                "PORT": _db_port or "3306",
+                "OPTIONS": {
+                    "charset": "utf8mb4",
+                    "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
+                },
+            }
+        }
+    elif _db_engine in ["postgresql", "postgres", "django.db.backends.postgresql"]:
+        DATABASES = {
+            "default": {
+                "ENGINE": "django.db.backends.postgresql",
+                "NAME": _db_name,
+                "USER": _db_user,
+                "PASSWORD": _db_password,
+                "HOST": _db_host,
+                "PORT": _db_port or "5432",
+            }
+        }
+    else:
+        raise ValueError(f"不支持的数据库引擎: {_db_engine}。支持: mysql, postgresql")
+else:
+    # 使用SQLite（仅开发环境）
+    if not DEBUG:
+        import sys
+        print(
+            "警告: 生产环境应使用MySQL或PostgreSQL，当前使用SQLite",
+            file=sys.stderr
+        )
+        print(
+            "提示: 设置环境变量 DJANGO_DB_ENGINE、DB_NAME、DB_USER、DB_PASSWORD",
+            file=sys.stderr
+        )
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
     }
-}
 
 
 # Password validation
@@ -194,11 +285,22 @@ if not CORS_ALLOWED_ORIGIN_REGEXES and DEBUG:
 
 CORS_ALLOW_CREDENTIALS = True
 
+# CORS配置：生产环境不允许允许所有源
 _cors_allow_all = os.getenv("DJANGO_CORS_ALLOW_ALL", "")
 if _cors_allow_all:
     CORS_ALLOW_ALL_ORIGINS = _cors_allow_all.lower() == "true"
 elif DEBUG:
+    # 仅在DEBUG模式下允许所有源（开发环境）
     CORS_ALLOW_ALL_ORIGINS = True
+else:
+    # 生产环境必须明确配置允许的源
+    CORS_ALLOW_ALL_ORIGINS = False
+    if not CORS_ALLOWED_ORIGINS:
+        import sys
+        print(
+            "警告: 生产环境未配置 CORS_ALLOWED_ORIGINS，可能导致前端无法访问API",
+            file=sys.stderr
+        )
 
 _csrf_trusted = os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "")
 CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in _csrf_trusted.split(",") if origin.strip()]
@@ -221,6 +323,15 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
+    # API限流配置：防止滥用
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "100/hour",  # 匿名用户每小时100次请求
+        "user": "1000/hour",  # 认证用户每小时1000次请求
+    },
 }
 
 # Default primary key field type
@@ -228,6 +339,30 @@ REST_FRAMEWORK = {
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# ==================== 安全配置 ====================
+
+# 文件上传大小限制（防止DoS攻击）
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 1000  # 限制表单字段数量
+
+# 安全HTTP头配置
+if not DEBUG:
+    # 生产环境启用安全头
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = "DENY"
+    
+    # HSTS (HTTP Strict Transport Security)
+    # 注意：仅在HTTPS环境下启用
+    SECURE_HSTS_SECONDS = 31536000  # 1年
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    
+    # 如果使用HTTPS，取消下面的注释
+    # SECURE_SSL_REDIRECT = True
+    # SESSION_COOKIE_SECURE = True
+    # CSRF_COOKIE_SECURE = True
 
 # Email configuration
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
@@ -241,7 +376,14 @@ if _use_tls and _use_ssl:
 
 EMAIL_USE_TLS = _use_tls
 EMAIL_USE_SSL = _use_ssl
+# 邮箱配置：生产环境必须通过环境变量设置，不允许硬编码密码
 EMAIL_HOST_USER = os.getenv("SMTP_USERNAME", "echodraw@163.com")
-EMAIL_HOST_PASSWORD = os.getenv("SMTP_PASSWORD", "RLTFvFP3ReVTGhh8")
+EMAIL_HOST_PASSWORD = os.getenv("SMTP_PASSWORD")
+if not EMAIL_HOST_PASSWORD:
+    import sys
+    print(
+        "警告: SMTP_PASSWORD 环境变量未设置，邮件发送功能可能无法正常工作",
+        file=sys.stderr
+    )
 DEFAULT_FROM_EMAIL = os.getenv("SMTP_FROM_EMAIL", EMAIL_HOST_USER)
 EMAIL_TIMEOUT = int(os.getenv("SMTP_TIMEOUT", "15"))

@@ -4,17 +4,19 @@ import MaterialIcon from "@/components/MaterialIcon";
 import TopNav from "@/components/TopNav";
 import { PRESET_TAGS } from "@/constants/tagPresets";
 import {
-  createCustomTag,
   getDefaultTagPreferences,
-  loadTagPreferences,
+  loadTagPreferencesAsync,
   saveTagPreferences,
+  clearTagsCache,
   type CustomTag,
   type TagPreferences,
 } from "@/services/tagPreferences";
 import {
-  removeTagFromStoredArtworks,
-  replaceTagNameForStoredArtworks,
-} from "@/services/artworkStorage";
+  createTag,
+  updateTag,
+  deleteTag,
+  type Tag,
+} from "@/services/api";
 
 import "./CustomTagManager.css";
 
@@ -29,16 +31,28 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
   const [originalPreferences, setOriginalPreferences] = useState<TagPreferences>(getDefaultTagPreferences);
   const [draftPreferences, setDraftPreferences] = useState<TagPreferences>(getDefaultTagPreferences);
   const [newTagName, setNewTagName] = useState("");
-  const [editingTagId, setEditingTagId] = useState<string | null>(null);
+  const [editingTagId, setEditingTagId] = useState<number | null>(null);
   const [editingName, setEditingName] = useState("");
   const [feedback, setFeedback] = useState<string>("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const refreshPreferences = useCallback(() => {
-    const latest = loadTagPreferences(userEmail);
-    setOriginalPreferences(latest);
-    setDraftPreferences(clonePreferences(latest));
-    setEditingTagId(null);
-    setEditingName("");
+  const refreshPreferences = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const latest = await loadTagPreferencesAsync(userEmail);
+      setOriginalPreferences(latest);
+      setDraftPreferences(clonePreferences(latest));
+      setEditingTagId(null);
+      setEditingName("");
+    } catch (error) {
+      console.warn("[CustomTagManager] Failed to load preferences:", error);
+      const fallback = getDefaultTagPreferences();
+      setOriginalPreferences(fallback);
+      setDraftPreferences(clonePreferences(fallback));
+    } finally {
+      setIsLoading(false);
+    }
   }, [userEmail]);
 
   useEffect(() => {
@@ -63,7 +77,7 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
   const presetTagNames = useMemo(() => new Set(PRESET_TAGS.map((tag) => tag.name.toLowerCase())), []);
 
   const validateTagName = useCallback(
-    (name: string, excludeId?: string | null): string | null => {
+    (name: string, excludeId?: number | null): string | null => {
       const trimmed = name.trim();
       if (!trimmed) {
         return "标签名称不能为空";
@@ -104,7 +118,7 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
     setFeedback("");
   }, []);
 
-  const handleToggleCustomVisibility = useCallback((id: string) => {
+  const handleToggleCustomVisibility = useCallback((id: number) => {
     setDraftPreferences((prev) => {
       const nextTags = prev.customTags.map((tag) => {
         if (tag.id !== id) {
@@ -118,6 +132,9 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
       return {
         ...prev,
         customTags: nextTags,
+        hiddenCustomTagIds: nextTags
+          .filter(tag => tag.hidden)
+          .map(tag => tag.id),
       };
     });
     setFeedback("");
@@ -136,7 +153,7 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
   }, []);
 
   const handleConfirmEdit = useCallback(
-    (tag: CustomTag) => {
+    async (tag: CustomTag) => {
       const error = validateTagName(editingName, tag.id);
       if (error) {
         setFeedback(error);
@@ -149,49 +166,89 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
         return;
       }
 
-      setDraftPreferences((prev) => {
-        const nextTags = prev.customTags.map((item) => {
-          if (item.id !== tag.id) {
-            return item;
-          }
+      setIsSaving(true);
+      try {
+        // 调用后端API更新标签
+        await updateTag(tag.id, { name: trimmed });
+        clearTagsCache(); // 清除缓存，强制重新加载
+        
+        // 更新本地状态
+        setDraftPreferences((prev) => {
+          const nextTags = prev.customTags.map((item) => {
+            if (item.id !== tag.id) {
+              return item;
+            }
+            return {
+              ...item,
+              name: trimmed,
+            };
+          });
           return {
-            ...item,
-            name: trimmed,
+            ...prev,
+            customTags: nextTags,
           };
         });
-        return {
-          ...prev,
-          customTags: nextTags,
-        };
-      });
-      setEditingTagId(null);
-      setEditingName("");
-      setFeedback("标签名称已更新，请记得保存。");
+        
+        // 刷新偏好设置
+        await refreshPreferences();
+        setEditingTagId(null);
+        setEditingName("");
+        setFeedback("标签名称已更新。");
+      } catch (error) {
+        console.warn("[CustomTagManager] Failed to update tag:", error);
+        setFeedback("更新失败，请重试。");
+      } finally {
+        setIsSaving(false);
+      }
     },
-    [editingName, validateTagName],
+    [editingName, validateTagName, refreshPreferences],
   );
 
-  const handleDelete = useCallback((tag: CustomTag) => {
+  const handleDelete = useCallback(async (tag: CustomTag) => {
     if (typeof window !== "undefined" && typeof window.confirm === "function") {
-      const ok = window.confirm(`确定要删除标签“${tag.name}”吗？删除后将无法在上传时选择。`);
+      const ok = window.confirm(`确定要删除标签"${tag.name}"吗？删除后将无法在上传时选择。`);
       if (!ok) {
         return;
       }
     }
-    setDraftPreferences((prev) => {
-      return {
-        ...prev,
-        customTags: prev.customTags.filter((item) => item.id !== tag.id),
-      };
-    });
-    if (editingTagId === tag.id) {
-      setEditingTagId(null);
-      setEditingName("");
-    }
-    setFeedback("标签已移除，请保存后生效。");
-  }, [editingTagId]);
 
-  const handleAddTag = useCallback(() => {
+    setIsSaving(true);
+    try {
+      // 调用后端API删除标签
+      await deleteTag(tag.id);
+      clearTagsCache(); // 清除缓存
+      
+      // 更新本地状态
+      setDraftPreferences((prev) => {
+        return {
+          ...prev,
+          customTags: prev.customTags.filter((item) => item.id !== tag.id),
+          hiddenCustomTagIds: prev.hiddenCustomTagIds.filter(id => id !== tag.id),
+        };
+      });
+      
+      if (editingTagId === tag.id) {
+        setEditingTagId(null);
+        setEditingName("");
+      }
+      
+      // 刷新偏好设置
+      await refreshPreferences();
+      setFeedback("标签已删除。");
+    } catch (error) {
+      console.warn("[CustomTagManager] Failed to delete tag:", error);
+      const errorMessage = error instanceof Error ? error.message : "删除失败";
+      if (errorMessage.includes("仍有") && errorMessage.includes("个画作使用")) {
+        setFeedback(errorMessage);
+      } else {
+        setFeedback("删除失败，请重试。");
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  }, [editingTagId, refreshPreferences]);
+
+  const handleAddTag = useCallback(async () => {
     const error = validateTagName(newTagName, null);
     if (error) {
       setFeedback(error);
@@ -199,14 +256,35 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
     }
 
     const trimmed = newTagName.trim();
-    const newTag = createCustomTag(trimmed);
-    setDraftPreferences((prev) => ({
-      ...prev,
-      customTags: [...prev.customTags, newTag],
-    }));
-    setNewTagName("");
-    setFeedback("标签已添加，请保存后在上传页使用。");
-  }, [newTagName, validateTagName]);
+    setIsSaving(true);
+    try {
+      // 调用后端API创建标签
+      const createdTag = await createTag({ name: trimmed });
+      clearTagsCache(); // 清除缓存
+      
+      // 更新本地状态
+      const newTag: CustomTag = {
+        id: createdTag.id,
+        name: createdTag.name,
+        hidden: false,
+      };
+      setDraftPreferences((prev) => ({
+        ...prev,
+        customTags: [...prev.customTags, newTag],
+      }));
+      
+      setNewTagName("");
+      
+      // 刷新偏好设置
+      await refreshPreferences();
+      setFeedback("标签已添加，可在上传页使用。");
+    } catch (error) {
+      console.warn("[CustomTagManager] Failed to create tag:", error);
+      setFeedback("添加失败，请重试。");
+    } finally {
+      setIsSaving(false);
+    }
+  }, [newTagName, validateTagName, refreshPreferences]);
 
   const handleSubmit = useCallback(
     (event: React.FormEvent<HTMLFormElement>) => {
@@ -219,35 +297,18 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
   const handleBack = useCallback(async () => {
     if (dirty) {
       try {
-        saveTagPreferences(userEmail, draftPreferences);
-        const renames: Array<{ oldName: string; newName: string }> = [];
-
-        for (const tag of originalPreferences.customTags) {
-          const next = draftPreferences.customTags.find((item) => item.id === tag.id);
-          if (next && next.name !== tag.name) {
-            renames.push({ oldName: tag.name, newName: next.name });
-          }
-        }
-
-        const removed = originalPreferences.customTags.filter(
-          (tag) => !draftPreferences.customTags.some((item) => item.id === tag.id),
-        );
-
-        for (const rename of renames) {
-          replaceTagNameForStoredArtworks(rename.oldName, rename.newName);
-        }
-
-        for (const tag of removed) {
-          removeTagFromStoredArtworks(tag.name);
-        }
-
+        // 只保存隐藏偏好（标签的创建/更新/删除已经通过API完成）
+        saveTagPreferences(userEmail, {
+          ...draftPreferences,
+          customTags: [], // 不保存标签列表，从后端获取
+        });
         setOriginalPreferences(clonePreferences(draftPreferences));
       } catch (error) {
         console.warn("[Echo] Failed to save tag preferences on back:", error);
       }
     }
     onBack();
-  }, [dirty, draftPreferences, originalPreferences, userEmail, onBack]);
+  }, [dirty, draftPreferences, userEmail, onBack]);
 
   return (
     <div className="custom-tag-page">
@@ -270,6 +331,12 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
       />
 
       <main className="custom-tag-page__content">
+        {isLoading ? (
+          <div style={{ padding: "2rem", textAlign: "center", color: "rgba(239, 234, 231, 0.6)" }}>
+            加载中...
+          </div>
+        ) : (
+          <>
         <section className="custom-tag-section">
           <header>
             <h2>预设标签可见性</h2>
@@ -389,6 +456,8 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
             </span>
           </div>
         </section>
+          </>
+        )}
       </main>
     </div>
   );
@@ -399,6 +468,7 @@ export default CustomTagManager;
 function clonePreferences(preferences: TagPreferences): TagPreferences {
   return {
     hiddenPresetTagIds: [...preferences.hiddenPresetTagIds],
+    hiddenCustomTagIds: [...preferences.hiddenCustomTagIds],
     customTags: preferences.customTags.map((tag) => ({ ...tag })),
   };
 }
@@ -416,12 +486,24 @@ function areTagPreferencesEqual(a: TagPreferences, b: TagPreferences): boolean {
     }
   }
 
+  if (a.hiddenCustomTagIds.length !== b.hiddenCustomTagIds.length) {
+    return false;
+  }
+
+  const hiddenCustomA = [...a.hiddenCustomTagIds].sort((x, y) => x - y);
+  const hiddenCustomB = [...b.hiddenCustomTagIds].sort((x, y) => x - y);
+  for (let i = 0; i < hiddenCustomA.length; i += 1) {
+    if (hiddenCustomA[i] !== hiddenCustomB[i]) {
+      return false;
+    }
+  }
+
   if (a.customTags.length !== b.customTags.length) {
     return false;
   }
 
-  const customA = [...a.customTags].sort((left, right) => left.id.localeCompare(right.id));
-  const customB = [...b.customTags].sort((left, right) => left.id.localeCompare(right.id));
+  const customA = [...a.customTags].sort((left, right) => left.id - right.id);
+  const customB = [...b.customTags].sort((left, right) => left.id - right.id);
 
   for (let i = 0; i < customA.length; i += 1) {
     if (customA[i].id !== customB[i].id) {

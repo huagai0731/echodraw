@@ -221,6 +221,23 @@
   display: block;
 }
 
+.artwork-details-screen__image--placeholder {
+  width: 100%;
+  min-height: 300px;
+  max-height: 70vh;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(152, 219, 198, 0.1);
+  border-radius: inherit;
+}
+
+.artwork-details-screen__placeholder-icon {
+  font-size: 3rem;
+  margin-bottom: 0.5rem;
+}
+
 .artwork-details-screen__nav {
   flex-shrink: 0;
   width: 3rem;

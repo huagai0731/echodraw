@@ -168,6 +168,9 @@ class UserProfile(models.Model):
         ordering = ["user__email"]
         verbose_name = "用户资料"
         verbose_name_plural = "用户资料"
+        indexes = [
+            models.Index(fields=["registration_number"]),  # 性能优化：为注册编号添加索引
+        ]
 
     def __str__(self) -> str:
         return self.display_name or self.user.get_username()
@@ -182,6 +185,63 @@ class UserProfile(models.Model):
             changed = True
         if changed:
             self.save(update_fields=["display_name", "signature", "updated_at"])
+
+
+class Tag(models.Model):
+    """
+    标签模型：存储用户自定义标签和预设标签。
+    预设标签的user为None，自定义标签关联到具体用户。
+    """
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="custom_tags",
+        null=True,
+        blank=True,
+        help_text="标签所属用户，None表示预设标签。",
+    )
+    name = models.CharField(
+        max_length=24,
+        help_text="标签名称，最多24个字符。",
+    )
+    is_preset = models.BooleanField(
+        default=False,
+        help_text="是否为预设标签。",
+    )
+    is_hidden = models.BooleanField(
+        default=False,
+        help_text="是否隐藏（用户可隐藏预设标签或自定义标签）。",
+    )
+    display_order = models.PositiveIntegerField(
+        default=100,
+        help_text="显示顺序，数值越小越靠前。",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["user", "-created_at"]),
+            models.Index(fields=["is_preset", "is_hidden"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "name"],
+                condition=models.Q(user__isnull=False),
+                name="unique_user_tag_name",
+            ),
+            models.UniqueConstraint(
+                fields=["name"],
+                condition=models.Q(user__isnull=True, is_preset=True),
+                name="unique_preset_tag_name",
+            ),
+        ]
+        ordering = ["display_order", "name"]
+
+    def __str__(self):
+        if self.is_preset:
+            return f"[预设] {self.name}"
+        return f"{self.user.email if self.user else 'Unknown'} - {self.name}"
 
 
 class UserUpload(models.Model):
@@ -207,10 +267,17 @@ class UserUpload(models.Model):
         blank=True,
         help_text="上传时选择的心情标签。",
     )
-    tags = models.JSONField(
+    tags = models.ManyToManyField(
+        Tag,
+        related_name="uploads",
+        blank=True,
+        help_text="上传时选择的作品标签。",
+    )
+    # 保留旧的tags JSONField用于数据迁移，迁移完成后可删除
+    tags_old = models.JSONField(
         default=list,
         blank=True,
-        help_text="上传时选择的作品标签列表。",
+        help_text="[已废弃] 旧版标签存储，仅用于数据迁移。",
     )
     duration_minutes = models.PositiveIntegerField(
         null=True,
@@ -1565,14 +1632,14 @@ class MonthlyReportTemplate(models.Model):
     min_avg_rating = models.FloatField(
         null=True,
         blank=True,
-        validators=[MinValueValidator(0), MaxValueValidator(5)],
-        help_text="平均自评分最低值（含）。",
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        help_text="平均自评分最低值（含），范围 0-100。",
     )
     max_avg_rating = models.FloatField(
         null=True,
         blank=True,
-        validators=[MinValueValidator(0), MaxValueValidator(5)],
-        help_text="平均自评分最高值（含）。",
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        help_text="平均自评分最高值（含），范围 0-100。",
     )
     
     # 与上月对比条件
@@ -1890,3 +1957,29 @@ class HighFiveClick(models.Model):
         if self.user:
             return f"{self.user.email} - {self.created_at}"
         return f"Session {self.session_key} - {self.created_at}"
+
+
+class LoginAttempt(models.Model):
+    """
+    登录尝试记录：用于追踪登录失败次数，防止暴力破解攻击。
+    
+    与EmailVerification表分离，避免混淆验证码和登录失败记录。
+    """
+    email = models.EmailField(db_index=True, help_text="尝试登录的邮箱地址")
+    ip_address = models.CharField(max_length=45, db_index=True, help_text="客户端IP地址")
+    success = models.BooleanField(default=False, help_text="登录是否成功")
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["email", "-created_at"]),
+            models.Index(fields=["ip_address", "-created_at"]),
+            models.Index(fields=["created_at"]),
+        ]
+        verbose_name = "登录尝试记录"
+        verbose_name_plural = "登录尝试记录"
+
+    def __str__(self) -> str:
+        status = "成功" if self.success else "失败"
+        return f"{self.email} @ {self.ip_address} - {status} - {self.created_at}"

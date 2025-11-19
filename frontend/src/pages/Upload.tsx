@@ -4,14 +4,15 @@ import MaterialIcon from "@/components/MaterialIcon";
 import TopNav from "@/components/TopNav";
 import { getActiveUserEmail } from "@/services/authStorage";
 import {
-  buildTagOptions,
-  createCustomTag,
-  loadTagPreferences,
+  buildTagOptionsAsync,
+  loadTagPreferencesAsync,
   saveTagPreferences,
+  clearTagsCache,
   TAG_PREFERENCES_CHANGED_EVENT,
   type TagOption,
   type TagPreferences,
 } from "@/services/tagPreferences";
+import { createTag } from "@/services/api";
 import { PRESET_TAGS } from "@/constants/tagPresets";
 import { loadStoredArtworks, USER_ARTWORKS_CHANGED_EVENT } from "@/services/artworkStorage";
 import type { Artwork } from "@/types/artwork";
@@ -22,7 +23,7 @@ export type UploadResult = {
   file: File;
   title: string;
   description: string;
-  tags: string[];
+  tags: (string | number)[]; // 支持字符串ID（预设标签）和数字ID（自定义标签）
   mood: string;
   rating: number;
   durationMinutes: number;
@@ -63,22 +64,13 @@ const MOODS = [
 ];
 
 function Upload({ onClose, onSave }: UploadProps) {
-  const initialTagState = useMemo(() => {
-    const email = getActiveUserEmail();
-    const preferences = loadTagPreferences(email);
-    const options = buildTagOptions(preferences);
-    return {
-      options,
-      selectedIds: options.filter((option) => option.defaultActive).map((option) => option.id),
-    };
-  }, []);
-
   const [rating, setRating] = useState(70);
   const [showRating, setShowRating] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [tagOptions, setTagOptions] = useState<TagOption[]>(initialTagState.options);
-  const [selectedTags, setSelectedTags] = useState<string[]>(initialTagState.selectedIds);
+  const [tagOptions, setTagOptions] = useState<TagOption[]>([]);
+  const [selectedTags, setSelectedTags] = useState<(string | number)[]>([]);
+  const [isLoadingTags, setIsLoadingTags] = useState(true);
   const [selectedMood, setSelectedMood] = useState<string>("心旷神怡");
   const [durationHours, setDurationHours] = useState<number>(1);
   const [durationMinutes, setDurationMinutes] = useState<number>(30);
@@ -224,7 +216,7 @@ function Upload({ onClose, onSave }: UploadProps) {
     setShowRating((prev) => !prev);
   };
 
-  const handleTagToggle = (id: string) => {
+  const handleTagToggle = (id: string | number) => {
     setSelectedTags((prev) => (prev.includes(id) ? prev.filter((tagId) => tagId !== id) : [...prev, id]));
   };
 
@@ -232,13 +224,10 @@ function Upload({ onClose, onSave }: UploadProps) {
     setSelectedMood(label);
   };
 
-  const handleAddTagShortcut = () => {
+  const handleAddTagShortcut = async () => {
     if (typeof window === "undefined") {
       return;
     }
-
-    const email = getActiveUserEmail();
-    const preferences = loadTagPreferences(email);
 
     const input = window.prompt("输入自定义标签名称（12 个字符以内）");
     if (input === null) {
@@ -255,34 +244,40 @@ function Upload({ onClose, onSave }: UploadProps) {
       return;
     }
 
+    // 检查是否与现有标签重名
     const normalized = name.toLowerCase();
     const existingNames = new Set<string>([
-      ...preferences.customTags.map((tag) => tag.name.toLowerCase()),
-      ...PRESET_TAGS.map((preset) => preset.name.toLowerCase()),
+      ...tagOptions.map((tag) => tag.name.toLowerCase()),
     ]);
     if (existingNames.has(normalized)) {
       window.alert("标签名称已存在，请使用其他名称");
       return;
     }
 
-    const newTag = createCustomTag(name);
-    const nextPreferences: TagPreferences = {
-      ...preferences,
-      customTags: [...preferences.customTags, newTag],
-    };
+    try {
+      // 调用后端API创建标签
+      const createdTag = await createTag({ name });
+      clearTagsCache(); // 清除缓存
+      
+      // 刷新标签列表
+      const email = getActiveUserEmail();
+      const preferences = await loadTagPreferencesAsync(email);
+      const options = await buildTagOptionsAsync(preferences);
+      setTagOptions(options);
+      
+      // 自动选中新创建的标签
+      setSelectedTags((prev) => {
+        if (prev.includes(createdTag.id)) {
+          return prev;
+        }
+        return [...prev, createdTag.id];
+      });
 
-    saveTagPreferences(email, nextPreferences);
-
-    const options = buildTagOptions(nextPreferences);
-    setTagOptions(options);
-    setSelectedTags((prev) => {
-      if (prev.includes(newTag.id)) {
-        return prev;
-      }
-      return [...prev, newTag.id];
-    });
-
-    window.alert("标签已添加，可在上传时直接使用。");
+      window.alert("标签已添加，可在上传时直接使用。");
+    } catch (error) {
+      console.warn("[Upload] Failed to create tag:", error);
+      window.alert("添加失败，请重试。");
+    }
   };
 
   // 用于触发 allCollections 重新计算的计数器
@@ -455,9 +450,8 @@ function Upload({ onClose, onSave }: UploadProps) {
       return;
     }
 
-    const selectedTagNames = tagOptions
-      .filter((option) => selectedTags.includes(option.id))
-      .map((option) => option.name);
+    // 直接使用标签ID（字符串或数字）
+    const selectedTagIds = selectedTags;
 
     // 处理套图逻辑
     let finalCollectionId: string | null = null;
@@ -499,7 +493,7 @@ function Upload({ onClose, onSave }: UploadProps) {
         file: selectedFile,
         title: finalTitle,
         description: description.trim(),
-        tags: selectedTagNames,
+        tags: selectedTagIds,
         mood: selectedMood,
         rating,
         durationMinutes: totalMinutes,
@@ -522,38 +516,45 @@ function Upload({ onClose, onSave }: UploadProps) {
   };
 
   useEffect(() => {
-    const handlePreferencesChange = () => {
-      const email = getActiveUserEmail();
-      const preferences = loadTagPreferences(email);
-      const options = buildTagOptions(preferences);
-      setTagOptions(options);
-      setSelectedTags((prev) => {
-        const optionIds = new Set(options.map((option) => option.id));
-        const retained = prev.filter((id) => optionIds.has(id));
-        const baseSet = new Set(retained);
-        options.forEach((option) => {
-          if (option.defaultActive && !baseSet.has(option.id)) {
-            baseSet.add(option.id);
-          }
+    const loadTags = async () => {
+      setIsLoadingTags(true);
+      try {
+        const email = getActiveUserEmail();
+        const preferences = await loadTagPreferencesAsync(email);
+        const options = await buildTagOptionsAsync(preferences);
+        setTagOptions(options);
+        setSelectedTags((prev) => {
+          const optionIds = new Set(options.map((option) => option.id));
+          const retained = prev.filter((id) => optionIds.has(id));
+          const baseSet = new Set(retained);
+          options.forEach((option) => {
+            if (option.defaultActive && !baseSet.has(option.id)) {
+              baseSet.add(option.id);
+            }
+          });
+          return Array.from(baseSet);
         });
-        return Array.from(baseSet);
-      });
+      } catch (error) {
+        console.warn("[Upload] Failed to load tags:", error);
+      } finally {
+        setIsLoadingTags(false);
+        }
     };
 
-    handlePreferencesChange();
+    loadTags();
 
     if (typeof window === "undefined") {
       return;
     }
 
-    const tagEventListener = (_event: Event) => {
-      handlePreferencesChange();
+    const tagEventListener = async (_event: Event) => {
+      await loadTags();
     };
-    const storageListener = (event: StorageEvent) => {
+    const storageListener = async (event: StorageEvent) => {
       if (!event.key || !event.key.startsWith("echo.tag-preferences.")) {
         return;
       }
-      handlePreferencesChange();
+      await loadTags();
     };
 
     window.addEventListener(TAG_PREFERENCES_CHANGED_EVENT, tagEventListener);

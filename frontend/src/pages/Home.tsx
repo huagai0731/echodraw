@@ -18,6 +18,7 @@ import {
   type CheckInStatus,
   type HomeMessagesResponse,
 } from "@/services/api";
+import { clearAllUserCache } from "@/utils/clearUserCache";
 
 import "./HomeScreen.css";
 
@@ -95,9 +96,9 @@ function truncateName(name: string, maxLength: number = 12): string {
 
 const LOCAL_LAST_CHECKIN_KEY = "echo-last-checkin-date";
 const LOCAL_CHECKIN_STATUS_KEY = "echo-last-checkin-status";
-const HOME_COPY_CACHE_KEY = "echo-home-copy-cache";
-const HOME_COPY_CACHE_TIMESTAMP_KEY = "echo-home-copy-cache-timestamp";
-const CACHE_MAX_AGE = 5 * 60 * 1000; // 5分钟缓存有效期
+const HOME_COPY_CACHE_KEY_PREFIX = "echo-home-copy-cache-";
+const HOME_COPY_CACHE_DATE_KEY = "echo-home-copy-cache-date";
+// 不再使用时间戳，而是使用日期作为缓存键，确保每天只加载一次
 
 type HomeProps = {
   onOpenUpload?: () => void;
@@ -146,17 +147,49 @@ function normalizeMessages(payload: HomeMessagesResponse | null): HomeCopy | nul
   return hasContent ? normalized : null;
 }
 
+function getTodayIsoForCache(): string {
+  // 使用与getTodayIso相同的逻辑获取今天的日期
+  try {
+    const formatter = new Intl.DateTimeFormat("zh-CN", {
+      timeZone: "Asia/Shanghai",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    const parts = formatter.formatToParts(new Date());
+    const y = parts.find((p) => p.type === "year")?.value ?? "0000";
+    const m = parts.find((p) => p.type === "month")?.value ?? "01";
+    const d = parts.find((p) => p.type === "day")?.value ?? "01";
+    return `${y}-${m}-${d}`;
+  } catch {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const d = String(now.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+}
+
 function loadCachedCopy(): HomeCopy | null {
   if (typeof window === "undefined") {
     return null;
   }
   try {
-    const cached = window.sessionStorage.getItem(HOME_COPY_CACHE_KEY);
-    const timestamp = window.sessionStorage.getItem(HOME_COPY_CACHE_TIMESTAMP_KEY);
-    if (cached && timestamp) {
-      const age = Date.now() - Number.parseInt(timestamp, 10);
-      if (age < CACHE_MAX_AGE) {
+    const today = getTodayIsoForCache();
+    const cachedDate = window.sessionStorage.getItem(HOME_COPY_CACHE_DATE_KEY);
+    // 如果缓存的日期是今天，才使用缓存
+    if (cachedDate === today) {
+      const cacheKey = `${HOME_COPY_CACHE_KEY_PREFIX}${today}`;
+      const cached = window.sessionStorage.getItem(cacheKey);
+      if (cached) {
         return JSON.parse(cached) as HomeCopy;
+      }
+    } else {
+      // 如果日期不是今天，清除旧缓存
+      if (cachedDate) {
+        const oldCacheKey = `${HOME_COPY_CACHE_KEY_PREFIX}${cachedDate}`;
+        window.sessionStorage.removeItem(oldCacheKey);
+        window.sessionStorage.removeItem(HOME_COPY_CACHE_DATE_KEY);
       }
     }
   } catch {
@@ -170,27 +203,113 @@ function saveCachedCopy(copy: HomeCopy) {
     return;
   }
   try {
-    window.sessionStorage.setItem(HOME_COPY_CACHE_KEY, JSON.stringify(copy));
-    window.sessionStorage.setItem(HOME_COPY_CACHE_TIMESTAMP_KEY, String(Date.now()));
+    const today = getTodayIsoForCache();
+    const cacheKey = `${HOME_COPY_CACHE_KEY_PREFIX}${today}`;
+    window.sessionStorage.setItem(cacheKey, JSON.stringify(copy));
+    window.sessionStorage.setItem(HOME_COPY_CACHE_DATE_KEY, today);
   } catch {
     // ignore cache errors
   }
 }
 
+// 辅助函数：获取今天的日期（用于打卡状态初始化）
+function getTodayIsoForCheckIn(): string {
+  try {
+    const formatter = new Intl.DateTimeFormat("zh-CN", {
+      timeZone: "Asia/Shanghai",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    const parts = formatter.formatToParts(new Date());
+    const y = parts.find((p) => p.type === "year")?.value ?? "0000";
+    const m = parts.find((p) => p.type === "month")?.value ?? "01";
+    const d = parts.find((p) => p.type === "day")?.value ?? "01";
+    return `${y}-${m}-${d}`;
+  } catch {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const d = String(now.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+}
+
 function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomeProps) {
-  const [copy, setCopy] = useState<HomeCopy>(EMPTY_COPY);
-  const [loadingCopy, setLoadingCopy] = useState(true);
+  // 初始化时先从缓存加载，避免闪烁
+  const [copy, setCopy] = useState<HomeCopy>(() => {
+    const cached = loadCachedCopy();
+    return cached || EMPTY_COPY;
+  });
+  const [loadingCopy, setLoadingCopy] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
-  const [checkInStatus, setCheckInStatus] = useState<CheckInStatus | null>(null);
+  // 初始化时先从缓存加载打卡状态，避免闪烁
+  // 注意：只有在有认证信息时才读取缓存，避免读取到其他用户的数据
+  const [checkInStatus, setCheckInStatus] = useState<CheckInStatus | null>(() => {
+    if (typeof window === "undefined") {
+      return null;
+    }
+    // 如果没有认证信息，不读取缓存，避免读取到其他用户的数据
+    if (!hasAuthToken()) {
+      return null;
+    }
+    try {
+      const today = getTodayIsoForCheckIn();
+      const localLastCheckinDate = window.localStorage.getItem(LOCAL_LAST_CHECKIN_KEY);
+      // 检查本地存储的打卡日期是否是今天
+      if (localLastCheckinDate === today) {
+        const cached = window.localStorage.getItem(LOCAL_CHECKIN_STATUS_KEY);
+        if (cached) {
+          try {
+            const parsed = JSON.parse(cached) as CheckInStatus;
+            if (parsed && typeof parsed.total_checkins === "number") {
+              return parsed;
+            }
+          } catch {
+            // ignore parse errors
+          }
+        }
+      }
+    } catch {
+      // ignore storage errors
+    }
+    return null;
+  });
   const [checkInLoading, setCheckInLoading] = useState(false);
   const [checkInError, setCheckInError] = useState<string | null>(null);
   const [checkInStatusRequested, setCheckInStatusRequested] = useState(false);
   const checkInAbortControllerRef = useRef<AbortController | null>(null);
   const [authVersion, setAuthVersion] = useState(0);
-  const [userName, setUserName] = useState<string | null>(null);
+  // 初始化时先从缓存加载用户名，避免闪烁
+  const [userName, setUserName] = useState<string | null>(() => {
+    if (typeof window === "undefined") {
+      return null;
+    }
+    try {
+      if (!hasAuthToken()) {
+        return null;
+      }
+      const auth = getInitialAuth();
+      if (!auth?.user?.email) {
+        return null;
+      }
+      const email = auth.user.email;
+      // 先从本地存储加载
+      const stored = loadStoredPreferences(email);
+      if (stored?.displayName) {
+        return stored.displayName;
+      }
+      // 如果没有本地存储，使用 email 生成默认名称
+      return formatName(email);
+    } catch {
+      // ignore errors
+    }
+    return null;
+  });
   const [notificationModalOpen, setNotificationModalOpen] = useState(false);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
 
+  // 需要在组件内部定义 getTodayIso，因为初始化时需要使用
   function getTodayIso(): string {
     // 始终以中国时区（Asia/Shanghai）计算“今天”，避免用户本地时区影响
     try {
@@ -229,15 +348,8 @@ function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomePr
       setCheckInError(null);
       setLoadingCopy(true);
       setUserName(null);
-      // 清除 localStorage 中的打卡缓存
-      try {
-        if (typeof window !== "undefined") {
-          window.localStorage.removeItem(LOCAL_CHECKIN_STATUS_KEY);
-          window.localStorage.removeItem(LOCAL_LAST_CHECKIN_KEY);
-        }
-      } catch {
-        // ignore storage errors
-      }
+      // 清除所有用户相关的缓存
+      clearAllUserCache();
     };
 
     const handleCheckInStatusChange = async () => {
@@ -304,14 +416,29 @@ function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomePr
 
   useEffect(() => {
     let isMounted = true;
+    let abortController: AbortController | null = null;
 
     async function loadCopy() {
+      // 取消之前的请求（如果有）
+      if (abortController) {
+        abortController.abort();
+      }
+      abortController = new AbortController();
+
       // 先尝试从缓存加载，避免闪烁
       const cached = loadCachedCopy();
       if (cached && isMounted) {
+        // 如果缓存存在且是今天的，直接使用，不显示加载状态
         setCopy(cached);
         setCopyError(null);
         setLoadingCopy(false);
+        // 如果已经有今天的缓存，就不需要再请求了
+        const today = getTodayIsoForCache();
+        const cachedDate = window.sessionStorage.getItem(HOME_COPY_CACHE_DATE_KEY);
+        if (cachedDate === today) {
+          // 今天已经有缓存，不需要重新请求
+          return;
+        }
       } else {
         setLoadingCopy(true);
       }
@@ -326,8 +453,10 @@ function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomePr
             // 清除缓存，因为未登录状态不应该使用缓存
             if (typeof window !== "undefined") {
               try {
-                window.sessionStorage.removeItem(HOME_COPY_CACHE_KEY);
-                window.sessionStorage.removeItem(HOME_COPY_CACHE_TIMESTAMP_KEY);
+                const today = getTodayIsoForCache();
+                const cacheKey = `${HOME_COPY_CACHE_KEY_PREFIX}${today}`;
+                window.sessionStorage.removeItem(cacheKey);
+                window.sessionStorage.removeItem(HOME_COPY_CACHE_DATE_KEY);
               } catch {
                 // ignore storage errors
               }
@@ -337,7 +466,9 @@ function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomePr
         }
 
         const data = await fetchHomeMessages();
-        if (!isMounted) {
+        
+        // 检查请求是否被取消
+        if (abortController.signal.aborted || !isMounted) {
           return;
         }
 
@@ -358,7 +489,8 @@ function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomePr
           setCopyError(null);
         }
       } catch (error) {
-        if (!isMounted) {
+        // 如果请求被取消，不处理错误
+        if (abortController?.signal.aborted || !isMounted) {
           return;
         }
 
@@ -388,6 +520,9 @@ function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomePr
 
     return () => {
       isMounted = false;
+      if (abortController) {
+        abortController.abort();
+      }
     };
   }, [authVersion]);
 
@@ -599,6 +734,9 @@ function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomePr
         try {
           window.localStorage.removeItem(LOCAL_LAST_CHECKIN_KEY);
           window.localStorage.removeItem(LOCAL_CHECKIN_STATUS_KEY);
+          // 清除昨天的打卡锁
+          const yesterdayLockKey = `echo-checkin-lock-${localLastCheckinDate}`;
+          window.localStorage.removeItem(yesterdayLockKey);
         } catch {
           // ignore storage errors
         }
@@ -729,6 +867,25 @@ function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomePr
       return;
     }
 
+    // 额外检查：使用localStorage防止多标签页同时打卡
+    const checkInLockKey = `echo-checkin-lock-${getTodayIso()}`;
+    try {
+      const lockValue = window.localStorage.getItem(checkInLockKey);
+      if (lockValue) {
+        const lockTime = parseInt(lockValue, 10);
+        const now = Date.now();
+        // 如果锁在1分钟内，说明可能正在打卡，直接返回
+        if (now - lockTime < 60000) {
+          setCheckInError("正在打卡中，请稍候...");
+          return;
+        }
+      }
+      // 设置锁，有效期1分钟
+      window.localStorage.setItem(checkInLockKey, String(Date.now()));
+    } catch {
+      // 如果localStorage不可用，继续执行（降级处理）
+    }
+
     // 取消之前的请求（如果有）
     if (checkInAbortControllerRef.current) {
       checkInAbortControllerRef.current.abort();
@@ -758,6 +915,9 @@ function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomePr
           const today = getTodayIso();
           window.localStorage.setItem(LOCAL_LAST_CHECKIN_KEY, today);
           window.localStorage.setItem(LOCAL_CHECKIN_STATUS_KEY, JSON.stringify(status));
+          // 清除打卡锁
+          const checkInLockKey = `echo-checkin-lock-${today}`;
+          window.localStorage.removeItem(checkInLockKey);
           // 注意：storage事件只在其他标签页修改localStorage时触发
           // 当前标签页的修改不会触发storage事件，所以我们需要手动触发自定义事件
           // 其他标签页会通过storage事件接收到更新
@@ -802,6 +962,19 @@ function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomePr
         setCheckInError("请求超时，请检查网络连接后重试。");
       } else if (axiosError.code === "ERR_NETWORK") {
         setCheckInError("网络错误，请检查网络连接。");
+      } else if (axiosError.response?.status === 429) {
+        // 处理频率限制错误
+        const detail = (axiosError.response.data as any)?.detail;
+        setCheckInError(detail || "请求过于频繁，请稍后再试。");
+        // 如果是因为重复打卡，刷新状态
+        if (detail && typeof detail === "string" && (detail.includes("已经打卡") || detail.includes("刚刚已经打卡"))) {
+          try {
+            const status = await fetchCheckInStatus();
+            setCheckInStatus(status);
+          } catch {
+            // ignore refresh error
+          }
+        }
       } else {
         setCheckInError("打卡失败，请稍后再试。");
       }
@@ -813,6 +986,16 @@ function Home({ onOpenMentalStateAssessment, onOpenColorPerceptionTest }: HomePr
       // 清除AbortController引用
       if (checkInAbortControllerRef.current === abortController) {
         checkInAbortControllerRef.current = null;
+      }
+      // 清除打卡锁（无论成功或失败）
+      try {
+        if (typeof window !== "undefined") {
+          const today = getTodayIso();
+          const checkInLockKey = `echo-checkin-lock-${today}`;
+          window.localStorage.removeItem(checkInLockKey);
+        }
+      } catch {
+        // ignore storage errors
       }
     }
   };

@@ -196,7 +196,22 @@ type RecentAchievement = {
 function UserApp() {
   const [activeNav, setActiveNav] = useState<NavId>("home");
   const [activePage, setActivePage] = useState<PageId>("home");
-  const [userArtworks, setUserArtworks] = useState<Artwork[]>([]);
+  // 初始化时先从缓存加载，避免闪烁
+  const [userArtworks, setUserArtworks] = useState<Artwork[]>(() => {
+    // 如果处于强制退出登录状态，不加载缓存
+    if (typeof window !== "undefined") {
+      try {
+        const forcedLogout = sessionStorage.getItem("echo-forced-logout");
+        if (forcedLogout === "true") {
+          return [];
+        }
+      } catch {
+        // ignore
+      }
+    }
+    // 先从localStorage加载缓存的数据
+    return loadStoredArtworks();
+  });
   const [pinnedAchievements, setPinnedAchievements] = useState<PinnedAchievement[]>([]);
   const [achievementGroups, setAchievementGroups] = useState<AchievementGroupDefinition[]>([]);
   const [standaloneAchievements, setStandaloneAchievements] = useState<AchievementLevelDefinition[]>([]);
@@ -500,19 +515,14 @@ function UserApp() {
       setAchievementSummary(null);
       setPinnedAchievements([]);
       
-      // 清除所有 localStorage 中的用户相关数据
+      // 清除所有用户相关的缓存
       if (typeof window !== "undefined") {
-        try {
-          // 清除画作存储
-          window.localStorage.removeItem(USER_ARTWORK_STORAGE_KEY);
-          // 清除个人偏好设置
-          window.localStorage.removeItem("echodraw-profile-preferences");
-          // 清除打卡相关数据
-          window.localStorage.removeItem(LOCAL_LAST_CHECKIN_KEY);
-          window.localStorage.removeItem("echo-last-checkin-status");
-        } catch (error) {
-          console.warn("[Echo] Failed to clear user data from localStorage:", error);
-        }
+        // 使用动态导入避免循环依赖，但需要同步执行
+        import("@/utils/clearUserCache").then(({ clearAllUserCache }) => {
+          clearAllUserCache();
+        }).catch((error) => {
+          console.warn("[Echo] Failed to clear user cache:", error);
+        });
       }
       
       setForcedLogoutVersion((prev) => prev + 1);
