@@ -81,3 +81,5 @@ MODIFY COLUMN `id` BIGINT AUTO_INCREMENT NOT NULL;
 2. 数据库表结构与 Django 模型定义一致
 3. 使用 `python manage.py migrate --plan` 检查待执行的迁移
 
+
+

@@ -2,8 +2,63 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import MaterialIcon from "@/components/MaterialIcon";
 import TopNav, { type TopNavAction } from "@/components/TopNav";
+import { isFeaturedArtwork } from "@/services/featuredArtworks";
 
 import "./ArtworkDetails.css";
+
+// 将数字转换为罗马数字
+function toRomanNumeral(num: number): string {
+  if (num <= 0 || !Number.isFinite(num)) return "";
+  
+  const values = [1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1];
+  const numerals = ["M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I"];
+  
+  let result = "";
+  for (let i = 0; i < values.length; i++) {
+    while (num >= values[i]) {
+      result += numerals[i];
+      num -= values[i];
+    }
+  }
+  return result;
+}
+
+// 格式化套图标题
+function formatCollectionTitle(artwork: ArtworkDetailsProps["artwork"]): string {
+  if (artwork.collectionName && artwork.collectionIndex) {
+    const romanNumeral = toRomanNumeral(artwork.collectionIndex);
+    
+    // 提取原始标题（去掉可能存在的套图名前缀）
+    let originalTitle = artwork.title;
+    if (artwork.title.includes(artwork.collectionName)) {
+      // 如果标题包含套图名，尝试提取原始标题
+      // 格式可能是：套图名·图片标题 或 套图名I·图片标题 等
+      const parts = artwork.title.split("·");
+      if (parts.length > 1) {
+        // 检查第一部分是否是套图名（可能带罗马数字）
+        const firstPart = parts[0];
+        if (firstPart.startsWith(artwork.collectionName)) {
+          // 去掉套图名和可能的罗马数字，取后面的部分
+          originalTitle = parts.slice(1).join("·");
+        } else {
+          // 如果第一部分不是套图名，保留原标题
+          originalTitle = artwork.title;
+        }
+      } else {
+        // 如果没有分隔符，但包含套图名，尝试去掉套图名
+        originalTitle = artwork.title.replace(artwork.collectionName, "").trim();
+      }
+    }
+    
+    // 如果提取后标题为空，使用原标题
+    if (!originalTitle || originalTitle.trim() === "") {
+      originalTitle = artwork.title;
+    }
+    
+    return `${artwork.collectionName}${romanNumeral}·${originalTitle}`;
+  }
+  return artwork.title;
+}
 
 type ArtworkDetailsProps = {
   artwork: {
@@ -17,12 +72,17 @@ type ArtworkDetailsProps = {
     mood: string;
     rating: string;
     tags: string[];
+    collectionId?: string | null;
+    collectionName?: string | null;
+    collectionIndex?: number | null;
+    incrementalDurationMinutes?: number | null;
   };
   onBack: () => void;
   onShare?: (artwork: ArtworkDetailsProps["artwork"]) => void;
   onDelete?: (artwork: ArtworkDetailsProps["artwork"]) => void;
   onEdit?: (artwork: ArtworkDetailsProps["artwork"]) => void;
   onSetAsFeatured?: (artwork: ArtworkDetailsProps["artwork"]) => void;
+  onRemoveFromFeatured?: (artwork: ArtworkDetailsProps["artwork"]) => void;
   onNavigate?: (direction: "prev" | "next") => void;
   hasPrev?: boolean;
   hasNext?: boolean;
@@ -35,6 +95,7 @@ function ArtworkDetails({
   onDelete,
   onEdit,
   onSetAsFeatured,
+  onRemoveFromFeatured,
   onNavigate,
   hasPrev = false,
   hasNext = false,
@@ -45,7 +106,26 @@ function ArtworkDetails({
   const [menuOpen, setMenuOpen] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showFeaturedToast, setShowFeaturedToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isFeatured, setIsFeatured] = useState(() => isFeaturedArtwork(artwork.id));
+
+  // 当 artwork.id 改变时，更新 isFeatured 状态
+  useEffect(() => {
+    setIsFeatured(isFeaturedArtwork(artwork.id));
+  }, [artwork.id]);
+
+  // 监听 featured artworks 变化
+  useEffect(() => {
+    const handleFeaturedChanged = () => {
+      setIsFeatured(isFeaturedArtwork(artwork.id));
+    };
+
+    window.addEventListener("echodraw-featured-artworks-changed", handleFeaturedChanged);
+    return () => {
+      window.removeEventListener("echodraw-featured-artworks-changed", handleFeaturedChanged);
+    };
+  }, [artwork.id]);
 
   // 组件挂载时确保滚动到顶部
   useEffect(() => {
@@ -180,14 +260,6 @@ function ArtworkDetails({
           trailingActions={topNavActions}
           className="top-nav--fixed top-nav--flush"
         />
-        {showFeaturedToast ? (
-          <div className="artwork-featured-toast">
-            <div className="artwork-featured-toast__content">
-              <MaterialIcon name="star" className="artwork-featured-toast__icon" filled />
-              <span className="artwork-featured-toast__text">"{artwork.title}" 已设置为作品，将在个人页面展示</span>
-            </div>
-          </div>
-        ) : null}
         {menuOpen ? (
           <div className="artwork-details-menu" role="menu">
             <button
@@ -206,7 +278,13 @@ function ArtworkDetails({
               className="artwork-details-menu__item"
               onClick={() => {
                 setMenuOpen(false);
-                onSetAsFeatured?.(artwork);
+                if (isFeatured) {
+                  onRemoveFromFeatured?.(artwork);
+                  setToastMessage(`"${artwork.title}" 已取消展示为作品，已从个人页面移除`);
+                } else {
+                  onSetAsFeatured?.(artwork);
+                  setToastMessage(`"${artwork.title}" 已设置为作品，将在个人页面展示`);
+                }
                 setShowFeaturedToast(true);
                 if (toastTimerRef.current) {
                   clearTimeout(toastTimerRef.current);
@@ -218,7 +296,7 @@ function ArtworkDetails({
               }}
             >
               <MaterialIcon name="star" className="artwork-details-menu__icon" />
-              展示为作品
+              {isFeatured ? "取消展示为作品" : "展示为作品"}
             </button>
             <div className="artwork-details-menu__divider" />
             <button
@@ -235,6 +313,15 @@ function ArtworkDetails({
           </div>
         ) : null}
       </div>
+
+      {showFeaturedToast ? (
+        <div className="artwork-featured-toast">
+          <div className="artwork-featured-toast__content">
+            <MaterialIcon name="star" className="artwork-featured-toast__icon" filled />
+            <span className="artwork-featured-toast__text">{toastMessage}</span>
+          </div>
+        </div>
+      ) : null}
 
       <main
         className="artwork-details-screen__content"
@@ -261,7 +348,9 @@ function ArtworkDetails({
           )}
           
           <div className="artwork-details-screen__title-block">
-            <h1 className="artwork-details-screen__title">{artwork.title}</h1>
+            <h1 className="artwork-details-screen__title">
+              {formatCollectionTitle(artwork)}
+            </h1>
             <p className="artwork-details-screen__date">{artwork.date}</p>
           </div>
 
@@ -296,6 +385,25 @@ function ArtworkDetails({
               <MaterialIcon name="star" className="artwork-details-screen__stat-icon" filled />
               {artwork.rating}
             </span>
+            {artwork.incrementalDurationMinutes !== null && artwork.incrementalDurationMinutes !== undefined && artwork.incrementalDurationMinutes > 0 && (
+              <>
+                <span className="artwork-details-screen__divider" aria-hidden="true" />
+                <span className="artwork-details-screen__stat" style={{ color: "#98dbc6" }}>
+                  <MaterialIcon name="schedule" className="artwork-details-screen__stat-icon" />
+                  {(() => {
+                    const hours = Math.floor(artwork.incrementalDurationMinutes / 60);
+                    const minutes = artwork.incrementalDurationMinutes % 60;
+                    if (hours > 0 && minutes > 0) {
+                      return `+${hours} 小时 ${minutes} 分钟`;
+                    }
+                    if (hours > 0) {
+                      return `+${hours} 小时`;
+                    }
+                    return `+${minutes} 分钟`;
+                  })()}
+                </span>
+              </>
+            )}
           </div>
 
           <div className="artwork-details-screen__tags" aria-label="作品标签">

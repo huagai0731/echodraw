@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import BottomNav, { type NavId } from "@/components/BottomNav";
+import AddToHomeScreen from "@/components/AddToHomeScreen";
 import Gallery, { INITIAL_ARTWORKS, type Artwork } from "@/pages/Gallery";
 import Goals from "@/pages/Goals";
 import Home from "@/pages/Home";
@@ -9,6 +10,8 @@ import Reports from "@/pages/Reports";
 import Profile from "@/pages/Profile";
 import ProfileAchievements from "@/pages/ProfileAchievements";
 import TestList from "@/pages/TestList";
+import TestTaking from "@/pages/TestTaking";
+import TestResults from "@/pages/TestResults";
 import PointsRecharge from "@/pages/PointsRecharge";
 import ColorPerceptionTest from "@/pages/ColorPerceptionTest";
 import ColorTestResults from "@/pages/ColorTestResults";
@@ -38,32 +41,17 @@ import {
   USER_ARTWORKS_CHANGED_EVENT,
   USER_ARTWORK_STORAGE_KEY,
 } from "@/services/artworkStorage";
-import { addFeaturedArtworkId } from "@/services/featuredArtworks";
+import { addFeaturedArtworkId, removeFeaturedArtworkId } from "@/services/featuredArtworks";
 import { replaceLocalhostInUrl } from "@/utils/urlUtils";
+import { formatISODateInShanghai, getTodayInShanghai } from "@/utils/dateUtils";
 
 import "./App.css";
 
 const LOCAL_LAST_CHECKIN_KEY = "echo-last-checkin-date";
 
 function getChinaDateIsoFrom(date: Date): string {
-  try {
-    const formatter = new Intl.DateTimeFormat("zh-CN", {
-      timeZone: "Asia/Shanghai",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    });
-    const parts = formatter.formatToParts(date);
-    const y = parts.find((p) => p.type === "year")?.value ?? "0000";
-    const m = parts.find((p) => p.type === "month")?.value ?? "01";
-    const d = parts.find((p) => p.type === "day")?.value ?? "01";
-    return `${y}-${m}-${d}`;
-  } catch {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, "0");
-    const d = String(date.getDate()).padStart(2, "0");
-    return `${y}-${m}-${d}`;
-  }
+  const shanghaiDate = formatISODateInShanghai(date);
+  return shanghaiDate || getTodayInShanghai();
 }
 
 function ensureRecord(value: unknown): Record<string, unknown> {
@@ -189,7 +177,7 @@ function formatLevelSubtitle(level: AchievementLevelDefinition): string {
 }
 
 
-type PageId = NavId | "upload" | "profile-achievements" | "test-list" | "mental-state-assessment" | "points-recharge" | "color-perception-test" | "color-test-results";
+type PageId = NavId | "upload" | "profile-achievements" | "test-list" | "test-taking" | "test-results" | "mental-state-assessment" | "points-recharge" | "color-perception-test" | "color-test-results";
 
 type PinnedAchievement = {
   id: string;
@@ -226,10 +214,15 @@ function UserApp() {
       percentage: number;
     }>;
   } | null>(null);
+  const [currentTestId, setCurrentTestId] = useState<number | null>(null);
+  const [currentTestResultId, setCurrentTestResultId] = useState<number | null>(null);
   
   // 滚动位置存储
   const scrollPositionsRef = useRef<Map<string, number>>(new Map());
   const currentPageKeyRef = useRef<string>("");
+  // 防止重复上传
+  const isUploadingRef = useRef<boolean>(false);
+  const uploadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const combinedArtworks = useMemo(
     () => [...userArtworks, ...INITIAL_ARTWORKS],
@@ -293,6 +286,10 @@ function UserApp() {
         uploadedAt,
         uploadedDate: formatDateKey(uploadedDate),
         durationMinutes: record.duration_minutes ?? null,
+        // 套图相关字段（后端可能不支持，从本地存储中恢复）
+        collectionId: (record as any).collectionId ?? null,
+        collectionName: (record as any).collectionName ?? null,
+        collectionIndex: (record as any).collectionIndex ?? null,
       };
     },
     [formatArtworkDate, formatDuration],
@@ -308,13 +305,42 @@ function UserApp() {
     try {
       const records = await fetchUserUploads();
       const mapped = records.map((item) => mapUploadRecordToArtwork(item));
-      setUserArtworks(mapped);
-      // 清除旧的缓存，使用最新的数据
-      persistStoredArtworks(mapped);
+      
+      // 合并本地存储的套图信息（因为后端可能不支持）
+      const localArtworks = loadStoredArtworks();
+      const localCollectionMap = new Map<string, { collectionId: string | null; collectionName: string | null; collectionIndex: number | null }>();
+      localArtworks.forEach((artwork) => {
+        if (artwork.collectionId && artwork.collectionName) {
+          localCollectionMap.set(artwork.id, {
+            collectionId: artwork.collectionId,
+            collectionName: artwork.collectionName,
+            collectionIndex: artwork.collectionIndex ?? null,
+          });
+        }
+      });
+      
+      // 将本地套图信息合并到从后端获取的作品中
+      const merged = mapped.map((artwork) => {
+        const localInfo = localCollectionMap.get(artwork.id);
+        if (localInfo) {
+          return {
+            ...artwork,
+            collectionId: localInfo.collectionId,
+            collectionName: localInfo.collectionName,
+            collectionIndex: localInfo.collectionIndex,
+          };
+        }
+        return artwork;
+      });
+      
+      setUserArtworks(merged);
+      // 保存合并后的数据
+      persistStoredArtworks(merged);
     } catch (error) {
       const status = (error as { response?: { status?: number } })?.response?.status;
       if (status !== 401 && status !== 403) {
         console.warn("[Echo] Failed to load remote artworks:", error);
+        // 非认证错误时，静默使用本地数据，不显示错误提示（避免干扰用户体验）
       }
       // 只有在非强制退出登录状态下才从 localStorage 加载
       if (!isForcedLogout) {
@@ -350,9 +376,15 @@ function UserApp() {
     }
   }, []);
 
+  // 使用useRef存储isForcedLogout状态，避免竞态条件
+  const isForcedLogoutRef = useRef(isForcedLogout);
+  useEffect(() => {
+    isForcedLogoutRef.current = isForcedLogout;
+  }, [isForcedLogout]);
+
   useEffect(() => {
     // 如果处于强制退出登录状态，不加载任何数据
-    if (isForcedLogout) {
+    if (isForcedLogoutRef.current) {
       setUserArtworks([]);
       return;
     }
@@ -372,7 +404,7 @@ function UserApp() {
     refreshUserAchievements().catch(() => {
       /* 已在函数内部处理 */
     });
-  }, [refreshUserArtworks, refreshUserAchievements, isForcedLogout]);
+  }, [refreshUserArtworks, refreshUserAchievements]);
 
   useEffect(() => {
     setPinnedAchievements((prev) => {
@@ -550,6 +582,37 @@ function UserApp() {
   const handleCloseTestList = useCallback(() => {
     setActivePage(activeNav);
   }, [activeNav]);
+
+  const handleSelectTest = useCallback((testId: number) => {
+    setCurrentTestId(testId);
+    setActivePage("test-taking");
+  }, []);
+
+  const handleTestComplete = useCallback((resultId: number) => {
+    setCurrentTestResultId(resultId);
+    setCurrentTestId(null);
+    setActivePage("test-results");
+  }, []);
+
+  const handleCloseTestTaking = useCallback(() => {
+    setCurrentTestId(null);
+    setActivePage("test-list");
+  }, []);
+
+  const handleCloseTestResults = useCallback(() => {
+    setCurrentTestResultId(null);
+    // 如果是从报告页面打开的，返回报告页面；否则返回测试列表
+    if (activeNav === "reports") {
+      setActivePage("reports");
+    } else {
+      setActivePage("test-list");
+    }
+  }, [activeNav]);
+
+  const handleOpenTestResult = useCallback((resultId: number) => {
+    setCurrentTestResultId(resultId);
+    setActivePage("test-results");
+  }, []);
 
   const handleOpenMentalStateAssessment = useCallback(() => {
     setActivePage("mental-state-assessment");
@@ -746,6 +809,30 @@ function UserApp() {
 
   const handleUploadSave = useCallback(
     async (result: UploadResult) => {
+      // 防止重复提交
+      if (isUploadingRef.current) {
+        console.warn("[Echo] Upload already in progress, ignoring duplicate request");
+        if (typeof window !== "undefined" && typeof window.alert === "function") {
+          window.alert("上传正在进行中，请稍候...");
+        }
+        return;
+      }
+      isUploadingRef.current = true;
+      
+      // 设置超时机制（30秒），防止永久阻塞
+      if (uploadTimeoutRef.current) {
+        clearTimeout(uploadTimeoutRef.current);
+      }
+      uploadTimeoutRef.current = setTimeout(() => {
+        if (isUploadingRef.current) {
+          console.warn("[Echo] Upload timeout, resetting upload state");
+          isUploadingRef.current = false;
+          if (typeof window !== "undefined" && typeof window.alert === "function") {
+            window.alert("上传超时，请重试。");
+          }
+        }
+      }, 30000);
+
       const finalizeLocal = (imageSrc: string | null) => {
         if (!imageSrc) {
           console.warn("[Echo] 无法生成作品预览，已取消保存。");
@@ -774,6 +861,11 @@ function UserApp() {
           uploadedAt,
           uploadedDate,
           durationMinutes: result.durationMinutes,
+          // 套图相关字段
+          collectionId: result.collectionId || null,
+          collectionName: result.collectionName || null,
+          collectionIndex: result.collectionIndex || null,
+          incrementalDurationMinutes: result.incrementalDurationMinutes ?? null,
         };
 
         setUserArtworks((prev) => {
@@ -806,11 +898,24 @@ function UserApp() {
           durationMinutes: result.durationMinutes,
         });
         const artwork = mapUploadRecordToArtwork(record, result.previewDataUrl);
+        // 添加套图相关字段（后端可能还不支持，所以从上传结果中获取）
+        // 优先使用上传结果中的套图信息，如果不存在则尝试从后端记录中获取
+        artwork.collectionId = result.collectionId ?? (record as any).collectionId ?? null;
+        artwork.collectionName = result.collectionName ?? (record as any).collectionName ?? null;
+        artwork.collectionIndex = result.collectionIndex ?? (record as any).collectionIndex ?? null;
+        artwork.incrementalDurationMinutes = result.incrementalDurationMinutes ?? (record as any).incrementalDurationMinutes ?? null;
+        
+        // 使用函数式更新，确保状态一致性
         setUserArtworks((prev) => {
-          const next = [artwork, ...prev.filter((item) => item.id !== artwork.id)];
+          // 过滤掉可能存在的相同ID的作品（避免重复）
+          const filtered = prev.filter((item) => item.id !== artwork.id);
+          const next = [artwork, ...filtered];
+          // 立即持久化，确保本地存储与状态同步
+          // 即使后端不支持套图字段，本地存储也会保存这些信息
           persistStoredArtworks(next);
           return next;
         });
+        
         try {
           const chinaIso = getChinaDateIsoFrom(new Date(record.uploaded_at));
           if (typeof window !== "undefined") {
@@ -821,28 +926,83 @@ function UserApp() {
         } catch {
           // ignore storage errors
         }
+        
+        // 延迟刷新，确保后端数据已同步
+        // 但先使用本地状态显示，避免闪烁
+        setTimeout(() => {
+          refreshUserArtworks().catch(() => {
+            // 已在函数内部处理错误
+          });
+        }, 1000);
+        
         setActivePage(activeNav);
+        isUploadingRef.current = false;
+        if (uploadTimeoutRef.current) {
+          clearTimeout(uploadTimeoutRef.current);
+          uploadTimeoutRef.current = null;
+        }
       } catch (error) {
         const status = (error as { response?: { status?: number } })?.response?.status;
         if (status === 401 || status === 403) {
           setForcedLogoutVisible(true);
+          isUploadingRef.current = false;
+          if (uploadTimeoutRef.current) {
+            clearTimeout(uploadTimeoutRef.current);
+            uploadTimeoutRef.current = null;
+          }
           return;
         }
         console.warn("[Echo] Failed to upload artwork to server:", error);
+        // 显示错误提示给用户
+        if (typeof window !== "undefined" && typeof window.alert === "function") {
+          const errorMessage = status === 500 
+            ? "服务器错误，请稍后重试。"
+            : status === 413
+            ? "文件过大，请选择较小的图片。"
+            : "上传失败，作品已保存到本地。";
+          window.alert(errorMessage);
+        }
         if (result.previewDataUrl) {
           finalizeLocal(result.previewDataUrl);
+          isUploadingRef.current = false;
+          if (uploadTimeoutRef.current) {
+            clearTimeout(uploadTimeoutRef.current);
+            uploadTimeoutRef.current = null;
+          }
         } else {
           readFileAsDataUrl(result.file)
-            .then((imageSrc) => finalizeLocal(imageSrc))
+            .then((imageSrc) => {
+              finalizeLocal(imageSrc);
+              isUploadingRef.current = false;
+              if (uploadTimeoutRef.current) {
+                clearTimeout(uploadTimeoutRef.current);
+                uploadTimeoutRef.current = null;
+              }
+            })
             .catch((readError) => {
               console.warn("[Echo] Failed to prepare upload preview:", readError);
               finalizeLocal(null);
+              isUploadingRef.current = false;
+              if (uploadTimeoutRef.current) {
+                clearTimeout(uploadTimeoutRef.current);
+                uploadTimeoutRef.current = null;
+              }
             });
         }
       }
     },
-    [activeNav, formatArtworkDate, formatDuration, mapUploadRecordToArtwork],
+    [activeNav, formatArtworkDate, formatDuration, mapUploadRecordToArtwork, refreshUserArtworks],
   );
+  
+  // 页面卸载时清理上传状态
+  useEffect(() => {
+    return () => {
+      if (uploadTimeoutRef.current) {
+        clearTimeout(uploadTimeoutRef.current);
+      }
+      isUploadingRef.current = false;
+    };
+  }, []);
 
   const handleDeleteArtwork = useCallback(
     async (target: Artwork) => {
@@ -876,6 +1036,9 @@ function UserApp() {
         return;
       }
 
+      // 从featured artworks中移除（如果存在）
+      removeFeaturedArtworkId(target.id);
+
       setUserArtworks((prev) => {
         const next = prev.filter((item) => item.id !== target.id);
         persistStoredArtworks(next);
@@ -895,6 +1058,10 @@ function UserApp() {
 
   const handleSetAsFeatured = useCallback((target: Artwork) => {
     addFeaturedArtworkId(target.id);
+  }, []);
+
+  const handleRemoveFromFeatured = useCallback((target: Artwork) => {
+    removeFeaturedArtworkId(target.id);
   }, []);
 
   if (import.meta.env.DEV) {
@@ -918,8 +1085,19 @@ function UserApp() {
       ) : activePage === "test-list" ? (
         <TestList
           onBack={handleCloseTestList}
-          onSelectTest={handleOpenMentalStateAssessment}
+          onSelectTest={handleSelectTest}
           onOpenPointsRecharge={handleOpenPointsRecharge}
+        />
+      ) : activePage === "test-taking" && currentTestId !== null ? (
+        <TestTaking
+          testId={currentTestId}
+          onBack={handleCloseTestTaking}
+          onComplete={handleTestComplete}
+        />
+      ) : activePage === "test-results" && currentTestResultId !== null ? (
+        <TestResults
+          resultId={currentTestResultId}
+          onBack={handleCloseTestResults}
         />
       ) : activePage === "points-recharge" ? (
         <PointsRecharge onBack={handleClosePointsRecharge} />
@@ -946,11 +1124,12 @@ function UserApp() {
           onDeleteArtwork={handleDeleteArtwork}
           onEditArtwork={handleEditArtwork}
           onSetAsFeatured={handleSetAsFeatured}
+          onRemoveFromFeatured={handleRemoveFromFeatured}
         />
       ) : activeNav === "goals" ? (
         <Goals />
       ) : activeNav === "reports" ? (
-        <Reports artworks={userArtworks} />
+        <Reports artworks={userArtworks} onOpenTestResult={handleOpenTestResult} />
       ) : (
         <Profile
           forcedLogoutVersion={forcedLogoutVersion}
@@ -967,6 +1146,7 @@ function UserApp() {
           setActivePage(id);
         }}
       />
+      <AddToHomeScreen />
       {forcedLogoutVisible ? (
         <div className="forced-logout-overlay">
           <div className="forced-logout-dialog">

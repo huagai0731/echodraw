@@ -1,12 +1,14 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import MaterialIcon from "@/components/MaterialIcon";
 import TopNav from "@/components/TopNav";
 import type { Artwork } from "@/types/artwork";
 import FourArtworkTemplateDesigner from "@/pages/reports/FourArtworkTemplateDesigner";
 import SingleArtworkTemplateDesigner from "@/pages/reports/SingleArtworkTemplateDesigner";
-import FullMonthlyReportDemo from "@/pages/reports/FullMonthlyReportDemo";
+import FullMonthlyReport from "@/pages/reports/FullMonthlyReport";
 import Calendar28DayTemplateDesigner from "@/pages/reports/28DayCalendarTemplateDesigner";
+import WeeklyCalendarTemplateDesigner from "@/pages/reports/WeeklyCalendarTemplateDesigner";
+import { fetchUserTestResults, type UserTestResult } from "@/services/api";
 
 import "./Reports.css";
 
@@ -19,9 +21,10 @@ type ReportItem = {
   title: string;
   subtitle: string;
   glow: number;
+  testResultId?: number; // 如果是测试结果，包含结果ID
 };
 
-type TemplateAction = "single" | "quad" | "28day";
+type TemplateAction = "single" | "quad" | "28day" | "weekly";
 
 type TemplateItem = {
   id: string;
@@ -105,6 +108,7 @@ const TEMPLATE_GROUPS: TemplateGroup[] = [
     items: [
       { id: "calendar-export", icon: "calendar_month", label: "日历导出" },
       { id: "28day-calendar", icon: "calendar_month", label: "28天作品日历", action: "28day" as TemplateAction },
+      { id: "weekly-calendar", icon: "calendar_view_week", label: "周历", action: "weekly" as TemplateAction },
     ],
   },
   {
@@ -121,18 +125,22 @@ const TEMPLATE_GROUPS: TemplateGroup[] = [
 
 type ReportsProps = {
   artworks?: Artwork[];
+  onOpenTestResult?: (resultId: number) => void;
 };
 
-function Reports({ artworks = [] }: ReportsProps) {
+function Reports({ artworks = [], onOpenTestResult }: ReportsProps) {
   const [activeTab, setActiveTab] = useState<TabKey>("reports");
   const [activeFilter, setActiveFilter] = useState<FilterKey>("周报");
   const [singleTemplateOpen, setSingleTemplateOpen] = useState(false);
   const [quadTemplateOpen, setQuadTemplateOpen] = useState(false);
-  const [fullMonthlyDemoOpen, setFullMonthlyDemoOpen] = useState(false);
+  const [fullMonthlyReportOpen, setFullMonthlyReportOpen] = useState(false);
   const [calendar28DayOpen, setCalendar28DayOpen] = useState(false);
+  const [weeklyCalendarOpen, setWeeklyCalendarOpen] = useState(false);
+  const [testResults, setTestResults] = useState<UserTestResult[]>([]);
+  const [testResultsLoading, setTestResultsLoading] = useState(false);
   const isTemplatesTab = activeTab === "templates";
-  const isTemplateExperience = isTemplatesTab || singleTemplateOpen || quadTemplateOpen;
-  const showTemplateBack = singleTemplateOpen || quadTemplateOpen;
+  const isTemplateExperience = isTemplatesTab || singleTemplateOpen || quadTemplateOpen || weeklyCalendarOpen;
+  const showTemplateBack = singleTemplateOpen || quadTemplateOpen || weeklyCalendarOpen;
   const handleTemplateBack = useCallback(() => {
     if (singleTemplateOpen) {
       setSingleTemplateOpen(false);
@@ -140,8 +148,12 @@ function Reports({ artworks = [] }: ReportsProps) {
     }
     if (quadTemplateOpen) {
       setQuadTemplateOpen(false);
+      return;
     }
-  }, [quadTemplateOpen, singleTemplateOpen]);
+    if (weeklyCalendarOpen) {
+      setWeeklyCalendarOpen(false);
+    }
+  }, [quadTemplateOpen, singleTemplateOpen, weeklyCalendarOpen]);
   const handleTemplateAction = useCallback(
     (action: TemplateAction) => {
       if (action === "single") {
@@ -154,20 +166,66 @@ function Reports({ artworks = [] }: ReportsProps) {
       }
       if (action === "28day") {
         setCalendar28DayOpen(true);
+        return;
+      }
+      if (action === "weekly") {
+        setWeeklyCalendarOpen(true);
       }
     },
     [],
   );
 
+  // 加载测试结果
+  useEffect(() => {
+    const loadTestResults = async () => {
+      try {
+        setTestResultsLoading(true);
+        const results = await fetchUserTestResults();
+        setTestResults(results);
+      } catch (err) {
+        console.warn("[Reports] Failed to load test results:", err);
+        // 静默失败，不影响其他报告显示
+        setTestResults([]);
+      } finally {
+        setTestResultsLoading(false);
+      }
+    };
+
+    loadTestResults();
+  }, []);
+
+  // 将测试结果转换为 ReportItem 格式
+  const testResultItems = useMemo<ReportItem[]>(() => {
+    return testResults.map((result, index) => {
+      const date = new Date(result.completed_at);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      const hours = String(date.getHours()).padStart(2, "0");
+      const minutes = String(date.getMinutes()).padStart(2, "0");
+      
+      return {
+        id: `test-result-${result.id}`,
+        category: "测试" as FilterKey,
+        title: result.test_name,
+        subtitle: `${year}年${month}月${day}日 ${hours}:${minutes}`,
+        glow: (index % 7) + 1,
+        testResultId: result.id, // 添加测试结果ID，用于点击跳转
+      };
+    });
+  }, [testResults]);
+
   const filteredReports = useMemo(() => {
+    if (activeFilter === "测试") {
+      // 合并静态测试报告和动态测试结果
+      const staticTestItems = REPORT_ITEMS.filter((item) => item.category === "测试");
+      return [...testResultItems, ...staticTestItems];
+    }
     if (activeFilter === "其他") {
       return REPORT_ITEMS.filter((item) => item.category === activeFilter);
     }
-    if (activeFilter === "测试") {
-      return REPORT_ITEMS.filter((item) => item.category === activeFilter);
-    }
     return REPORT_ITEMS.filter((item) => item.category === activeFilter);
-  }, [activeFilter]);
+  }, [activeFilter, testResultItems]);
 
   const renderTemplateItem = useCallback(
     (item: TemplateItem) => {
@@ -275,7 +333,7 @@ function Reports({ artworks = [] }: ReportsProps) {
               <button
                 type="button"
                 className="reports-screen__demo-button"
-                onClick={() => setFullMonthlyDemoOpen(true)}
+                onClick={() => setFullMonthlyReportOpen(true)}
               >
                 <MaterialIcon name="play_arrow" />
                 打开 Demo
@@ -283,10 +341,20 @@ function Reports({ artworks = [] }: ReportsProps) {
             </section>
 
             <div className="reports-screen__list">
+              {activeFilter === "测试" && testResultsLoading && (
+                <div className="reports-screen__loading">加载测试结果中...</div>
+              )}
               {filteredReports.map((item) => (
                 <article
                   key={item.id}
                   className={`reports-card reports-card--glow-${item.glow}`}
+                  onClick={() => {
+                    // 如果是测试结果，点击后跳转到测试结果详情
+                    if (item.testResultId !== undefined && onOpenTestResult) {
+                      onOpenTestResult(item.testResultId);
+                    }
+                  }}
+                  style={item.testResultId !== undefined ? { cursor: "pointer" } : undefined}
                 >
                   <div className="reports-card__body">
                     <p className="reports-card__title">
@@ -298,6 +366,9 @@ function Reports({ artworks = [] }: ReportsProps) {
                   <MaterialIcon name="chevron_right" className="reports-card__icon" />
                 </article>
               ))}
+              {activeFilter === "测试" && !testResultsLoading && filteredReports.length === 0 && (
+                <div className="reports-screen__empty">暂无测试结果</div>
+              )}
             </div>
           </>
         ) : (
@@ -326,8 +397,9 @@ function Reports({ artworks = [] }: ReportsProps) {
         artworks={artworks}
         onClose={() => setQuadTemplateOpen(false)}
       />
-      <FullMonthlyReportDemo open={fullMonthlyDemoOpen} onClose={() => setFullMonthlyDemoOpen(false)} />
+      <FullMonthlyReport open={fullMonthlyReportOpen} onClose={() => setFullMonthlyReportOpen(false)} />
       <Calendar28DayTemplateDesigner open={calendar28DayOpen} artworks={artworks} onClose={() => setCalendar28DayOpen(false)} />
+      <WeeklyCalendarTemplateDesigner open={weeklyCalendarOpen} artworks={artworks} onClose={() => setWeeklyCalendarOpen(false)} />
     </div>
   );
 }

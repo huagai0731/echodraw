@@ -373,9 +373,11 @@ REST_FRAMEWORK = {
         "rest_framework.throttling.UserRateThrottle",
     ],
     "DEFAULT_THROTTLE_RATES": {
-        "anon": "30/min",
-        "user": "120/min",
+        "anon": "30/min",  # 匿名用户每分钟30次
+        "user": "120/min",  # 已认证用户每分钟120次
     },
+    # 增强：针对特定端点设置更严格的限流
+    # 可以通过视图类级别的throttle_classes和throttle_scope自定义
 }
 
 # Default primary key field type
@@ -479,3 +481,31 @@ LOGGING = {
 _logs_dir = BASE_DIR / "logs"
 if not _logs_dir.exists():
     _logs_dir.mkdir(exist_ok=True)
+
+# ==================== 安全配置 ====================
+
+# Session安全配置
+SESSION_COOKIE_SECURE = not DEBUG  # 生产环境使用HTTPS时设置为True
+SESSION_COOKIE_HTTPONLY = True  # 防止XSS攻击
+SESSION_COOKIE_SAMESITE = 'Lax'  # CSRF保护
+SESSION_COOKIE_AGE = 60 * 60 * 24 * 7  # 7天过期
+
+# CSRF安全配置
+CSRF_COOKIE_SECURE = not DEBUG  # 生产环境使用HTTPS时设置为True
+CSRF_COOKIE_HTTPONLY = True
+CSRF_COOKIE_SAMESITE = 'Lax'
+CSRF_USE_SESSIONS = False  # 使用Cookie而不是Session存储CSRF token
+
+# 安全头配置（通过SecurityMiddleware）
+if not DEBUG:
+    # 生产环境启用严格的安全头
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_SECONDS = 31536000  # 1年
+    SECURE_HSTS_PRELOAD = True
+    X_FRAME_OPTIONS = 'DENY'  # 防止点击劫持
+    SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
+else:
+    # 开发环境使用较宽松的配置
+    X_FRAME_OPTIONS = 'SAMEORIGIN'

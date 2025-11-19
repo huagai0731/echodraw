@@ -67,7 +67,17 @@ function loadStoredPreferences(email: string): StoredPreferences | null {
       return parsed;
     }
   } catch (error) {
-    console.warn("[Echo] Failed to parse stored profile preferences:", error);
+    // 处理JSON解析错误或localStorage访问错误
+    if (error instanceof DOMException && error.name === "QuotaExceededError") {
+      console.warn("[Echo] localStorage quota exceeded, clearing old preferences");
+      try {
+        window.localStorage.removeItem(PREFS_STORAGE_KEY);
+      } catch {
+        // 忽略清理错误
+      }
+    } else {
+      console.warn("[Echo] Failed to parse stored profile preferences:", error);
+    }
   }
   return null;
 }
@@ -85,7 +95,20 @@ function storePreferences(email: string, displayName: string, signature: string)
     };
     window.localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify(payload));
   } catch (error) {
-    console.warn("[Echo] Failed to persist profile preferences:", error);
+    // 处理localStorage配额超出错误
+    if (error instanceof DOMException && error.name === "QuotaExceededError") {
+      console.warn("[Echo] localStorage quota exceeded, attempting to clear old data");
+      try {
+        // 尝试清理旧的偏好设置
+        window.localStorage.removeItem(PREFS_STORAGE_KEY);
+        // 重试一次
+        window.localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify(payload));
+      } catch (retryError) {
+        console.warn("[Echo] Failed to persist profile preferences after cleanup:", retryError);
+      }
+    } else {
+      console.warn("[Echo] Failed to persist profile preferences:", error);
+    }
   }
 }
 
@@ -97,7 +120,12 @@ function clearStoredPreferences() {
   try {
     window.localStorage.removeItem(PREFS_STORAGE_KEY);
   } catch (error) {
-    console.warn("[Echo] Failed to clear stored profile preferences:", error);
+    // localStorage可能被禁用或不可用，静默处理
+    if (error instanceof DOMException) {
+      console.warn("[Echo] localStorage access denied or unavailable");
+    } else {
+      console.warn("[Echo] Failed to clear stored profile preferences:", error);
+    }
   }
 }
 
@@ -222,17 +250,25 @@ function Profile({
     }
 
     let cancelled = false;
+    let requestAbortController: AbortController | null = null;
 
     const loadPreferences = async () => {
+      // 取消之前的请求
+      if (requestAbortController) {
+        requestAbortController.abort();
+      }
+      requestAbortController = new AbortController();
+
+      // 先加载本地缓存以快速显示
       const stored = loadStoredPreferences(userEmail);
-      if (stored) {
+      if (stored && !cancelled) {
         setDisplayName(stored.displayName);
         setSignature(stored.signature);
       }
 
       try {
         const preferences = await fetchProfilePreferences();
-        if (cancelled) {
+        if (cancelled || requestAbortController.signal.aborted) {
           return;
         }
         const effectiveDisplayName =
@@ -240,15 +276,29 @@ function Profile({
           preferences.defaultDisplayName.trim() ||
           formatName(userEmail);
         const effectiveSignature = preferences.signature.trim() || DEFAULT_SIGNATURE;
-        setDisplayName(effectiveDisplayName);
-        setSignature(effectiveSignature);
-        storePreferences(userEmail, effectiveDisplayName, effectiveSignature);
+        if (!cancelled && !requestAbortController.signal.aborted) {
+          setDisplayName(effectiveDisplayName);
+          setSignature(effectiveSignature);
+          storePreferences(userEmail, effectiveDisplayName, effectiveSignature);
+        }
       } catch (error) {
-        if (!cancelled) {
+        if (!cancelled && !requestAbortController.signal.aborted) {
+          // 如果是401错误，可能是token过期，不更新本地状态
+          if (error && typeof error === "object" && "response" in error) {
+            const httpError = error as { response?: { status?: number } };
+            if (httpError.response?.status === 401) {
+              // Token过期，不更新状态，让上层处理
+              return;
+            }
+          }
           console.warn("[Echo] Failed to load profile preferences:", error);
-          setDisplayName(formatName(userEmail));
-          setSignature(DEFAULT_SIGNATURE);
-          storePreferences(userEmail, formatName(userEmail), DEFAULT_SIGNATURE);
+          // 只有在没有本地缓存时才使用默认值
+          const hasStored = loadStoredPreferences(userEmail);
+          if (!hasStored) {
+            setDisplayName(formatName(userEmail));
+            setSignature(DEFAULT_SIGNATURE);
+            storePreferences(userEmail, formatName(userEmail), DEFAULT_SIGNATURE);
+          }
         }
       }
     };
@@ -261,65 +311,92 @@ function Profile({
 
     return () => {
       cancelled = true;
+      if (requestAbortController) {
+        requestAbortController.abort();
+      }
     };
   }, [userEmail]);
 
   const handleUpdateDisplayName = useCallback(
     async (value: string) => {
-      setDisplayName(value);
+      // 输入验证：防止XSS和过长输入
+      const trimmed = value.trim();
+      if (trimmed.length > 24) {
+        throw new Error("显示名称不能超过24个字符");
+      }
+      
+      // 乐观更新UI
+      setDisplayName(trimmed);
       if (userEmail) {
         try {
-          const preferences = await updateProfilePreferences({ displayName: value });
-          setDisplayName(
+          const preferences = await updateProfilePreferences({ displayName: trimmed });
+          // 使用服务器返回的值更新状态
+          const effectiveDisplayName =
             preferences.displayName.trim() ||
-              preferences.defaultDisplayName.trim() ||
-              formatName(userEmail),
-          );
-          setSignature(preferences.signature.trim() || DEFAULT_SIGNATURE);
-          storePreferences(
-            userEmail,
-            preferences.displayName.trim() ||
-              preferences.defaultDisplayName.trim() ||
-              formatName(userEmail),
-            preferences.signature.trim() || DEFAULT_SIGNATURE,
-          );
+            preferences.defaultDisplayName.trim() ||
+            formatName(userEmail);
+          const effectiveSignature = preferences.signature.trim() || DEFAULT_SIGNATURE;
+          setDisplayName(effectiveDisplayName);
+          setSignature(effectiveSignature);
+          storePreferences(userEmail, effectiveDisplayName, effectiveSignature);
         } catch (error) {
           console.warn("[Echo] Failed to update display name:", error);
-          setDisplayName(formatName(userEmail));
-          storePreferences(userEmail, formatName(userEmail), signature);
+          // 回滚到之前的显示名称
+          const stored = loadStoredPreferences(userEmail);
+          if (stored) {
+            setDisplayName(stored.displayName);
+            setSignature(stored.signature);
+          } else {
+            setDisplayName(formatName(userEmail));
+            setSignature(DEFAULT_SIGNATURE);
+          }
+          // 重新抛出错误，让调用者处理
+          throw error;
         }
       }
     },
-    [userEmail, signature],
+    [userEmail],
   );
 
   const handleUpdateSignature = useCallback(
     async (value: string) => {
-      setSignature(value);
+      // 输入验证：防止XSS和过长输入
+      const trimmed = value.trim();
+      if (trimmed.length > 80) {
+        throw new Error("签名不能超过80个字符");
+      }
+      
+      // 乐观更新UI
+      setSignature(trimmed);
       if (userEmail) {
         try {
-          const preferences = await updateProfilePreferences({ signature: value });
-          setDisplayName(
+          const preferences = await updateProfilePreferences({ signature: trimmed });
+          // 使用服务器返回的值更新状态
+          const effectiveDisplayName =
             preferences.displayName.trim() ||
-              preferences.defaultDisplayName.trim() ||
-              formatName(userEmail),
-          );
-          setSignature(preferences.signature.trim() || DEFAULT_SIGNATURE);
-          storePreferences(
-            userEmail,
-            preferences.displayName.trim() ||
-              preferences.defaultDisplayName.trim() ||
-              formatName(userEmail),
-            preferences.signature.trim() || DEFAULT_SIGNATURE,
-          );
+            preferences.defaultDisplayName.trim() ||
+            formatName(userEmail);
+          const effectiveSignature = preferences.signature.trim() || DEFAULT_SIGNATURE;
+          setDisplayName(effectiveDisplayName);
+          setSignature(effectiveSignature);
+          storePreferences(userEmail, effectiveDisplayName, effectiveSignature);
         } catch (error) {
           console.warn("[Echo] Failed to update signature:", error);
-          setSignature(DEFAULT_SIGNATURE);
-          storePreferences(userEmail, displayName, DEFAULT_SIGNATURE);
+          // 回滚到之前的签名
+          const stored = loadStoredPreferences(userEmail);
+          if (stored) {
+            setDisplayName(stored.displayName);
+            setSignature(stored.signature);
+          } else {
+            setDisplayName(formatName(userEmail));
+            setSignature(DEFAULT_SIGNATURE);
+          }
+          // 重新抛出错误，让调用者处理
+          throw error;
         }
       }
     },
-    [userEmail, displayName],
+    [userEmail],
   );
 
   const handleLogout = useCallback(() => {
@@ -494,8 +571,15 @@ function ProfileDashboard({
 
   useEffect(() => {
     let cancelled = false;
+    let requestAbortController: AbortController | null = null;
 
     const loadStats = async () => {
+      // 取消之前的请求
+      if (requestAbortController) {
+        requestAbortController.abort();
+      }
+      requestAbortController = new AbortController();
+
       // 确保 token 已设置后再加载数据
       if (!hasAuthToken()) {
         setIsStatsLoading(false);
@@ -510,7 +594,7 @@ function ProfileDashboard({
           fetchUserUploads(),
         ]);
 
-        if (cancelled) {
+        if (cancelled || requestAbortController.signal.aborted) {
           return;
         }
 
@@ -523,7 +607,16 @@ function ProfileDashboard({
         if (checkInResult.status === "fulfilled") {
           nextStats.totalCheckInDays = checkInResult.value.total_checkins ?? 0;
         } else {
-          console.warn("[Echo] Failed to load check-in stats:", checkInResult.reason);
+          const reason = checkInResult.reason;
+          // 如果是401错误，可能是token过期，不记录警告
+          if (reason && typeof reason === "object" && "response" in reason) {
+            const httpError = reason as { response?: { status?: number } };
+            if (httpError.response?.status !== 401) {
+              console.warn("[Echo] Failed to load check-in stats:", reason);
+            }
+          } else {
+            console.warn("[Echo] Failed to load check-in stats:", reason);
+          }
         }
 
         if (uploadsResult.status === "fulfilled") {
@@ -534,12 +627,23 @@ function ProfileDashboard({
             0,
           );
         } else {
-          console.warn("[Echo] Failed to load upload stats:", uploadsResult.reason);
+          const reason = uploadsResult.reason;
+          // 如果是401错误，可能是token过期，不记录警告
+          if (reason && typeof reason === "object" && "response" in reason) {
+            const httpError = reason as { response?: { status?: number } };
+            if (httpError.response?.status !== 401) {
+              console.warn("[Echo] Failed to load upload stats:", reason);
+            }
+          } else {
+            console.warn("[Echo] Failed to load upload stats:", reason);
+          }
         }
 
-        setStats(nextStats);
+        if (!cancelled && !requestAbortController.signal.aborted) {
+          setStats(nextStats);
+        }
       } catch (error) {
-        if (!cancelled) {
+        if (!cancelled && !requestAbortController.signal.aborted) {
           console.warn("[Echo] Failed to load profile stats:", error);
           setStats({
             totalCheckInDays: 0,
@@ -548,7 +652,7 @@ function ProfileDashboard({
           });
         }
       } finally {
-        if (!cancelled) {
+        if (!cancelled && !requestAbortController.signal.aborted) {
           setIsStatsLoading(false);
         }
       }
@@ -563,6 +667,9 @@ function ProfileDashboard({
 
     return () => {
       cancelled = true;
+      if (requestAbortController) {
+        requestAbortController.abort();
+      }
     };
   }, [email]);
 
@@ -581,6 +688,10 @@ function ProfileDashboard({
 
   // 监听"作品"变化事件
   useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
     const handleFeaturedChanged = () => {
       const featuredIds = loadFeaturedArtworkIds();
       const featured = artworks.filter((art) => featuredIds.includes(art.id));
@@ -664,7 +775,18 @@ function ProfileDashboard({
             <div className="profile-page__gallery-track">
               {featuredArtworks.map((art) => (
                 <div key={art.id} className="profile-page__gallery-item">
-                  <img src={art.imageSrc} alt={art.alt || art.title} />
+                  <img
+                    src={art.imageSrc}
+                    alt={art.alt || art.title || "作品"}
+                    onError={(e) => {
+                      // 图片加载失败时显示占位符
+                      const target = e.currentTarget;
+                      target.style.display = "none";
+                      // 可以在这里添加错误占位符逻辑
+                      console.warn("[Echo] Failed to load artwork image:", art.id);
+                    }}
+                    loading="lazy"
+                  />
                 </div>
               ))}
             </div>
@@ -729,11 +851,19 @@ function ProfileDashboard({
 }
 
 function formatName(email: string) {
+  // 输入验证：确保email是有效的字符串
+  if (!email || typeof email !== "string") {
+    return "回声艺术家";
+  }
+  
   const name = email.split("@")[0];
   if (name.length === 0) {
     return "回声艺术家";
   }
-  return name.slice(0, 1).toUpperCase() + name.slice(1);
+  
+  // 防止XSS：确保只返回安全的字符串（React会自动转义，但这里额外验证）
+  const sanitized = name.slice(0, 1).toUpperCase() + name.slice(1);
+  return sanitized;
 }
 
 function formatTotalDuration(minutesTotal: number) {

@@ -557,6 +557,7 @@ export type AdminTest = {
   is_active: boolean;
   display_order: number;
   metadata: Record<string, unknown>;
+  dimension_question_mapping?: Record<string, number[]>; // 维度ID（字符串） -> 题目ID列表
   created_at: string;
   updated_at: string;
 };

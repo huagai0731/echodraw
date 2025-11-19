@@ -81,11 +81,20 @@ function formatPrice(amount: number): string {
   return hasFraction ? amount.toFixed(1) : amount.toFixed(0);
 }
 
+function formatClickDate(dateString: string): string {
+  const date = new Date(dateString);
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  return `${year}年${month}月${day}日`;
+}
+
 function MembershipOptions({ onBack, currentTier, onSelectTier }: MembershipOptionsProps) {
   const [isMessageExpanded, setIsMessageExpanded] = useState(false);
   const [showFireworks, setShowFireworks] = useState<false | { x: number; y: number }>(false);
   const [highFiveCount, setHighFiveCount] = useState<number | null>(null);
   const [hasClicked, setHasClicked] = useState<boolean>(false);
+  const [clickedAt, setClickedAt] = useState<string | null>(null);
   const messageButtonRef = useRef<HTMLButtonElement>(null);
   const fireworksContainerRef = useRef<HTMLDivElement>(null);
 
@@ -94,16 +103,18 @@ function MembershipOptions({ onBack, currentTier, onSelectTier }: MembershipOpti
     if (isMessageExpanded) {
       Promise.all([
         getHighFiveCount(),
-        hasHighFiveClicked().catch(() => false),
+        hasHighFiveClicked().catch(() => ({ has_clicked: false })),
       ])
-        .then(([count, clicked]) => {
+        .then(([count, result]) => {
           setHighFiveCount(count);
-          setHasClicked(clicked);
+          setHasClicked(result.has_clicked || false);
+          setClickedAt(result.clicked_at || null);
         })
         .catch((error) => {
           console.warn("Failed to load high-five data", error);
           setHighFiveCount(0);
           setHasClicked(false);
+          setClickedAt(null);
         });
     }
   }, [isMessageExpanded]);
@@ -387,9 +398,15 @@ function MembershipOptions({ onBack, currentTier, onSelectTier }: MembershipOpti
                       
                       if (result.success) {
                         setHasClicked(true);
+                        if (result.clicked_at) {
+                          setClickedAt(result.clicked_at);
+                        }
                       } else {
                         // 如果已经点击过，更新状态
                         setHasClicked(true);
+                        if (result.clicked_at) {
+                          setClickedAt(result.clicked_at);
+                        }
                         // 可以显示提示信息
                         console.log(result.message || "您已经点击过了");
                       }
@@ -398,11 +415,12 @@ function MembershipOptions({ onBack, currentTier, onSelectTier }: MembershipOpti
                       // 如果API调用失败，尝试重新加载当前计数和状态
                       Promise.all([
                         getHighFiveCount(),
-                        hasHighFiveClicked().catch(() => false),
+                        hasHighFiveClicked().catch(() => ({ has_clicked: false })),
                       ])
-                        .then(([count, clicked]) => {
+                        .then(([count, result]) => {
                           setHighFiveCount(count);
-                          setHasClicked(clicked);
+                          setHasClicked(result.has_clicked || false);
+                          setClickedAt(result.clicked_at || null);
                         })
                         .catch(() => {});
                     }
@@ -416,6 +434,11 @@ function MembershipOptions({ onBack, currentTier, onSelectTier }: MembershipOpti
             {highFiveCount !== null && (
               <div className="membership-options__high-five-counter">
                 已有 <strong>{highFiveCount.toLocaleString()}</strong> 位小画师击掌
+              </div>
+            )}
+            {hasClicked && clickedAt && (
+              <div className="membership-options__high-five-message">
+                于{formatClickDate(clickedAt)}，听见你的回声
               </div>
             )}
             </div>

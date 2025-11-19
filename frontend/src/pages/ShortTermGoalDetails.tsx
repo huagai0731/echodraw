@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import MaterialIcon from "@/components/MaterialIcon";
 import type { ShortTermGoal, ShortTermGoalTask, UserUploadRecord } from "@/services/api";
-import { deleteShortTermGoal, fetchUserUploads, submitCheckIn } from "@/services/api";
-import { formatDateKey } from "@/services/artworkStorage";
+import { fetchUserUploads, submitCheckIn, fetchShortTermGoalTaskCompletions, deleteShortTermGoal } from "@/services/api";
 import { replaceLocalhostInUrl } from "@/utils/urlUtils";
+import { parseISODateInShanghai, getTodayInShanghai, formatISODateInShanghai } from "@/utils/dateUtils";
 
 import "./ShortTermGoalDetails.css";
 
@@ -12,554 +11,678 @@ type ShortTermGoalDetailsProps = {
   goal: ShortTermGoal;
   onClose: () => void;
   uploadDates?: Set<string>;
-  onReviewHistory?: () => void;
   onComplete?: (dateKey: string) => void;
   onDeleted?: (goalId: number) => void;
 };
 
-type DayStatus = "completed" | "active" | "upcoming";
+// 卡片状态
+type CardStatus = "locked" | "available" | "completed";
 
-type DayEntry = {
+// 周期状态
+type CycleStatus = "active" | "finished" | "expired";
+
+// 卡片数据
+type DayCard = {
   dayNumber: number;
   tasks: ShortTermGoalTask[];
-  status: DayStatus;
+  status: CardStatus;
   summary: string;
   subtitle: string;
   dateKey: string;
   hasUpload: boolean;
+  isTomorrow: boolean; // 是否是明日继续（今天已完成，但明天因日期未到而锁定）
+  note?: string; // 用户备注
+  completedAt?: string; // 完成时间（ISO格式）
 };
 
-type TaskImageMap = Record<string, UserUploadRecord | null>;
+// 周期状态数据
+type CycleState = {
+  status: CycleStatus;
+  days: DayCard[];
+  progressPercent: number;
+  daysRemaining: number;
+  completedCount: number;
+};
+
+// 计算容错天数（周期天数 + 2）
+function getToleranceDays(cycleDays: number): number {
+  return cycleDays + 2;
+}
+
+// 根据创建日期计算第几天的日期
+function getDayDate(createdAt: string, dayIndex: number): Date | null {
+  // 尝试解析日期（可能是 YYYY-MM-DD 或 ISO 日期时间字符串）
+  let createdDate = parseISODateInShanghai(createdAt);
+  
+  // 如果失败，尝试从 ISO 日期时间字符串提取日期部分
+  if (!createdDate) {
+    // 提取日期部分（YYYY-MM-DD）
+    const datePart = createdAt.split('T')[0];
+    createdDate = parseISODateInShanghai(datePart);
+  }
+  
+  // 如果还是失败，尝试使用 formatISODateInShanghai 从原始字符串转换
+  if (!createdDate) {
+    const dateStr = formatISODateInShanghai(createdAt);
+    if (dateStr) {
+      createdDate = parseISODateInShanghai(dateStr);
+    }
+  }
+  
+  // 如果仍然失败，使用当前日期作为fallback
+  if (!createdDate) {
+    createdDate = parseISODateInShanghai(getTodayInShanghai()) || new Date();
+    createdDate.setHours(0, 0, 0, 0);
+  }
+  
+  const dayDate = new Date(createdDate);
+  dayDate.setDate(dayDate.getDate() + dayIndex);
+  dayDate.setHours(0, 0, 0, 0);
+  return dayDate;
+}
+
+// 状态推导函数
+function deriveCycleState(
+  goal: ShortTermGoal,
+  uploadDates: Set<string>
+): CycleState {
+  const todayStr = getTodayInShanghai();
+  const today = parseISODateInShanghai(todayStr) || new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // 解析创建日期，如果失败使用当前日期作为fallback
+  let createdDate = parseISODateInShanghai(goal.createdAt);
+  if (!createdDate) {
+    // 尝试从 ISO 日期时间字符串提取日期部分
+    const datePart = goal.createdAt.split('T')[0];
+    createdDate = parseISODateInShanghai(datePart);
+  }
+  if (!createdDate) {
+    // 尝试使用 formatISODateInShanghai 转换
+    const dateStr = formatISODateInShanghai(goal.createdAt);
+    if (dateStr) {
+      createdDate = parseISODateInShanghai(dateStr);
+    }
+  }
+  // 如果仍然失败，使用当前日期
+  if (!createdDate) {
+    createdDate = parseISODateInShanghai(getTodayInShanghai()) || new Date();
+  }
+  createdDate.setHours(0, 0, 0, 0);
+
+  // 计算容错天数
+  const toleranceDays = getToleranceDays(goal.durationDays);
+  
+  // 计算已过天数（从创建日期到今天）
+  const daysSinceCreation = Math.floor(
+    (today.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24)
+  );
+
+  // 判断周期状态
+  let cycleStatus: CycleStatus;
+  if (daysSinceCreation > toleranceDays) {
+    cycleStatus = "expired";
+  } else {
+    // 检查是否全部完成
+    const completedCount = Array.from({ length: goal.durationDays }, (_, index) => {
+      const dayDate = getDayDate(goal.createdAt, index);
+      if (!dayDate) return false;
+      const dateKey = formatISODateInShanghai(dayDate);
+      return dateKey ? uploadDates.has(dateKey) : false;
+    }).filter(Boolean).length;
+
+    if (completedCount === goal.durationDays) {
+      cycleStatus = "finished";
+    } else {
+      cycleStatus = "active";
+    }
+  }
+
+  // 生成所有卡片
+  const sortedSchedule = [...goal.schedule].sort((a, b) => a.dayIndex - b.dayIndex);
+  const scheduleMap = new Map(sortedSchedule.map((day) => [day.dayIndex, day.tasks]));
+  const baseTasks =
+    goal.planType === "same" && sortedSchedule.length > 0
+      ? sortedSchedule[0]?.tasks ?? []
+      : [];
+
+  const days: DayCard[] = Array.from({ length: goal.durationDays }, (_, index) => {
+    const dayNumber = index + 1;
+    const dayDate = getDayDate(goal.createdAt, index);
+    const dateKey = dayDate ? formatISODateInShanghai(dayDate) : null;
+
+    // 获取任务列表
+    const currentTasks =
+      goal.planType === "same"
+        ? baseTasks
+        : scheduleMap.get(index) ??
+          (index > 0 && sortedSchedule.length > 0
+            ? sortedSchedule.find((d) => d.dayIndex <= index)?.tasks ?? baseTasks
+            : baseTasks);
+
+    const summary = currentTasks.length > 0 ? currentTasks[0].title : "未安排任务";
+    const subtitle = currentTasks.length > 0 ? currentTasks[0].subtitle ?? "" : "";
+
+    // 判断是否有打卡记录
+    const hasUpload = dateKey ? uploadDates.has(dateKey) : false;
+
+    // 判断卡片状态
+    let cardStatus: CardStatus;
+    let isTomorrow = false;
+    
+    if (hasUpload) {
+      cardStatus = "completed";
+    } else if (cycleStatus === "expired") {
+      // 周期过期，所有未完成的卡片锁定
+      cardStatus = "locked";
+    } else {
+      // 判断是否解锁
+      // Day 1 总是解锁
+      if (index === 0) {
+        cardStatus = "available";
+      } else {
+        // Day 2 及以后：需要满足"今天是该天或该天之前"
+        // 即：today >= dayDate
+        if (dayDate && today.getTime() >= dayDate.getTime()) {
+          cardStatus = "available";
+        } else {
+          cardStatus = "locked";
+          // 判断是否是"明日继续"的情况：今天的卡片已完成，但明天因日期未到而锁定
+          if (index > 0) {
+            const previousDayIndex = index - 1;
+            const previousDayDate = getDayDate(goal.createdAt, previousDayIndex);
+            if (previousDayDate) {
+              const previousDateKey = formatISODateInShanghai(previousDayDate);
+              if (previousDateKey && uploadDates.has(previousDateKey)) {
+                // 前一天已完成，今天是明天（日期未到），显示"明日继续"
+                isTomorrow = true;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return {
+      dayNumber,
+      tasks: currentTasks,
+      status: cardStatus,
+      summary,
+      subtitle,
+      dateKey: dateKey || "",
+      hasUpload,
+      isTomorrow,
+    };
+  });
+
+  // 计算进度
+  const completedCount = days.filter((d) => d.hasUpload).length;
+  const progressPercent =
+    goal.durationDays > 0
+      ? Math.round((completedCount / goal.durationDays) * 100)
+      : 0;
+  const daysRemaining = Math.max(goal.durationDays - completedCount, 0);
+
+  return {
+    status: cycleStatus,
+    days,
+    progressPercent,
+    daysRemaining,
+    completedCount,
+  };
+}
 
 function ShortTermGoalDetails({
   goal,
   onClose,
-  uploadDates,
-  onReviewHistory,
+  uploadDates = new Set(),
   onComplete,
   onDeleted,
 }: ShortTermGoalDetailsProps) {
-  // 本地维护 uploadDates 状态，允许内部更新
-  // 初始化时，如果目标是今天创建的，过滤掉第一天的打卡记录（可能是之前demo数据）
-  // 同时监听 uploadDates prop 的变化，确保从父组件传递的最新状态能同步过来
-  const [localUploadDates, setLocalUploadDates] = useState<Set<string>>(() => {
-    const initialDates = new Set(uploadDates || []);
-    
-    // 如果目标是今天创建的，且uploadDates中有今天的记录，这可能是之前demo数据
-    // 需要在初始化时移除，但在用户完成今日目标后可以重新添加
-    if (goal.createdAt) {
-      const startDate = new Date(goal.createdAt);
-      startDate.setHours(0, 0, 0, 0);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      // 如果目标创建日期是今天，移除第一天的打卡记录（如果存在）
-      if (startDate.getTime() === today.getTime()) {
-        const firstDayKey = formatDateKey(startDate);
-        if (initialDates.has(firstDayKey)) {
-          // 移除第一天的记录，避免demo数据影响
-          initialDates.delete(firstDayKey);
-        }
-      }
-    }
-    
-    return initialDates;
-  });
+  const [localUploadDates, setLocalUploadDates] = useState<Set<string>>(uploadDates);
+  const [taskImages, setTaskImages] = useState<Record<string, UserUploadRecord | null>>({});
+  const [recentUploads, setRecentUploads] = useState<UserUploadRecord[]>([]);
+  const [selectedTaskKey, setSelectedTaskKey] = useState<string | null>(null);
+  const [viewingImage, setViewingImage] = useState<UserUploadRecord | null>(null);
+  const [completingDay, setCompletingDay] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showNoteModal, setShowNoteModal] = useState(false);
+  const [pendingDay, setPendingDay] = useState<DayCard | null>(null);
+  const [dayNote, setDayNote] = useState("");
+  const [dayNotes, setDayNotes] = useState<Record<string, string>>({}); // dateKey -> note
+  const [checkInTimes, setCheckInTimes] = useState<Record<string, string>>({}); // dateKey -> completedAt (ISO)
+  const [showMenu, setShowMenu] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
-  // 当 uploadDates prop 更新时，同步到本地状态
-  // 这样可以确保从父组件传递的最新状态能正确显示
+  // 同步 uploadDates prop 到本地状态（合并而不是覆盖）
   useEffect(() => {
-    if (uploadDates) {
-      setLocalUploadDates((prev) => {
-        // 合并父组件传递的最新状态和本地状态
-        const merged = new Set(uploadDates);
-        // 保留本地可能新增的日期（比如刚刚完成的）
-        prev.forEach((date) => merged.add(date));
-        console.log("[ShortTermGoalDetails] Synced uploadDates from prop", {
-          propDates: Array.from(uploadDates),
-          prevDates: Array.from(prev),
-          mergedDates: Array.from(merged)
-        });
-        return merged;
-      });
-    }
+    setLocalUploadDates((prev) => {
+      const merged = new Set(prev);
+      uploadDates.forEach((date) => merged.add(date));
+      return merged;
+    });
   }, [uploadDates]);
 
-  // 将 Set 转换为排序后的数组字符串，用于 useMemo 依赖比较
-  const localUploadDatesKey = useMemo(
-    () => Array.from(localUploadDates).sort().join(','),
-    [localUploadDates]
-  );
-
-  const snapshot = useMemo(
-    () => buildGoalSnapshot(goal, localUploadDates),
-    [goal, localUploadDatesKey],
-  );
-
-  const STORAGE_KEY = `short-term-goal-${goal.id}-task-images`;
-
-  // 从 localStorage 加载任务图片关联（只保存图片ID）
-  // key格式：dateKey-taskId，确保不同天的相同任务ID不会冲突
-  const loadTaskImages = useCallback((): TaskImageMap => {
-    try {
-      const storageKey = `short-term-goal-${goal.id}-task-images`;
-      const stored = localStorage.getItem(storageKey);
-      if (stored) {
-        const imageIds = JSON.parse(stored) as Record<string, number | null>;
-        console.log("[ShortTermGoalDetails] loadTaskImages found stored data", {
-          keys: Object.keys(imageIds),
-          imageIds
-        });
-        // 初始化时返回空的map，等待上传列表加载后再关联
-        // 这里返回一个占位符 map，键存在但值为 null，后续会在 useEffect 中恢复
-        return Object.fromEntries(
-          Object.entries(imageIds).map(([key]) => [key, null])
-        ) as TaskImageMap;
-      } else {
-        console.log("[ShortTermGoalDetails] loadTaskImages no stored data", { storageKey });
-      }
-    } catch (error) {
-      console.warn("[ShortTermGoalDetails] Failed to load task images", error);
-    }
-    return {};
-  }, [goal.id]);
-
-  const saveTaskImages = useCallback((images: TaskImageMap) => {
-    try {
-      // 只保存图片ID，而不是整个对象
-      // key格式：dateKey-taskId
-      const imageIds = Object.fromEntries(
-        Object.entries(images)
-          .filter(([, upload]) => upload !== null) // 只保存非null的项
-          .map(([key, upload]) => [key, upload!.id])
-      );
-      console.log("[ShortTermGoalDetails] Saving task images", { 
-        keys: Object.keys(imageIds), 
-        imageIds,
-        totalImages: Object.keys(images).length,
-        nonNullImages: Object.values(images).filter(Boolean).length
-      });
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(imageIds));
-      console.log("[ShortTermGoalDetails] Saved to localStorage successfully", {
-        storageKey: STORAGE_KEY,
-        savedCount: Object.keys(imageIds).length
-      });
-      
-      // 立即验证保存
-      const verified = localStorage.getItem(STORAGE_KEY);
-      if (verified) {
-        const parsed = JSON.parse(verified) as Record<string, number>;
-        console.log("[ShortTermGoalDetails] Verified saved data", {
-          savedKeys: Object.keys(parsed),
-          matches: Object.keys(imageIds).every(key => parsed[key] === imageIds[key])
-        });
-      }
-    } catch (error) {
-      console.error("[ShortTermGoalDetails] Failed to save task images", error);
-    }
-  }, [STORAGE_KEY]);
-
-  const [taskImages, setTaskImages] = useState<TaskImageMap>(() => {
-    try {
-      const storageKey = `short-term-goal-${goal.id}-task-images`;
-      const stored = localStorage.getItem(storageKey);
-      console.log("[ShortTermGoalDetails] Initial taskImages from localStorage", {
-        storageKey,
-        hasStored: !!stored,
-        stored
-      });
-      const loaded = loadTaskImages();
-      console.log("[ShortTermGoalDetails] Initial taskImages loaded", {
-        keys: Object.keys(loaded)
-      });
-      return loaded;
-    } catch (error) {
-      console.error("[ShortTermGoalDetails] Failed to load initial taskImages", error);
-      return {};
-    }
-  });
-  const [recentUploads, setRecentUploads] = useState<UserUploadRecord[]>([]);
-  const [allUploads, setAllUploads] = useState<UserUploadRecord[]>([]);
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [viewingImage, setViewingImage] = useState<UserUploadRecord | null>(null);
-  const [loadingUploads, setLoadingUploads] = useState(false);
-  const [completingDay, setCompletingDay] = useState<string | null>(null);
-  const [showMoreOptions, setShowMoreOptions] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [showReviewModal, setShowReviewModal] = useState(false);
-  const [reviewText, setReviewText] = useState("");
-  const [pendingCompleteDay, setPendingCompleteDay] = useState<DayEntry | null>(null);
-  const [animatingDay, setAnimatingDay] = useState<string | null>(null);
-  
-  // 在组件挂载时验证 localStorage
-  useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    console.log("[ShortTermGoalDetails] Component mounted, checking localStorage", {
-      storageKey: STORAGE_KEY,
-      hasStored: !!stored,
-      stored,
-      currentTaskImagesKeys: Object.keys(taskImages)
-    });
-  }, [STORAGE_KEY, taskImages]);
-
+  // 加载上传记录
   useEffect(() => {
     let cancelled = false;
-    setLoadingUploads(true);
     fetchUserUploads()
       .then((uploads) => {
         if (!cancelled) {
-          const sorted = uploads
-            .sort((a, b) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime());
-          const recent = sorted.slice(0, 16);
-          setRecentUploads(recent);
-          setAllUploads(sorted);
-
-          // 从 localStorage 恢复任务图片关联
-          // key格式：dateKey-taskId
-          try {
-            const stored = localStorage.getItem(STORAGE_KEY);
-            if (stored) {
-              const imageIds = JSON.parse(stored) as Record<string, number | null>;
-              console.log("[ShortTermGoalDetails] Restoring task images from localStorage", { 
-                keys: Object.keys(imageIds), 
-                imageIds,
-                uploadsCount: uploads.length 
-              });
-              const restored: TaskImageMap = {};
-              let foundCount = 0;
-              let missingCount = 0;
-              
-              Object.entries(imageIds).forEach(([key, uploadId]) => {
-                if (uploadId) {
-                  const upload = uploads.find((u) => u.id === uploadId);
-                  if (upload) {
-                    restored[key] = upload;
-                    foundCount++;
-                    console.log("[ShortTermGoalDetails] Restored", { key, uploadId, uploadTitle: upload.title });
-                  } else {
-                    missingCount++;
-                    console.warn("[ShortTermGoalDetails] Upload not found for ID", { key, uploadId, availableIds: uploads.map(u => u.id) });
-                  }
-                }
-              });
-              
-              console.log("[ShortTermGoalDetails] Restored taskImages", { 
-                keys: Object.keys(restored),
-                foundCount,
-                missingCount,
-                total: Object.keys(imageIds).length
-              });
-              
-              // 使用函数式更新，确保合并而不是替换
-              // 如果 prev 中有占位符（值为 null），用 restored 中的实际值替换
-              setTaskImages((prev) => {
-                const merged = { ...prev };
-                // 先合并 restored 中的值
-                Object.entries(restored).forEach(([key, upload]) => {
-                  merged[key] = upload;
-                });
-                // 确保所有 localStorage 中的 key 都有对应的值（如果找不到上传，保持 null）
-                Object.keys(imageIds).forEach((key) => {
-                  if (!(key in merged)) {
-                    merged[key] = null;
-                  }
-                });
-                console.log("[ShortTermGoalDetails] Merged taskImages", {
-                  prevKeys: Object.keys(prev),
-                  restoredKeys: Object.keys(restored),
-                  mergedKeys: Object.keys(merged),
-                  mergedValues: Object.entries(merged).map(([k, v]) => ({ key: k, hasValue: v !== null }))
-                });
-                return merged;
-              });
-            } else {
-              console.log("[ShortTermGoalDetails] No stored task images found in localStorage");
-            }
-          } catch (error) {
-            console.error("[ShortTermGoalDetails] Failed to restore task images", error);
-          }
-
-          setLoadingUploads(false);
+          const sorted = uploads.sort(
+            (a, b) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime()
+          );
+          setRecentUploads(sorted.slice(0, 16));
         }
       })
       .catch((error) => {
-        console.warn("[ShortTermGoalDetails] Failed to fetch uploads", error);
         if (!cancelled) {
-          setLoadingUploads(false);
+          console.warn("Failed to fetch uploads", error);
         }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [STORAGE_KEY]);
-
-  const handleTaskUploadClick = useCallback((dateKey: string, taskId: string) => {
-    // key格式：dateKey-taskId
-    setSelectedTaskId(`${dateKey}-${taskId}`);
   }, []);
 
-  const handleImageSelect = useCallback((upload: UserUploadRecord) => {
-    if (selectedTaskId) {
-      console.log("[ShortTermGoalDetails] Selecting image", { selectedTaskId, uploadId: upload.id, uploadTitle: upload.title });
-      
-      setTaskImages((prev) => {
-        const next = {
-          ...prev,
-          [selectedTaskId]: upload,
-        };
-        console.log("[ShortTermGoalDetails] Updated taskImages", { 
-          prevKeys: Object.keys(prev), 
-          nextKeys: Object.keys(next),
-          selectedTaskId,
-          uploadId: upload.id
-        });
-        
-        // 保存到 localStorage
-        saveTaskImages(next);
-        
-        // 验证保存（使用 setTimeout 确保保存完成）
-        setTimeout(() => {
-          try {
-            const stored = localStorage.getItem(STORAGE_KEY);
-            if (stored) {
-              const saved = JSON.parse(stored) as Record<string, number | null>;
-              console.log("[ShortTermGoalDetails] Verified save to localStorage", { 
-                savedKeys: Object.keys(saved),
-                saved,
-                expectedKey: selectedTaskId,
-                expectedValue: upload.id 
-              });
-              
-              // 验证保存的key和value是否正确
-              if (saved[selectedTaskId] !== upload.id) {
-                console.error("[ShortTermGoalDetails] Save verification failed!", {
-                  expected: { key: selectedTaskId, value: upload.id },
-                  actual: { key: selectedTaskId, value: saved[selectedTaskId] }
-                });
-              } else {
-                console.log("[ShortTermGoalDetails] Save verification passed!");
+  // 加载已保存的任务图片关联
+  const loadTaskCompletions = useCallback(() => {
+    let cancelled = false;
+    fetchShortTermGoalTaskCompletions(goal.id)
+      .then((data) => {
+        if (!cancelled) {
+          const completions = data.completions || {};
+          const checkinTimes = data.checkin_times || {};
+          
+          // 将完成记录转换为taskImages格式
+          const loadedTaskImages: Record<string, UserUploadRecord | null> = {};
+          // 收集所有有任务完成记录的日期
+          const completedDates = new Set<string>();
+          
+          // 保存完成时间
+          setCheckInTimes((prev) => ({
+            ...prev,
+            ...checkinTimes,
+          }));
+          
+          Object.entries(completions).forEach(([dateKey, tasks]) => {
+            // 后端返回的日期键是ISO格式（YYYY-MM-DD），前端生成的dateKey也是相同格式
+            // 直接使用后端返回的日期键，确保完全匹配
+            // 同时也要尝试标准化格式，以防万一
+            const normalizedDateKey = formatISODateInShanghai(dateKey) || dateKey;
+            
+            // 如果有任务完成记录，说明这一天已经完成了，添加到已完成日期集合
+            if (Object.keys(tasks).length > 0) {
+              completedDates.add(normalizedDateKey);
+              // 如果标准化后的日期键与原始不同，也添加原始格式
+              if (normalizedDateKey !== dateKey) {
+                completedDates.add(dateKey);
               }
-            } else {
-              console.error("[ShortTermGoalDetails] localStorage is empty after save!");
             }
-          } catch (error) {
-            console.error("[ShortTermGoalDetails] Failed to verify save", error);
-          }
-        }, 100);
-        
-        return next;
+            
+            Object.entries(tasks).forEach(([taskId, completion]) => {
+              // 使用标准化后的日期键（如果与原始不同，也保存原始格式的键）
+              const taskKey = normalizedDateKey !== dateKey ? `${normalizedDateKey}-${taskId}` : `${dateKey}-${taskId}`;
+              // 构建UserUploadRecord对象
+              const uploadRecord: UserUploadRecord = {
+                id: completion.id,
+                title: completion.title,
+                description: "",
+                uploaded_at: completion.uploaded_at,
+                self_rating: null,
+                mood_label: "",
+                tags: [],
+                duration_minutes: null,
+                image: completion.image,
+                created_at: completion.uploaded_at,
+                updated_at: completion.uploaded_at,
+              };
+              // 保存到标准化日期键
+              loadedTaskImages[taskKey] = uploadRecord;
+              // 如果标准化后的日期键与原始不同，也保存原始格式的键
+              if (normalizedDateKey !== dateKey) {
+                loadedTaskImages[`${dateKey}-${taskId}`] = uploadRecord;
+              }
+            });
+          });
+          
+          // 更新任务图片
+          setTaskImages((prev) => ({
+            ...prev,
+            ...loadedTaskImages,
+          }));
+          
+          // 更新已完成日期，确保有任务完成记录的日期也显示为已完成
+          setLocalUploadDates((prev) => {
+            const next = new Set(prev);
+            completedDates.forEach((date) => next.add(date));
+            return next;
+          });
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          console.warn("Failed to fetch task completions", error);
+        }
       });
-      setSelectedTaskId(null);
-    }
-  }, [selectedTaskId, saveTaskImages, STORAGE_KEY]);
 
+    return () => {
+      cancelled = true;
+    };
+  }, [goal.id]);
+
+  useEffect(() => {
+    const cleanup = loadTaskCompletions();
+    return cleanup;
+  }, [loadTaskCompletions]);
+
+  // 计算周期状态
+  const cycleState = useMemo(
+    () => deriveCycleState(goal, localUploadDates),
+    [goal, localUploadDates]
+  );
+
+  // 处理任务图片上传
+  const handleTaskUploadClick = useCallback((dayDateKey: string, taskId: string) => {
+    const taskKey = `${dayDateKey}-${taskId}`;
+    setSelectedTaskKey(taskKey);
+  }, []);
+
+  // 选择图片
+  const handleImageSelect = useCallback(
+    (upload: UserUploadRecord) => {
+      if (selectedTaskKey) {
+        setTaskImages((prev) => ({
+          ...prev,
+          [selectedTaskKey]: upload,
+        }));
+        setSelectedTaskKey(null);
+      }
+    },
+    [selectedTaskKey]
+  );
+
+  // 查看图片
   const handleImageView = useCallback((upload: UserUploadRecord) => {
     setViewingImage(upload);
   }, []);
 
-  const handleCompleteTodayClick = useCallback((day: DayEntry) => {
-    // 先显示评价弹窗
-    setPendingCompleteDay(day);
-    setReviewText("");
-    setShowReviewModal(true);
-  }, []);
-
-  const handleReviewSave = useCallback(async () => {
-    if (!pendingCompleteDay) {
-      return;
-    }
-
-    const day = pendingCompleteDay;
-    setShowReviewModal(false);
-    setCompletingDay(day.dateKey);
-    
-    try {
-      // 确保日期格式正确（YYYY-MM-DD）
-      const dateKey = day.dateKey;
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
-        console.error("[ShortTermGoalDetails] Invalid date format:", dateKey);
-        setCompletingDay(null);
-        setPendingCompleteDay(null);
+  // 完成某一天的打卡
+  const handleCompleteDay = useCallback(
+    async (day: DayCard) => {
+      // 防止重复提交
+      if (isSubmitting || completingDay === day.dateKey || day.hasUpload) {
         return;
       }
 
-      // 在完成今日目标前，确保当天的图片关联已保存到 localStorage
-      // 获取当天的所有任务图片关联
-      const dayTaskImages: TaskImageMap = {};
-      day.tasks.forEach((task) => {
-        const taskImageKey = `${dateKey}-${task.taskId}`;
-        const taskImage = taskImages[taskImageKey];
-        if (taskImage) {
-          dayTaskImages[taskImageKey] = taskImage;
-        }
+      // 检查是否所有任务都有图片
+      const allTasksHaveImages = day.tasks.every((task) => {
+        const taskKey = `${day.dateKey}-${task.taskId}`;
+        return taskImages[taskKey] !== undefined && taskImages[taskKey] !== null;
       });
-      
-      // 如果有图片关联，确保保存到 localStorage
-      if (Object.keys(dayTaskImages).length > 0) {
-        setTaskImages((prev) => {
-          const next = { ...prev, ...dayTaskImages };
-          // 确保保存到 localStorage
-          saveTaskImages(next);
+
+      if (!allTasksHaveImages && day.tasks.length > 0) {
+        alert("请先为所有任务上传作品");
+        return;
+      }
+
+      // 弹出备注输入框
+      setPendingDay(day);
+      setDayNote(dayNotes[day.dateKey] || "");
+      setShowNoteModal(true);
+    },
+    [isSubmitting, completingDay, taskImages, dayNotes]
+  );
+
+  // 确认保存（包含备注）
+  const handleConfirmComplete = useCallback(
+    async () => {
+      if (!pendingDay) return;
+
+      const day = pendingDay;
+      setShowNoteModal(false);
+      setCompletingDay(day.dateKey);
+      setIsSubmitting(true);
+
+      try {
+        // 构建任务图片关联信息
+        const taskImagesMap: Record<string, number> = {};
+        day.tasks.forEach((task) => {
+          const taskKey = `${day.dateKey}-${task.taskId}`;
+          const upload = taskImages[taskKey];
+          if (upload && upload.id) {
+            taskImagesMap[task.taskId] = upload.id;
+          }
+        });
+
+        const result = await submitCheckIn({
+          date: day.dateKey,
+          source: "short-term-goal",
+          goal_id: goal.id,
+          task_images: Object.keys(taskImagesMap).length > 0 ? taskImagesMap : undefined,
+          notes: dayNote.trim() || undefined,
+        });
+
+        // 使用服务器返回的 checked_date（可能因时区等原因与请求的日期不同）
+        const checkedDate = result.checked_date 
+          ? formatISODateInShanghai(result.checked_date) || day.dateKey
+          : day.dateKey;
+
+        // 更新本地状态（使用函数式更新确保不丢失已有状态）
+        setLocalUploadDates((prev) => {
+          const next = new Set(prev);
+          next.add(checkedDate);
           return next;
         });
-        console.log("[ShortTermGoalDetails] Ensured task images are saved before completing", {
-          dateKey,
-          taskImageKeys: Object.keys(dayTaskImages)
-        });
-      }
 
-      // 保存评价到 localStorage（如果后端不支持，先保存在本地）
-      if (reviewText.trim()) {
-        try {
-          const reviewKey = `short-term-goal-${goal.id}-review-${dateKey}`;
-          localStorage.setItem(reviewKey, reviewText.trim());
-          console.log("[ShortTermGoalDetails] Saved review", { dateKey, review: reviewText.trim() });
-        } catch (error) {
-          console.warn("[ShortTermGoalDetails] Failed to save review", error);
+        // 保存备注
+        if (dayNote.trim()) {
+          setDayNotes((prev) => ({
+            ...prev,
+            [checkedDate]: dayNote.trim(),
+          }));
         }
-      }
 
-      console.log("[ShortTermGoalDetails] Submitting check-in", { date: dateKey, source: "short-term-goal" });
-      const result = await submitCheckIn({ date: dateKey, source: "short-term-goal" });
-      console.log("[ShortTermGoalDetails] Check-in successful", result);
-      
-      // 更新本地 uploadDates 状态，标记该日期为已完成
-      setLocalUploadDates((prev) => {
-        const next = new Set(prev);
-        next.add(day.dateKey);
-        console.log("[ShortTermGoalDetails] Updated localUploadDates", Array.from(next));
-        return next;
-      });
-      
-      // 触发动画
-      setAnimatingDay(day.dateKey);
-      
-      // 通知父组件刷新打卡记录
-      if (onComplete) {
-        onComplete(day.dateKey);
-      }
-      
-      // 动画结束后清理状态
-      setTimeout(() => {
-        setAnimatingDay(null);
+        // 保存完成时间（从服务器返回的时间，如果没有则使用当前时间）
+        const completionTime = result.checked_at || new Date().toISOString();
+        setCheckInTimes((prev) => ({
+          ...prev,
+          [checkedDate]: completionTime,
+        }));
+
+        // 重新加载任务完成记录，确保图片关联已保存
+        // 延迟一点时间，确保后端已保存完成
+        setTimeout(() => {
+          loadTaskCompletions();
+          loadCheckInNotes();
+        }, 100);
+
+        // 通知父组件刷新数据
+        if (onComplete) {
+          onComplete(checkedDate);
+        }
+      } catch (error) {
+        console.error("Failed to complete day", error);
+        let errorMessage = "打卡失败，请稍后重试";
+        if (
+          error &&
+          typeof error === "object" &&
+          "response" in error
+        ) {
+          const axiosError = error as {
+            response?: { data?: { detail?: string }; status?: number };
+          };
+          const detail = axiosError.response?.data?.detail;
+          if (detail && typeof detail === "string") {
+            errorMessage = detail;
+          } else if (axiosError.response?.status === 401 || axiosError.response?.status === 403) {
+            errorMessage = "登录已过期，请重新登录";
+          }
+        }
+        alert(errorMessage);
+      } finally {
         setCompletingDay(null);
-        setPendingCompleteDay(null);
-        setReviewText("");
-        console.log("[ShortTermGoalDetails] Completed successfully");
-      }, 2000); // 动画持续2秒
-    } catch (error) {
-      console.error("[ShortTermGoalDetails] Failed to complete today", error);
-      // 如果是AxiosError，尝试获取详细的错误信息
-      if (error && typeof error === "object" && "response" in error) {
-        const axiosError = error as { response?: { data?: { detail?: string } } };
-        const detail = axiosError.response?.data?.detail;
-        if (detail) {
-          console.error("[ShortTermGoalDetails] Error detail:", detail);
-        }
+        setIsSubmitting(false);
+        setPendingDay(null);
+        setDayNote("");
       }
-      setCompletingDay(null);
-      setPendingCompleteDay(null);
-      setAnimatingDay(null);
-    }
-  }, [pendingCompleteDay, reviewText, taskImages, saveTaskImages, onComplete, goal.id]);
+    },
+    [pendingDay, taskImages, onComplete, goal.id, loadTaskCompletions, dayNote]
+  );
 
-  const handleReviewCancel = useCallback(() => {
-    setShowReviewModal(false);
-    setPendingCompleteDay(null);
-    setReviewText("");
+  // 取消备注输入
+  const handleCancelNote = useCallback(() => {
+    setShowNoteModal(false);
+    setPendingDay(null);
+    setDayNote("");
   }, []);
 
+  // 处理删除目标
+  const handleDeleteGoal = useCallback(async () => {
+    if (isDeleting) return;
+    
+    const confirmed = window.confirm("确定要删除这个短期目标吗？删除后无法恢复。");
+    if (!confirmed) {
+      setShowMenu(false);
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      await deleteShortTermGoal(goal.id);
+      if (onDeleted) {
+        onDeleted(goal.id);
+      }
+      onClose();
+    } catch (error) {
+      console.error("Failed to delete goal", error);
+      alert("删除失败，请稍后重试");
+    } finally {
+      setIsDeleting(false);
+      setShowMenu(false);
+    }
+  }, [goal.id, isDeleting, onDeleted, onClose]);
+
+  // 点击外部关闭菜单
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        const target = event.target as HTMLElement;
+        if (!target.closest('.short-term-details__icon-button')) {
+          setShowMenu(false);
+        }
+      }
+    };
+
+    if (showMenu) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => {
+        document.removeEventListener("mousedown", handleClickOutside);
+      };
+    }
+  }, [showMenu]);
+
+  // 加载打卡备注
+  const loadCheckInNotes = useCallback(() => {
+    // 从打卡记录中获取备注（需要后端API支持）
+    // 暂时先不实现，等后端API准备好
+  }, []);
+
+  // 关闭选择图片弹窗
+  const handleCloseSelectModal = useCallback(() => {
+    setSelectedTaskKey(null);
+  }, []);
+
+  // 关闭查看图片弹窗
   const handleCloseImageModal = useCallback(() => {
     setViewingImage(null);
   }, []);
 
-  const handleCloseSelectModal = useCallback(() => {
-    setSelectedTaskId(null);
+  // 格式化日期为中文格式（如：2024年1月15日）
+  const formatDateChinese = useCallback((date: Date): string => {
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    return `${year}年${month}月${day}日`;
   }, []);
 
-  const handleMoreOptionsClick = useCallback(() => {
-    setShowMoreOptions(true);
-  }, []);
-
-  const handleCloseMoreOptions = useCallback(() => {
-    setShowMoreOptions(false);
-  }, []);
-
-  const handleDeleteClick = useCallback(() => {
-    setShowMoreOptions(false);
-    setShowDeleteConfirm(true);
-  }, []);
-
-  const handleDeleteCancel = useCallback(() => {
-    setShowDeleteConfirm(false);
-  }, []);
-
-  const handleDeleteConfirm = useCallback(async () => {
-    if (deleting) {
-      return;
-    }
-
-    setDeleting(true);
+  // 格式化完成时间（如：完成时间：2024-01-15 14时30分）
+  const formatCompletionTime = useCallback((isoTime: string): string => {
     try {
-      await deleteShortTermGoal(goal.id);
-      console.log("[ShortTermGoalDetails] Goal deleted successfully", goal.id);
-      
-      // 清理该目标相关的 localStorage 数据
-      try {
-        const storageKey = `short-term-goal-${goal.id}-task-images`;
-        localStorage.removeItem(storageKey);
-        console.log("[ShortTermGoalDetails] Cleared localStorage for deleted goal", storageKey);
-      } catch (error) {
-        console.warn("[ShortTermGoalDetails] Failed to clear localStorage", error);
-      }
-      
-      // 通知父组件目标已删除
-      if (onDeleted) {
-        onDeleted(goal.id);
-      }
-      
-      // 删除成功后关闭页面
-      onClose();
-    } catch (error) {
-      console.error("[ShortTermGoalDetails] Failed to delete goal", error);
-      setDeleting(false);
-      // 可以在这里显示错误提示
-    }
-  }, [deleting, goal.id, onClose, onDeleted]);
-
-  // 获取完成时间
-  const getCompletionTime = useCallback((dateKey: string): string | null => {
-    // 从 allUploads 中找到对应日期的上传记录（使用最早的那条，因为可能有多条）
-    const uploadsForDate = allUploads.filter((u) => {
-      if (!u.uploaded_at) return false;
-      const uploadDate = new Date(u.uploaded_at);
-      const uploadDateKey = formatDateKey(uploadDate);
-      return uploadDateKey === dateKey;
-    });
-    
-    if (uploadsForDate.length === 0) return null;
-    
-    // 使用最早的上传记录作为完成时间
-    const upload = uploadsForDate.sort((a, b) => 
-      new Date(a.uploaded_at).getTime() - new Date(b.uploaded_at).getTime()
-    )[0];
-    
-    if (!upload?.uploaded_at) return null;
-    
-    try {
-      const date = new Date(upload.uploaded_at);
+      const date = new Date(isoTime);
       const year = date.getFullYear();
       const month = String(date.getMonth() + 1).padStart(2, "0");
       const day = String(date.getDate()).padStart(2, "0");
       const hours = String(date.getHours()).padStart(2, "0");
       const minutes = String(date.getMinutes()).padStart(2, "0");
-      return `${year}-${month}-${day} ${hours}:${minutes}`;
+      return `完成时间：${year}-${month}-${day} ${hours}时${minutes}分`;
     } catch {
-      return null;
+      return "";
     }
-  }, [allUploads]);
+  }, []);
+
+  // 计算截止日期（建立时间 + 容错天数）
+  const deadlineDate = useMemo(() => {
+    const toleranceDays = getToleranceDays(goal.durationDays);
+    let createdDate = parseISODateInShanghai(goal.createdAt);
+    if (!createdDate) {
+      const datePart = goal.createdAt.split('T')[0];
+      createdDate = parseISODateInShanghai(datePart);
+    }
+    if (!createdDate) {
+      const dateStr = formatISODateInShanghai(goal.createdAt);
+      if (dateStr) {
+        createdDate = parseISODateInShanghai(dateStr);
+      }
+    }
+    if (!createdDate) {
+      createdDate = parseISODateInShanghai(getTodayInShanghai()) || new Date();
+    }
+    createdDate.setHours(0, 0, 0, 0);
+    
+    const deadline = new Date(createdDate);
+    deadline.setDate(deadline.getDate() + toleranceDays);
+    return deadline;
+  }, [goal.createdAt, goal.durationDays]);
+
+  // 获取状态提示文案
+  const getStatusHint = useCallback(() => {
+    if (cycleState.status === "expired") {
+      return "周期已结束，所有卡片已锁定";
+    }
+    if (cycleState.status === "finished") {
+      return "恭喜！已完成所有任务";
+    }
+    const toleranceDays = getToleranceDays(goal.durationDays);
+    const todayDate = parseISODateInShanghai(getTodayInShanghai());
+    const createdDate = parseISODateInShanghai(goal.createdAt);
+    if (!todayDate || !createdDate) {
+      return "";
+    }
+    const daysRemaining = toleranceDays - Math.floor(
+      (todayDate.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24)
+    );
+    if (daysRemaining <= 0) {
+      return "周期即将结束";
+    }
+    return `剩余 ${daysRemaining} 天可完成`;
+  }, [cycleState.status, goal]);
+
+  // 映射状态到 UI 样式类名
+  const getStatusClass = (status: CardStatus): string => {
+    switch (status) {
+      case "completed":
+        return "completed";
+      case "available":
+        return "active";
+      case "locked":
+        return "upcoming";
+      default:
+        return "upcoming";
+    }
+  };
 
   return (
     <div className="short-term-details">
@@ -579,53 +702,94 @@ function ShortTermGoalDetails({
             <MaterialIcon name="arrow_back" />
           </button>
           <h1 className="short-term-details__title">{goal.title}</h1>
-          <button
-            type="button"
-            className="short-term-details__icon-button"
-            onClick={handleMoreOptionsClick}
-            aria-label="更多选项"
-          >
-            <MaterialIcon name="more_vert" />
-          </button>
+          <div style={{ position: "relative" }}>
+            <button
+              type="button"
+              className="short-term-details__icon-button"
+              onClick={() => setShowMenu(!showMenu)}
+              aria-label="更多选项"
+            >
+              <MaterialIcon name="more_vert" />
+            </button>
+            {showMenu && (
+              <div
+                ref={menuRef}
+                style={{
+                  position: "absolute",
+                  top: "100%",
+                  right: 0,
+                  marginTop: "0.5rem",
+                  background: "white",
+                  borderRadius: "8px",
+                  boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+                  minWidth: "120px",
+                  zIndex: 1000,
+                  overflow: "hidden",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={handleDeleteGoal}
+                  disabled={isDeleting}
+                  style={{
+                    width: "100%",
+                    padding: "0.75rem 1rem",
+                    border: "none",
+                    background: "transparent",
+                    textAlign: "left",
+                    cursor: isDeleting ? "not-allowed" : "pointer",
+                    color: isDeleting ? "#999" : "#d32f2f",
+                    fontSize: "0.875rem",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isDeleting) {
+                      e.currentTarget.style.background = "#f5f5f5";
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "transparent";
+                  }}
+                >
+                  <MaterialIcon name="delete" />
+                  <span>{isDeleting ? "删除中..." : "删除目标"}</span>
+                </button>
+              </div>
+            )}
+          </div>
         </header>
 
         <p className="short-term-details__meta">
-          挑战时长：{goal.durationDays} 天 | 剩余 {snapshot.daysRemaining} 天
+          挑战时长：{goal.durationDays} 天 | 截止日期：{formatDateChinese(deadlineDate)} | {getStatusHint()}
         </p>
 
         <section className="short-term-details__progress">
           <div className="short-term-details__progress-header">
             <span>总体进度</span>
-            <strong>{snapshot.progressPercent}%</strong>
+            <strong>{cycleState.progressPercent}%</strong>
           </div>
           <div className="short-term-details__progress-track" aria-hidden="true">
             <div
               className="short-term-details__progress-fill"
-              style={{ width: `${snapshot.progressPercent}%` }}
+              style={{ width: `${cycleState.progressPercent}%` }}
             />
           </div>
         </section>
 
         <section className="short-term-details__days">
-          {snapshot.days.map((day, dayIndex) => {
-            const isActive = day.status === "active";
+          {cycleState.days.map((day) => {
+            const statusClass = getStatusClass(day.status);
+            const isAvailable = day.status === "available";
             const isCompleted = day.status === "completed";
-            const isUpcoming = day.status === "upcoming";
-            // 检查前一天是否已完成
-            const prevDay = dayIndex > 0 ? snapshot.days[dayIndex - 1] : null;
-            const prevDayCompleted = prevDay?.hasUpload ?? false;
-            // 判断是否应该显示"明日启动！"
-            const shouldShowTomorrow = isUpcoming && prevDayCompleted;
-            // 获取完成时间
-            const completionTime = isCompleted ? getCompletionTime(day.dateKey) : null;
-            
+            const isLocked = day.status === "locked";
+
             return (
               <details
                 key={day.dayNumber}
-                className={`short-term-details__day short-term-details__day--${day.status} ${
-                  animatingDay === day.dateKey ? "short-term-details__day--animating" : ""
-                }`}
-                open={isActive}
+                className={`short-term-details__day short-term-details__day--${statusClass}`}
+                open={isAvailable && !isCompleted}
               >
                 <summary>
                   <div className="short-term-details__day-heading">
@@ -634,9 +798,6 @@ function ShortTermGoalDetails({
                         第 {day.dayNumber} 天
                       </span>
                       <span className="short-term-details__day-title">{day.summary}</span>
-                      {completionTime ? (
-                        <span className="short-term-details__day-completion-time">{completionTime}</span>
-                      ) : null}
                     </p>
                     <div className="short-term-details__day-actions">
                       {isCompleted ? (
@@ -648,19 +809,31 @@ function ShortTermGoalDetails({
                   {day.subtitle ? (
                     <p className="short-term-details__day-subtitle">{day.subtitle}</p>
                   ) : null}
+                  {dayNotes[day.dateKey] ? (
+                    <p className="short-term-details__day-subtitle">{dayNotes[day.dateKey]}</p>
+                  ) : null}
+                  {isCompleted && checkInTimes[day.dateKey] ? (
+                    <p className="short-term-details__day-subtitle" style={{ color: "#98dbc6" }}>
+                      {formatCompletionTime(checkInTimes[day.dateKey])}
+                    </p>
+                  ) : null}
                 </summary>
 
-                {day.tasks.length === 0 ? (
+                {isLocked ? (
                   <div className="short-term-details__day-empty">
-                    {day.status === "upcoming" ? "展开后可查看今日任务" : "今日无任务安排"}
+                    {day.isTomorrow ? "明日继续！" : "尚未解锁，请先完成之前的任务"}
+                  </div>
+                ) : day.tasks.length === 0 ? (
+                  <div className="short-term-details__day-empty">
+                    今日无任务安排
                   </div>
                 ) : (
                   <div className="short-term-details__task-list">
                     {day.tasks.map((task) => {
-                      // key格式：dateKey-taskId，确保不同天的相同任务ID不会冲突
-                      const taskImageKey = `${day.dateKey}-${task.taskId}`;
-                      const taskImage = taskImages[taskImageKey];
+                      const taskKey = `${day.dateKey}-${task.taskId}`;
+                      const taskImage = taskImages[taskKey];
                       const hasImage = Boolean(taskImage);
+
                       return (
                         <div className="short-term-details__task" key={task.taskId}>
                           <div className="short-term-details__task-meta">
@@ -671,7 +844,7 @@ function ShortTermGoalDetails({
                               ) : null}
                             </div>
                           </div>
-                          {isActive || isCompleted ? (
+                          {(isAvailable || isCompleted) && !isLocked ? (
                             <div className="short-term-details__task-extra">
                               {hasImage ? (
                                 <button
@@ -680,9 +853,12 @@ function ShortTermGoalDetails({
                                   onClick={() => handleImageView(taskImage!)}
                                   aria-label={`查看任务「${task.title}」作品`}
                                 >
-                                  <img src={taskImage!.image || ""} alt={task.title} />
+                                  <img
+                                    src={taskImage!.image ? replaceLocalhostInUrl(taskImage!.image) : ""}
+                                    alt={task.title}
+                                  />
                                 </button>
-                              ) : isActive ? (
+                              ) : isAvailable && !isCompleted ? (
                                 <button
                                   type="button"
                                   className="short-term-details__ghost-button"
@@ -700,70 +876,40 @@ function ShortTermGoalDetails({
                   </div>
                 )}
 
-                {(isActive || shouldShowTomorrow) ? (
+                {isAvailable && !isCompleted && !isLocked ? (
                   <button
                     type="button"
                     className={`short-term-details__complete-button ${
-                      !shouldShowTomorrow &&
                       day.tasks.length > 0 &&
-                      day.tasks.every((task) => taskImages[`${day.dateKey}-${task.taskId}`])
+                      day.tasks.every(
+                        (task) => taskImages[`${day.dateKey}-${task.taskId}`]
+                      )
                         ? "short-term-details__complete-button--enabled"
                         : ""
                     }`}
                     disabled={
-                      shouldShowTomorrow ||
-                      !day.tasks.every((task) => taskImages[`${day.dateKey}-${task.taskId}`]) ||
-                      day.tasks.length === 0 ||
                       completingDay === day.dateKey ||
-                      day.hasUpload
+                      isSubmitting ||
+                      day.hasUpload ||
+                      (day.tasks.length > 0 &&
+                        !day.tasks.every(
+                          (task) => taskImages[`${day.dateKey}-${task.taskId}`]
+                        ))
                     }
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      
-                      // 如果是"明日启动！"状态，不应该执行
-                      if (shouldShowTomorrow) {
-                        return;
-                      }
-                      
-                      console.log("[ShortTermGoalDetails] Button clicked", {
-                        day: day.dateKey,
-                        allTasksHaveImages: day.tasks.every((task) => taskImages[`${day.dateKey}-${task.taskId}`]),
-                        tasksLength: day.tasks.length,
-                        completingDay: completingDay === day.dateKey,
-                        hasUpload: day.hasUpload,
-                        isDisabled: !day.tasks.every((task) => taskImages[`${day.dateKey}-${task.taskId}`]) ||
-                          day.tasks.length === 0 ||
-                          completingDay === day.dateKey ||
-                          day.hasUpload,
-                        taskImages,
-                        tasks: day.tasks.map((t) => ({ id: t.taskId, hasImage: !!taskImages[`${day.dateKey}-${t.taskId}`] }))
-                      });
-                      
-                      // 如果按钮被禁用，不应该执行
-                      if (!day.tasks.every((task) => taskImages[`${day.dateKey}-${task.taskId}`]) ||
-                          day.tasks.length === 0 ||
-                          completingDay === day.dateKey ||
-                          day.hasUpload) {
-                        console.log("[ShortTermGoalDetails] Button condition failed, not calling handleCompleteToday");
-                        return;
-                      }
-                      
-                      console.log("[ShortTermGoalDetails] Calling handleCompleteTodayClick");
-                      handleCompleteTodayClick(day);
+                      handleCompleteDay(day);
                     }}
                     onMouseDown={(e) => {
-                      // 防止 mousedown 事件触发 details 的切换
                       e.stopPropagation();
                     }}
                   >
-                    {shouldShowTomorrow
-                      ? "明日启动！"
-                      : completingDay === day.dateKey
-                        ? "标记中..."
-                        : day.hasUpload
-                          ? "今日已完成"
-                          : "完成今日目标"}
+                    {completingDay === day.dateKey
+                      ? "标记中..."
+                      : day.hasUpload
+                        ? "今日已完成"
+                        : "完成今日目标"}
                   </button>
                 ) : null}
               </details>
@@ -776,15 +922,18 @@ function ShortTermGoalDetails({
         <button
           type="button"
           className="short-term-details__footer-button"
-          onClick={onReviewHistory}
         >
           查看历史记录
         </button>
       </footer>
 
-      {selectedTaskId ? (
+      {/* 选择图片弹窗 */}
+      {selectedTaskKey ? (
         <div className="short-term-details__modal-overlay" onClick={handleCloseSelectModal}>
-          <div className="short-term-details__image-select-modal" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="short-term-details__image-select-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="short-term-details__modal-header">
               <h2>选择图片</h2>
               <button
@@ -796,9 +945,7 @@ function ShortTermGoalDetails({
                 <MaterialIcon name="close" />
               </button>
             </div>
-            {loadingUploads ? (
-              <div className="short-term-details__modal-loading">加载中...</div>
-            ) : recentUploads.length === 0 ? (
+            {recentUploads.length === 0 ? (
               <div className="short-term-details__modal-empty">暂无图片</div>
             ) : (
               <div className="short-term-details__image-grid">
@@ -810,7 +957,10 @@ function ShortTermGoalDetails({
                     onClick={() => handleImageSelect(upload)}
                   >
                     {upload.image ? (
-                      <img src={replaceLocalhostInUrl(upload.image)} alt={upload.title || "作品"} />
+                      <img
+                        src={replaceLocalhostInUrl(upload.image)}
+                        alt={upload.title || "作品"}
+                      />
                     ) : (
                       <div className="short-term-details__image-placeholder">无图片</div>
                     )}
@@ -822,9 +972,134 @@ function ShortTermGoalDetails({
         </div>
       ) : null}
 
+      {/* 备注输入弹窗 */}
+      {showNoteModal && pendingDay ? (
+        <div 
+          className="short-term-details__modal-overlay" 
+          onClick={handleCancelNote}
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "#2a2a2a",
+              borderRadius: "16px",
+              width: "90%",
+              maxWidth: "400px",
+              padding: "1.5rem",
+              display: "flex",
+              flexDirection: "column",
+              gap: "1rem",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h2 style={{ margin: 0, color: "#ffffff", fontSize: "1.125rem", fontWeight: 600 }}>
+                完成今日目标
+              </h2>
+              <button
+                type="button"
+                onClick={handleCancelNote}
+                aria-label="关闭"
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "#ffffff",
+                  cursor: "pointer",
+                  padding: "0.25rem",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <MaterialIcon name="close" />
+              </button>
+            </div>
+            <p style={{ margin: 0, color: "rgba(255, 255, 255, 0.7)", fontSize: "0.875rem" }}>
+              为今天的练习留一句话或评价吧 (可选)
+            </p>
+            <textarea
+              value={dayNote}
+              onChange={(e) => setDayNote(e.target.value)}
+              placeholder="今天有什么想说的吗?"
+              style={{
+                width: "100%",
+                minHeight: "120px",
+                padding: "0.75rem",
+                border: "1px solid rgba(255, 255, 255, 0.2)",
+                borderRadius: "8px",
+                fontSize: "0.875rem",
+                fontFamily: "inherit",
+                resize: "vertical",
+                background: "rgba(255, 255, 255, 0.1)",
+                color: "#ffffff",
+                outline: "none",
+              }}
+            />
+            <div
+              style={{
+                display: "flex",
+                gap: "0.75rem",
+                marginTop: "0.5rem",
+              }}
+            >
+              <button
+                type="button"
+                onClick={handleCancelNote}
+                style={{
+                  flex: 1,
+                  padding: "0.75rem 1rem",
+                  border: "none",
+                  borderRadius: "8px",
+                  background: "#4a4a4a",
+                  color: "#ffffff",
+                  cursor: "pointer",
+                  fontSize: "0.875rem",
+                  fontWeight: 500,
+                }}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmComplete}
+                disabled={isSubmitting}
+                style={{
+                  flex: 1,
+                  padding: "0.75rem 1rem",
+                  border: "none",
+                  borderRadius: "8px",
+                  background: isSubmitting ? "#6a9a8a" : "#98dbc6",
+                  color: "#ffffff",
+                  cursor: isSubmitting ? "not-allowed" : "pointer",
+                  fontSize: "0.875rem",
+                  fontWeight: 500,
+                }}
+              >
+                {isSubmitting ? "保存中..." : "保存"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* 查看图片弹窗 */}
       {viewingImage ? (
         <div className="short-term-details__modal-overlay" onClick={handleCloseImageModal}>
-          <div className="short-term-details__image-view-modal" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="short-term-details__image-view-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
               type="button"
               className="short-term-details__modal-close"
@@ -834,7 +1109,10 @@ function ShortTermGoalDetails({
               <MaterialIcon name="close" />
             </button>
             {viewingImage.image ? (
-              <img src={replaceLocalhostInUrl(viewingImage.image)} alt={viewingImage.title || "作品"} />
+              <img
+                src={replaceLocalhostInUrl(viewingImage.image)}
+                alt={viewingImage.title || "作品"}
+              />
             ) : (
               <div className="short-term-details__image-empty">无图片</div>
             )}
@@ -844,253 +1122,8 @@ function ShortTermGoalDetails({
           </div>
         </div>
       ) : null}
-
-      {/* 更多选项页面 */}
-      {showMoreOptions ? (
-        <div className="short-term-details__modal-overlay" onClick={handleCloseMoreOptions}>
-          <div className="short-term-details__more-options-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="short-term-details__modal-header">
-              <h2>更多选项</h2>
-              <button
-                type="button"
-                className="short-term-details__modal-close"
-                onClick={handleCloseMoreOptions}
-                aria-label="关闭"
-              >
-                <MaterialIcon name="close" />
-              </button>
-            </div>
-            <div className="short-term-details__more-options-content">
-              <button
-                type="button"
-                className="short-term-details__delete-goal-button"
-                onClick={handleDeleteClick}
-              >
-                <MaterialIcon name="delete_outline" />
-                放弃本次目标
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {/* 删除确认弹窗 */}
-      {showDeleteConfirm ? (
-        <div className="short-term-details__modal-overlay" onClick={handleDeleteCancel}>
-          <div className="short-term-details__confirm-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="short-term-details__confirm-header">
-              <h2>确认放弃目标</h2>
-            </div>
-            <div className="short-term-details__confirm-content">
-              <p>确定要放弃「{goal.title}」吗？此操作不可撤销。</p>
-            </div>
-            <div className="short-term-details__confirm-actions">
-              <button
-                type="button"
-                className="short-term-details__confirm-button short-term-details__confirm-button--cancel"
-                onClick={handleDeleteCancel}
-                disabled={deleting}
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                className="short-term-details__confirm-button short-term-details__confirm-button--confirm"
-                onClick={handleDeleteConfirm}
-                disabled={deleting}
-              >
-                {deleting ? "删除中..." : "确认"}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {/* 评价弹窗 */}
-      {showReviewModal ? (
-        <div className="short-term-details__modal-overlay" onClick={handleReviewCancel}>
-          <div className="short-term-details__review-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="short-term-details__modal-header">
-              <h2>完成今日目标</h2>
-              <button
-                type="button"
-                className="short-term-details__modal-close"
-                onClick={handleReviewCancel}
-                aria-label="关闭"
-              >
-                <MaterialIcon name="close" />
-              </button>
-            </div>
-            <div className="short-term-details__review-content">
-              <p className="short-term-details__review-prompt">
-                为今天的练习留一句话或评价吧（可选）
-              </p>
-              <textarea
-                className="short-term-details__review-textarea"
-                placeholder="今天有什么想说的吗？"
-                value={reviewText}
-                onChange={(e) => setReviewText(e.target.value)}
-                rows={4}
-                maxLength={200}
-              />
-              <div className="short-term-details__review-actions">
-                <button
-                  type="button"
-                  className="short-term-details__review-button short-term-details__review-button--cancel"
-                  onClick={handleReviewCancel}
-                >
-                  取消
-                </button>
-                <button
-                  type="button"
-                  className="short-term-details__review-button short-term-details__review-button--save"
-                  onClick={handleReviewSave}
-                  disabled={completingDay === pendingCompleteDay?.dateKey}
-                >
-                  {completingDay === pendingCompleteDay?.dateKey ? "保存中..." : "保存"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }
 
-function buildGoalSnapshot(goal: ShortTermGoal, uploadDates?: Set<string>) {
-  const sortedSchedule = [...goal.schedule].sort((a, b) => a.dayIndex - b.dayIndex);
-  const scheduleMap = new Map(sortedSchedule.map((day) => [day.dayIndex, day.tasks]));
-  const baseTasks =
-    goal.planType === "same" && sortedSchedule.length > 0
-      ? sortedSchedule[0]?.tasks ?? []
-      : [];
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0); // 重置时间为0点，只比较日期
-  const startDate = goal.createdAt ? new Date(goal.createdAt) : today;
-  startDate.setHours(0, 0, 0, 0); // 重置时间为0点
-  
-  // 计算目标日期范围（只检查目标范围内的打卡记录，排除demo数据）
-  const endDate = addDays(startDate, goal.durationDays - 1);
-  endDate.setHours(0, 0, 0, 0);
-  
-  const elapsedDaysRaw = Math.max(differenceInCalendarDays(startDate, today), 0) + 1;
-  const unlockedDays = clamp(elapsedDaysRaw, 1, goal.durationDays);
-
-  const days: DayEntry[] = Array.from({ length: goal.durationDays }, (_, index) => {
-    const dayNumber = index + 1;
-    const currentTasks =
-      goal.planType === "same"
-        ? baseTasks
-        : scheduleMap.get(index) ??
-          findFallbackTasks(sortedSchedule, index);
-
-    const summary = currentTasks.length > 0 ? currentTasks[0].title : "未安排任务";
-    const subtitle = currentTasks.length > 0 ? currentTasks[0].subtitle : "";
-    const dayDate = addDays(startDate, index);
-    dayDate.setHours(0, 0, 0, 0); // 重置时间为0点
-    const dateKey = formatDateKey(dayDate);
-    
-    // 只考虑目标日期范围内的打卡记录（排除目标创建日期之前的demo数据）
-    // 逻辑：
-    // 1. 初始化时已经过滤掉新建目标（今天创建）第一天的demo数据
-    // 2. 只要打卡日期在目标开始日期之后或等于开始日期，且uploadDates中有记录，就计入
-    const dayDateTimestamp = dayDate.getTime();
-    const startDateTimestamp = startDate.getTime();
-    const isOnOrAfterStartDate = dayDateTimestamp >= startDateTimestamp;
-    
-    // 只要打卡日期在目标开始日期之后或等于开始日期，且uploadDates中有记录，就计入
-    // 注意：对于第一天，初始化时已经过滤掉可能的demo数据，所以如果uploadDates中有记录，说明是目标创建后完成的
-    const hasUpload = isOnOrAfterStartDate && Boolean(uploadDates?.has(dateKey));
-
-    let status: DayStatus = "upcoming";
-
-    return {
-      dayNumber,
-      tasks: currentTasks ?? [],
-      status,
-      summary,
-      subtitle,
-      dateKey,
-      hasUpload,
-    };
-  });
-
-  let completedCount = 0;
-  let activeIndex: number | null = null;
-
-  days.forEach((day, index) => {
-    if (day.hasUpload) {
-      day.status = "completed";
-      completedCount += 1;
-      return;
-    }
-    // 只有今天或过去的日期才能被标记为active
-    const dayDate = addDays(startDate, index);
-    dayDate.setHours(0, 0, 0, 0);
-    const isTodayOrPast = dayDate.getTime() <= today.getTime();
-    
-    if (index < unlockedDays && activeIndex === null && isTodayOrPast) {
-      day.status = "active";
-      activeIndex = index;
-      return;
-    }
-    day.status = "upcoming";
-  });
-
-  if (activeIndex === null && completedCount < goal.durationDays) {
-    const nextIndex = Math.min(unlockedDays, goal.durationDays - 1);
-    const candidate = days[nextIndex];
-    if (candidate && candidate.status !== "completed") {
-      candidate.status = "active";
-      activeIndex = nextIndex;
-    }
-  }
-
-  const hasActive = activeIndex !== null;
-  const daysRemaining = Math.max(goal.durationDays - completedCount - (hasActive ? 1 : 0), 0);
-  const progressFraction =
-    goal.durationDays > 0 ? Math.min(completedCount / goal.durationDays, 1) : 0;
-  const progressPercent = Math.round(progressFraction * 100);
-
-  return {
-    days,
-    daysRemaining,
-    progressPercent,
-  };
-}
-
-function findFallbackTasks(schedule: ShortTermGoal["schedule"], dayIndex: number) {
-  for (let index = schedule.length - 1; index >= 0; index -= 1) {
-    const day = schedule[index];
-    if (day.dayIndex <= dayIndex) {
-      return day.tasks;
-    }
-  }
-  if (schedule.length > 0) {
-    return schedule[0].tasks;
-  }
-  return [];
-}
-
-// Removed unused function getTaskInitial
-
-function differenceInCalendarDays(start: Date, end: Date) {
-  const startUtc = Date.UTC(start.getFullYear(), start.getMonth(), start.getDate());
-  const endUtc = Date.UTC(end.getFullYear(), end.getMonth(), end.getDate());
-  const diff = endUtc - startUtc;
-  return Math.floor(diff / 86400000);
-}
-
-function addDays(source: Date, amount: number) {
-  return new Date(source.getFullYear(), source.getMonth(), source.getDate() + amount);
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(Math.max(value, min), max);
-}
-
 export default ShortTermGoalDetails;
-
-

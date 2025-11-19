@@ -616,11 +616,15 @@ class DailyCheckIn(models.Model):
         related_name="daily_checkins",
     )
     date = models.DateField()
-    checked_at = models.DateTimeField(auto_now_add=True)
+    checked_at = models.DateTimeField(auto_now=True, help_text="最后打卡时间，每次打卡都会更新")
     source = models.CharField(
         max_length=32,
         blank=True,
         help_text="用于追踪打卡来源，例如 'app'、'admin'。",
+    )
+    notes = models.TextField(
+        blank=True,
+        help_text="用户为这一天留下的备注或感想。",
     )
 
     class Meta:
@@ -636,6 +640,49 @@ class DailyCheckIn(models.Model):
 
     def __str__(self) -> str:
         return f"{self.user} @ {self.date:%Y-%m-%d}"
+
+
+class ShortTermGoalTaskCompletion(models.Model):
+    """
+    短期目标任务完成记录，用于存储用户为每个任务选择的上传作品。
+    """
+    goal = models.ForeignKey(
+        ShortTermGoal,
+        on_delete=models.CASCADE,
+        related_name="task_completions",
+        help_text="关联的短期目标。",
+    )
+    task_id = models.CharField(
+        max_length=64,
+        help_text="任务ID，对应schedule中的taskId。",
+    )
+    upload = models.ForeignKey(
+        UserUpload,
+        on_delete=models.CASCADE,
+        related_name="task_completions",
+        help_text="用户为该任务选择的上传作品。",
+    )
+    date = models.DateField(
+        help_text="完成日期，对应打卡日期。",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["goal", "task_id", "date"],
+                name="unique_task_completion_per_goal_task_date"
+            )
+        ]
+        indexes = [
+            models.Index(fields=["goal", "date"]),
+            models.Index(fields=["goal", "task_id"]),
+        ]
+        ordering = ["-date", "task_id"]
+
+    def __str__(self) -> str:
+        return f"{self.goal.title} - Task {self.task_id} @ {self.date:%Y-%m-%d}"
 
 
 class AchievementGroup(models.Model):
@@ -1086,6 +1133,14 @@ class Test(models.Model):
         default=dict,
         blank=True,
         help_text="附加元数据，例如结果解释模板等。",
+    )
+    # 维度题目映射：存储每个维度对应的题目ID列表
+    # 格式：{"dimension_id": [question_id1, question_id2, ...], ...}
+    # 用于计算维度总分时，将指定题目的得分相加
+    dimension_question_mapping = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="维度题目映射，JSON格式。键为维度ID（字符串），值为该维度对应的题目ID列表。",
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -1744,14 +1799,16 @@ class HighFiveCounter(models.Model):
         # 检查用户是否已经点击过
         if user and user.is_authenticated:
             # 已登录用户：检查是否已点击
-            if HighFiveClick.objects.filter(user=user).exists():
+            existing_click = HighFiveClick.objects.filter(user=user).first()
+            if existing_click:
                 counter = cls.get_or_create_singleton()
-                return counter.count, False  # 返回当前计数和是否成功
+                return counter.count, False, existing_click.created_at  # 返回当前计数、是否成功和点击时间
         elif session_key:
             # 未登录用户：使用session_key检查
-            if HighFiveClick.objects.filter(session_key=session_key).exists():
+            existing_click = HighFiveClick.objects.filter(session_key=session_key).first()
+            if existing_click:
                 counter = cls.get_or_create_singleton()
-                return counter.count, False
+                return counter.count, False, existing_click.created_at
         
         # 如果用户未点击过，增加计数并记录
         counter = cls.get_or_create_singleton()
@@ -1759,12 +1816,12 @@ class HighFiveCounter(models.Model):
         counter.save(update_fields=["count", "updated_at"])
         
         # 记录点击
-        HighFiveClick.objects.create(
+        click_record = HighFiveClick.objects.create(
             user=user if user and user.is_authenticated else None,
             session_key=session_key if not (user and user.is_authenticated) else None,
         )
         
-        return counter.count, True
+        return counter.count, True, click_record.created_at
 
     @classmethod
     def get_count(cls):
@@ -1774,15 +1831,19 @@ class HighFiveCounter(models.Model):
 
     @classmethod
     def has_clicked(cls, user=None, session_key=None):
-        """检查用户是否已经点击过"""
+        """检查用户是否已经点击过，返回(是否已点击, 点击时间)"""
         # 延迟导入避免循环引用
         from core.models import HighFiveClick
         
         if user and user.is_authenticated:
-            return HighFiveClick.objects.filter(user=user).exists()
+            click_record = HighFiveClick.objects.filter(user=user).first()
+            if click_record:
+                return True, click_record.created_at
         elif session_key:
-            return HighFiveClick.objects.filter(session_key=session_key).exists()
-        return False
+            click_record = HighFiveClick.objects.filter(session_key=session_key).first()
+            if click_record:
+                return True, click_record.created_at
+        return False, None
 
 
 class HighFiveClick(models.Model):

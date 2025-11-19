@@ -14,6 +14,7 @@
   display: flex;
   flex-direction: column;
   padding-bottom: calc(var(--bottom-nav-safe-area) + 1.5rem);
+  min-height: 0;
 }
 
 .forced-logout-overlay {

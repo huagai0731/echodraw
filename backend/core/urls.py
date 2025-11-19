@@ -171,6 +171,11 @@ urlpatterns = [
         name="goals-short-term-detail",
     ),
     path(
+        "goals/short-term/<int:goal_id>/task-completions/",
+        views.short_term_goal_task_completions,
+        name="goals-short-term-task-completions",
+    ),
+    path(
         "goals/short-term/my-presets/",
         views.UserTaskPresetListCreateView.as_view(),
         name="goals-short-term-my-presets",
@@ -215,6 +220,11 @@ urlpatterns = [
         TestAccountUploadDetailView.as_view(),
         name="admin-test-account-upload-detail",
     ),
+    # 用户测试 API
+    path("tests/", views.user_tests_list, name="user-tests-list"),
+    path("tests/<int:test_id>/", views.user_test_detail, name="user-test-detail"),
+    path("tests/submit/", views.user_test_submit, name="user-test-submit"),
+    path("tests/results/<int:result_id>/", views.user_test_result, name="user-test-result"),
     path("", include(router.urls)),
 ]
 

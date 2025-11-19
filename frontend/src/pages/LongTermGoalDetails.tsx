@@ -31,7 +31,7 @@ function LongTermGoalDetails({
   const [showImageViewer, setShowImageViewer] = useState(false);
   const [viewingImage, setViewingImage] = useState<string | null>(null);
 
-  const progressPercent = clampPercent(goal.progress.progressRatio * 100);
+  const progressPercent = clampPercent((goal.progress?.progressRatio ?? 0) * 100);
   const timelineStyle = useMemo(() => {
     return {
       "--timeline-progress": `${progressPercent}%`,
@@ -41,7 +41,7 @@ function LongTermGoalDetails({
   const checkpointHours =
     goal.checkpointCount > 0 ? goal.targetHours / goal.checkpointCount : goal.targetHours;
   const checkpoints = goal.checkpoints ?? [];
-  const fallbackDescription = `累计投入 ${formatHours(goal.progress.spentHours)} 小时，目标为 ${
+  const fallbackDescription = `累计投入 ${formatHours(goal.progress?.spentHours ?? 0)} 小时，目标为 ${
     goal.targetHours
   } 小时，共 ${goal.checkpointCount} 个检查点。`;
 
@@ -136,7 +136,7 @@ function LongTermGoalDetails({
                   <CheckpointCard
                     checkpoint={checkpoint}
                     checkpointHours={checkpointHours}
-                    spentMinutes={goal.progress.spentMinutes}
+                    spentMinutes={goal.progress?.spentMinutes ?? 0}
                     stageStartedAt={stageStartedAt}
                     onSelectShowcase={handleSelectShowcase}
                     onEditCompletionNote={onEditCompletionNote}
@@ -154,7 +154,8 @@ function LongTermGoalDetails({
           checkpoint={selectedCheckpoint}
           goal={goal}
           onClose={handleCloseArtworkModal}
-          onSelect={() => {
+          onSelect={(artwork) => {
+            // 注意：onSelectShowcase 只需要 checkpoint，artwork 信息已经在 checkpoint 中
             onSelectShowcase?.(selectedCheckpoint);
             handleCloseArtworkModal();
           }}
@@ -550,5 +551,3 @@ function ImageViewerModal({ imageUrl, onClose }: ImageViewerModalProps) {
 }
 
 export default LongTermGoalDetails;
-
-

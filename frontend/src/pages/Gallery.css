@@ -15,6 +15,7 @@
   inset: 0;
   z-index: 0;
   overflow: hidden;
+  pointer-events: none;
 }
 
 .gallery-screen__glow {
@@ -170,6 +171,19 @@
   color: #c5e1e2;
   font-size: 0.62rem;
   font-weight: 500;
+}
+
+.gallery-item__collection-badge {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(197, 225, 226, 0.18);
+  color: #c5e1e2;
+  font-size: 0.62rem;
+  font-weight: 500;
+  z-index: 10;
 }
 
 .gallery-screen__fab {

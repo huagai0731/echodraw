@@ -156,8 +156,13 @@ class UserUploadSerializer(serializers.ModelSerializer):
             width, height = img.size
             max_dimension = 10000  # 最大边长10000像素
             if width > max_dimension or height > max_dimension:
+                # 生产环境统一错误消息，不暴露具体尺寸
+                logger.debug(
+                    f"图片尺寸过大: {width}x{height} (限制: {max_dimension}x{max_dimension})",
+                    extra={"width": width, "height": height, "file_name": getattr(value, "name", "unknown")}
+                )
                 raise serializers.ValidationError(
-                    f"图片尺寸过大：{width}x{height}。最大支持：{max_dimension}x{max_dimension}像素"
+                    f"图片尺寸过大，最大支持 {max_dimension}x{max_dimension} 像素，请使用较小的图片"
                 )
             
             # 恢复文件位置
@@ -201,34 +206,140 @@ class UserUploadSerializer(serializers.ModelSerializer):
         """
         将输入文件压缩为指定格式（默认 WEBP），并限制最长边，返回 ContentFile。
         如果处理失败，抛出异常拒绝上传，确保只保存有效的图片文件。
+        
+        添加超时机制防止DoS攻击：
+        - 文件大小限制：10MB（已在validate_image中验证）
+        - 图片尺寸限制：20000x20000像素
+        - 处理时间限制：30秒（通过文件大小和尺寸间接控制）
         """
+        import signal
+        import logging
+        import threading
+        from contextlib import contextmanager
+        
+        logger = logging.getLogger(__name__)
+        
+        # 统一的错误消息，不暴露内部细节
+        GENERIC_ERROR_MESSAGE = "图片处理失败，请确保上传的是有效的图片文件（JPEG、PNG、WebP或GIF）。如果问题持续，请尝试使用其他图片或联系支持。"
+        
+        # 处理超时时间（秒）
+        PROCESSING_TIMEOUT = 30
+        
+        @contextmanager
+        def timeout_handler(timeout):
+            """超时处理器，使用线程和事件实现超时控制"""
+            timeout_event = threading.Event()
+            exception_container = [None]
+            
+            def timeout_worker():
+                if not timeout_event.wait(timeout):
+                    # 超时触发
+                    exception_container[0] = TimeoutError(f"图片处理超时（超过{timeout}秒）")
+            
+            worker_thread = threading.Thread(target=timeout_worker, daemon=True)
+            worker_thread.start()
+            
+            try:
+                yield
+                timeout_event.set()  # 标记完成
+            except Exception as e:
+                timeout_event.set()  # 即使出错也要停止超时线程
+                raise
+            finally:
+                worker_thread.join(timeout=1)  # 等待线程结束，最多1秒
+                if exception_container[0]:
+                    raise TimeoutError(str(exception_container[0]))
+        
         try:
-            img = Image.open(file_obj)
-            # 验证确实是图片格式（PIL会尝试打开文件，如果不是图片会抛出异常）
-            # 纠正 EXIF 方向并统一到 RGB，避免部分模式保存失败
-            img = ImageOps.exif_transpose(img).convert("RGB")
+            # 限制处理时间（通过文件大小间接控制）
+            # 如果文件过大，可能处理时间过长，提前拒绝
+            if hasattr(file_obj, 'size') and file_obj.size > 50 * 1024 * 1024:  # 50MB
+                raise serializers.ValidationError(
+                    "文件过大，无法处理。请上传小于50MB的图片文件。"
+                )
+            
+            # 使用超时处理器包装所有图片处理操作
+            with timeout_handler(PROCESSING_TIMEOUT):
+                img = Image.open(file_obj)
+                
+                # 验证图片格式
+                if img.format not in ['JPEG', 'PNG', 'WEBP', 'GIF']:
+                    raise serializers.ValidationError(
+                        f"不支持的图片格式：{img.format}。仅支持：JPEG、PNG、WebP、GIF"
+                    )
+                
+                # 验证图片尺寸（防止超大图片导致内存问题）
+                width, height = img.size
+                max_dimension = 20000  # 最大边长20000像素
+                if width > max_dimension or height > max_dimension:
+                    raise serializers.ValidationError(
+                        f"图片尺寸过大：{width}x{height}。最大支持：{max_dimension}x{max_dimension}像素"
+                    )
+                
+                # 验证确实是图片格式（PIL会尝试打开文件，如果不是图片会抛出异常）
+                # 纠正 EXIF 方向并统一到 RGB，避免部分模式保存失败
+                try:
+                    img = ImageOps.exif_transpose(img).convert("RGB")
+                except Exception as convert_error:
+                    logger.warning(f"图片格式转换失败: {type(convert_error).__name__}", exc_info=True)
+                    raise serializers.ValidationError(GENERIC_ERROR_MESSAGE) from convert_error
 
-            width, height = img.size
-            if max(width, height) > max_side:
-                if width >= height:
-                    new_width = max_side
-                    new_height = int(height * (max_side / width))
-                else:
-                    new_height = max_side
-                    new_width = int(width * (max_side / height))
-                img = img.resize((new_width, new_height), Image.LANCZOS)
+                # 调整尺寸
+                if max(width, height) > max_side:
+                    try:
+                        if width >= height:
+                            new_width = max_side
+                            new_height = int(height * (max_side / width))
+                        else:
+                            new_height = max_side
+                            new_width = int(width * (max_side / height))
+                        img = img.resize((new_width, new_height), Image.LANCZOS)
+                    except Exception as resize_error:
+                        logger.warning(f"图片尺寸调整失败: {type(resize_error).__name__}", exc_info=True)
+                        raise serializers.ValidationError(GENERIC_ERROR_MESSAGE) from resize_error
 
-            buffer = BytesIO()
-            # optimize=True 可能提高压缩率；webp 默认使用 4:2:0 色度抽样
-            img.save(buffer, format=fmt, quality=quality, optimize=True)
-            data = buffer.getvalue()
-            new_name = UserUploadSerializer._rename_with_format(getattr(file_obj, "name", "upload"), fmt)
-            return ContentFile(data, name=new_name)
+                # 保存压缩后的图片
+                try:
+                    buffer = BytesIO()
+                    # optimize=True 可能提高压缩率；webp 默认使用 4:2:0 色度抽样
+                    img.save(buffer, format=fmt, quality=quality, optimize=True)
+                    data = buffer.getvalue()
+                    
+                    # 验证压缩后的数据大小（防止异常大的输出）
+                    max_output_size = 20 * 1024 * 1024  # 20MB
+                    if len(data) > max_output_size:
+                        raise serializers.ValidationError(
+                            "图片压缩后仍然过大，请尝试使用较小的原始图片。"
+                        )
+                    
+                    new_name = UserUploadSerializer._rename_with_format(getattr(file_obj, "name", "upload"), fmt)
+                    return ContentFile(data, name=new_name)
+                except Exception as save_error:
+                    logger.warning(f"图片保存失败: {type(save_error).__name__}", exc_info=True)
+                    raise serializers.ValidationError(GENERIC_ERROR_MESSAGE) from save_error
+                
+        except serializers.ValidationError:
+            # 重新抛出验证错误（保持原有错误消息）
+            raise
+        except TimeoutError as e:
+            # 处理超时错误
+            logger.warning(
+                f"图片处理超时: {str(e)}",
+                extra={"file_name": getattr(file_obj, "name", "unknown"), "file_size": getattr(file_obj, "size", "unknown")}
+            )
+            raise serializers.ValidationError(
+                "图片处理超时，请尝试使用较小的图片或联系支持。"
+            ) from e
         except Exception as e:
             # 处理失败时拒绝上传，防止恶意文件或损坏文件被保存
-            raise serializers.ValidationError(
-                f"图片处理失败：无法识别或处理该文件。请确保上传的是有效的图片文件（JPEG、PNG、WebP或GIF）。"
-            ) from e
+            # 记录详细错误到日志，但不返回给客户端
+            logger.error(
+                f"图片处理失败: {type(e).__name__}",
+                exc_info=True,
+                extra={"file_name": getattr(file_obj, "name", "unknown")}
+            )
+            # 生产环境返回统一错误消息，不暴露内部细节
+            raise serializers.ValidationError(GENERIC_ERROR_MESSAGE) from e
 
     def create(self, validated_data: dict[str, Any]) -> UserUpload:
         image_file = validated_data.get("image")
@@ -731,9 +842,33 @@ class LongTermGoalSerializer(serializers.ModelSerializer):
         target_hours = float(obj.target_hours) if obj.target_hours is not None else 0.0
         target_minutes = target_hours * 60
         ratio = total_minutes / target_minutes if target_minutes > 0 else 0
+        # 修复：确保进度不超过100%，并处理浮点数精度问题
         ratio = max(0.0, min(ratio, 1.0))
-        elapsed = timezone.now() - obj.started_at
-        elapsed_days = max(elapsed.days + 1, 1)
+        
+        # 修复：使用上海时区计算elapsed_days，确保时区一致
+        from core.views import SHANGHAI_TZ, get_today_shanghai
+        from django.conf import settings
+        
+        if SHANGHAI_TZ is not None:
+            # 获取上海时区的当前时间和开始时间
+            now_utc = timezone.now()
+            if timezone.is_naive(now_utc):
+                now_utc = timezone.make_aware(now_utc)
+            now_shanghai = now_utc.astimezone(SHANGHAI_TZ)
+            
+            started_at = obj.started_at
+            if timezone.is_naive(started_at):
+                started_at = timezone.make_aware(started_at)
+            started_at_shanghai = started_at.astimezone(SHANGHAI_TZ)
+            
+            # 计算日期差（使用日期而不是时间戳，更准确）
+            today_shanghai = get_today_shanghai()
+            started_date_shanghai = started_at_shanghai.date()
+            elapsed_days = max((today_shanghai - started_date_shanghai).days + 1, 1)
+        else:
+            # 回退：使用原始方法
+            elapsed = timezone.now() - obj.started_at
+            elapsed_days = max(elapsed.days + 1, 1)
         checkpoints = stats["checkpoints"]
         completed_checkpoints = sum(1 for checkpoint in checkpoints if checkpoint["status"] == "completed")
         next_checkpoint = None
@@ -790,9 +925,37 @@ class LongTermGoalSerializer(serializers.ModelSerializer):
         uploads = self.context.get("uploads")
         if uploads is not None:
             return uploads
+        # 修复：使用与views.py中相同的时区处理逻辑
+        # 确保查询时区一致，避免遗漏边界时间点的上传
+        from core.views import SHANGHAI_TZ
+        from django.conf import settings
+        from datetime import datetime
+        
+        started_at = obj.started_at
+        if timezone.is_naive(started_at):
+            started_at = timezone.make_aware(started_at)
+        
+        # 获取started_at的日期（上海时区），用于更准确的查询
+        if SHANGHAI_TZ is not None:
+            started_at_shanghai = started_at.astimezone(SHANGHAI_TZ)
+            # 使用当天的开始时间（00:00:00）作为查询起点，确保包含当天所有上传
+            start_date = started_at_shanghai.date()
+            start_datetime = timezone.make_aware(
+                datetime.combine(start_date, datetime.min.time()),
+                timezone=SHANGHAI_TZ
+            )
+            # 转换为UTC用于数据库查询
+            if settings.USE_TZ:
+                start_datetime = start_datetime.astimezone(timezone.utc)
+        else:
+            # 回退：使用原始started_at，但确保时区正确
+            start_datetime = started_at
+        
         return list(
-            UserUpload.objects.filter(user=obj.user, uploaded_at__gte=obj.started_at)
-            .order_by("uploaded_at", "id")
+            UserUpload.objects.filter(
+                user=obj.user, 
+                uploaded_at__gte=start_datetime
+            ).order_by("uploaded_at", "id")
         )
 
     def _build_checkpoints(
@@ -1616,6 +1779,7 @@ class TestSerializer(serializers.ModelSerializer):
             "is_active",
             "display_order",
             "metadata",
+            "dimension_question_mapping",
             "created_at",
             "updated_at",
         ]
@@ -1625,6 +1789,7 @@ class TestSerializer(serializers.ModelSerializer):
 class UserTestResultSerializer(serializers.ModelSerializer):
     test_name = serializers.CharField(source="test.name", read_only=True)
     user_email = serializers.CharField(source="user.email", read_only=True)
+    test_id = serializers.IntegerField(source="test.id", read_only=True)
 
     class Meta:
         model = UserTestResult
@@ -1633,6 +1798,7 @@ class UserTestResultSerializer(serializers.ModelSerializer):
             "user",
             "user_email",
             "test",
+            "test_id",
             "test_name",
             "dimension_scores",
             "answers",

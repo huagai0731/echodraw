@@ -123,3 +123,5 @@ function NotificationDetail({ notification: initialNotification, onBack }: Notif
 
 export default NotificationDetail;
 
+
+

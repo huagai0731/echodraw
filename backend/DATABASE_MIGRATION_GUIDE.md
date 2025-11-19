@@ -271,3 +271,5 @@ mysql -u echo -p --default-character-set=utf8mb4 echo < echo_backup.sql
 3. 运行诊断脚本：`python3 check_gunicorn.py`
 
 
+
+

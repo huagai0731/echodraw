@@ -69,3 +69,5 @@ WHERE checkpoint_count IS NOT NULL AND checkpoint_count != '';
 -- 如果表结构本身有问题，需要运行 Django 迁移
 
 
+
+

@@ -49,6 +49,7 @@ type GalleryProps = {
   onDeleteArtwork?: (artwork: Artwork) => void;
   onEditArtwork?: (artwork: Artwork) => void;
   onSetAsFeatured?: (artwork: Artwork) => void;
+  onRemoveFromFeatured?: (artwork: Artwork) => void;
 };
 
 function getArtworkTimestamp(artwork: Artwork): number {
@@ -176,7 +177,7 @@ const INITIAL_RENDER_COUNT = 20; // 初始渲染的图片数量
 const LOAD_MORE_COUNT = 10; // 每次加载更多的数量
 const INTERSECTION_ROOT_MARGIN = "300px"; // Intersection Observer 的提前加载距离
 
-function Gallery({ artworks, onOpenUpload, onDeleteArtwork, onEditArtwork, onSetAsFeatured }: GalleryProps) {
+function Gallery({ artworks, onOpenUpload, onDeleteArtwork, onEditArtwork, onSetAsFeatured, onRemoveFromFeatured }: GalleryProps) {
   const [showInfo, setShowInfo] = useState(true);
   const [filterOpen, setFilterOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
@@ -185,7 +186,9 @@ function Gallery({ artworks, onOpenUpload, onDeleteArtwork, onEditArtwork, onSet
   const containerRef = useRef<HTMLDivElement>(null);
   const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
+  const imageObserverRef = useRef<IntersectionObserver | null>(null);
   const galleryScrollPositionRef = useRef<number>(0);
+  const isRestoringScrollRef = useRef<boolean>(false); // 标记是否正在恢复滚动位置
 
   const stats = useMemo<GalleryFilterStats>(() => {
     let maxDuration = 0;
@@ -215,48 +218,89 @@ function Gallery({ artworks, onOpenUpload, onDeleteArtwork, onEditArtwork, onSet
   const [draftFilters, setDraftFilters] = useState<GalleryFilters>(defaultFilters);
 
   useEffect(() => {
-    setFilters((prev) => normalizeFilters(prev, stats));
-    setDraftFilters((prev) => normalizeFilters(prev, stats));
+    // 修复：添加错误处理，防止筛选器更新失败
+    try {
+      setFilters((prev) => normalizeFilters(prev, stats));
+      setDraftFilters((prev) => normalizeFilters(prev, stats));
+    } catch (error) {
+      console.error("[Gallery] Failed to normalize filters", error);
+    }
   }, [stats]);
+  
+  // 修复：清理防抖定时器
+  useEffect(() => {
+    return () => {
+      if (filterChangeTimeoutRef.current) {
+        clearTimeout(filterChangeTimeoutRef.current);
+        filterChangeTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   const filteredArtworks = useMemo(() => {
-    const now = Date.now();
-    let minTimestamp: number | null = null;
-    if (filters.timeRange === "7d") {
-      minTimestamp = now - 7 * 86400000;
-    } else if (filters.timeRange === "30d") {
-      minTimestamp = now - 30 * 86400000;
-    } else if (filters.timeRange === "90d") {
-      minTimestamp = now - 90 * 86400000;
-    }
+    // 修复：添加错误处理，防止筛选失败导致组件崩溃
+    try {
+      // 修复：使用上海时区计算时间范围，确保日期计算准确
+      // 获取当前上海时区的日期（UTC+8）
+      const now = Date.now();
+      const shanghaiOffset = 8 * 60 * 60 * 1000; // UTC+8 的毫秒偏移
+      const shanghaiNow = now + shanghaiOffset;
+      const shanghaiDate = new Date(shanghaiNow);
+      // 获取上海时区的当天0点（UTC时间）
+      const shanghaiMidnight = new Date(Date.UTC(
+        shanghaiDate.getUTCFullYear(),
+        shanghaiDate.getUTCMonth(),
+        shanghaiDate.getUTCDate(),
+        0, 0, 0, 0
+      ));
+      const shanghaiMidnightTimestamp = shanghaiMidnight.getTime() - shanghaiOffset;
+      
+      let minTimestamp: number | null = null;
+      if (filters.timeRange === "7d") {
+        minTimestamp = shanghaiMidnightTimestamp - 7 * 86400000;
+      } else if (filters.timeRange === "30d") {
+        minTimestamp = shanghaiMidnightTimestamp - 30 * 86400000;
+      } else if (filters.timeRange === "90d") {
+        minTimestamp = shanghaiMidnightTimestamp - 90 * 86400000;
+      }
 
-    const selectedTags = new Set(filters.tags);
-    const hasTagFilter = selectedTags.size > 0;
+      const selectedTags = new Set(filters.tags);
+      const hasTagFilter = selectedTags.size > 0;
 
-    return artworks.filter((artwork) => {
+      return artworks.filter((artwork) => {
       const timestamp = getArtworkTimestamp(artwork);
       if (minTimestamp !== null && timestamp < minTimestamp) {
         return false;
       }
 
       const ratingValue = parseRatingValue(artwork.rating);
-      if (
-        ratingValue !== null &&
-        (ratingValue < filters.rating.min - 1e-6 || ratingValue > filters.rating.max + 1e-6)
-      ) {
-        return false;
+      // 如果有评分，检查是否在筛选范围内
+      if (ratingValue !== null) {
+        if (ratingValue < filters.rating.min - 1e-6 || ratingValue > filters.rating.max + 1e-6) {
+          return false;
+        }
       }
-      if (ratingValue === null && filters.rating.min > 0) {
+      // 如果无评分但设置了最小评分筛选，且最小评分大于0，则排除
+      // 但如果是筛选最小值0，则包含无评分作品
+      if (ratingValue === null && filters.rating.min > 1e-6) {
         return false;
       }
 
       const durationValue = parseDurationMinutes(artwork);
-      const durationFallback = durationValue ?? 0;
-      if (
-        durationFallback < filters.duration.min - 1e-6 ||
-        durationFallback > filters.duration.max + 1e-6
-      ) {
-        return false;
+      // 如果有时长信息，检查是否在筛选范围内
+      if (durationValue !== null) {
+        if (
+          durationValue < filters.duration.min - 1e-6 ||
+          durationValue > filters.duration.max + 1e-6
+        ) {
+          return false;
+        }
+      } else {
+        // 如果无时长信息，只有在设置了最小时长筛选（大于0）时才排除
+        // 如果最小时长为0，则包含无时长信息的作品
+        if (filters.duration.min > 1e-6) {
+          return false;
+        }
       }
 
       if (hasTagFilter) {
@@ -268,48 +312,121 @@ function Gallery({ artworks, onOpenUpload, onDeleteArtwork, onEditArtwork, onSet
       }
 
       return true;
-    });
+      });
+    } catch (error) {
+      console.error("[Gallery] Error filtering artworks", error);
+      // 出错时返回空数组，避免组件崩溃
+      return [];
+    }
   }, [artworks, filters]);
 
-  const sortedArtworks = useMemo(() => {
-    const list = [...filteredArtworks];
+  // 处理套图逻辑：每个套图只显示最新的一张（作为封面），其他图片隐藏
+  const processedArtworks = useMemo(() => {
+    // 修复：添加错误处理，防止套图处理失败导致组件崩溃
+    try {
+      const collectionMap = new Map<string, Artwork[]>();
+      const standaloneArtworks: Artwork[] = [];
 
-    const compareByTimestamp = (a: Artwork, b: Artwork) => getArtworkTimestamp(a) - getArtworkTimestamp(b);
-    const compareByRating = (a: Artwork, b: Artwork) => {
-      const ratingA = parseRatingValue(a.rating) ?? -Infinity;
-      const ratingB = parseRatingValue(b.rating) ?? -Infinity;
-      return ratingA - ratingB;
-    };
-    const compareByDuration = (a: Artwork, b: Artwork) => {
-      const durationA = parseDurationMinutes(a) ?? -Infinity;
-      const durationB = parseDurationMinutes(b) ?? -Infinity;
-      return durationA - durationB;
-    };
+      // 将作品分为套图和非套图
+      filteredArtworks.forEach((artwork) => {
+      if (artwork.collectionId) {
+        if (!collectionMap.has(artwork.collectionId)) {
+          collectionMap.set(artwork.collectionId, []);
+        }
+        collectionMap.get(artwork.collectionId)!.push(artwork);
+      } else {
+        standaloneArtworks.push(artwork);
+      }
+    });
 
-    switch (filters.sortBy) {
-      case "oldest":
-        list.sort(compareByTimestamp);
-        break;
-      case "rating-high":
-        list.sort((a, b) => compareByRating(b, a));
-        break;
-      case "rating-low":
-        list.sort(compareByRating);
-        break;
-      case "duration-high":
-        list.sort((a, b) => compareByDuration(b, a));
-        break;
-      case "duration-low":
-        list.sort(compareByDuration);
-        break;
-      case "newest":
-      default:
-        list.sort((a, b) => compareByTimestamp(b, a));
-        break;
+    // 对每个套图，只保留最新的一张（按上传时间排序）
+    const collectionCovers: Artwork[] = [];
+    collectionMap.forEach((collectionArtworks) => {
+      // 按上传时间排序，最新的在前
+      collectionArtworks.sort((a, b) => {
+        const timeA = getArtworkTimestamp(a);
+        const timeB = getArtworkTimestamp(b);
+        return timeB - timeA;
+      });
+      // 只保留最新的一张作为封面
+      if (collectionArtworks.length > 0) {
+        collectionCovers.push(collectionArtworks[0]);
+      }
+    });
+
+      // 合并套图封面和非套图作品
+      return [...collectionCovers, ...standaloneArtworks];
+    } catch (error) {
+      console.error("[Gallery] Error processing artworks", error);
+      // 出错时返回原始筛选结果，避免组件崩溃
+      return filteredArtworks;
     }
+  }, [filteredArtworks]);
 
-    return list;
-  }, [filteredArtworks, filters.sortBy]);
+  const sortedArtworks = useMemo(() => {
+    // 修复：添加错误处理，防止排序失败导致组件崩溃
+    try {
+      const list = [...processedArtworks];
+
+      const compareByTimestamp = (a: Artwork, b: Artwork) => getArtworkTimestamp(a) - getArtworkTimestamp(b);
+      const compareByRating = (a: Artwork, b: Artwork) => {
+        const ratingA = parseRatingValue(a.rating) ?? -Infinity;
+        const ratingB = parseRatingValue(b.rating) ?? -Infinity;
+        return ratingA - ratingB;
+      };
+      const compareByDuration = (a: Artwork, b: Artwork) => {
+        const durationA = parseDurationMinutes(a) ?? -Infinity;
+        const durationB = parseDurationMinutes(b) ?? -Infinity;
+        return durationA - durationB;
+      };
+
+      switch (filters.sortBy) {
+        case "oldest":
+          list.sort(compareByTimestamp);
+          break;
+        case "rating-high":
+          list.sort((a, b) => compareByRating(b, a));
+          break;
+        case "rating-low":
+          list.sort(compareByRating);
+          break;
+        case "duration-high":
+          list.sort((a, b) => compareByDuration(b, a));
+          break;
+        case "duration-low":
+          list.sort(compareByDuration);
+          break;
+        case "newest":
+        default:
+          list.sort((a, b) => compareByTimestamp(b, a));
+          break;
+      }
+
+      return list;
+    } catch (error) {
+      console.error("[Gallery] Error sorting artworks", error);
+      // 出错时返回原始列表，避免组件崩溃
+      return processedArtworks;
+    }
+  }, [processedArtworks, filters.sortBy]);
+
+  // 获取套图的所有图片（用于详情页切换）
+  // 注意：这里使用原始artworks数组，不受筛选影响，确保套图内所有作品都能切换
+  const getCollectionArtworks = useCallback((collectionId: string): Artwork[] => {
+    return artworks
+      .filter((a) => a.collectionId === collectionId)
+      .sort((a, b) => {
+        const timeA = getArtworkTimestamp(a);
+        const timeB = getArtworkTimestamp(b);
+        return timeB - timeA; // 最新的在前
+      });
+  }, [artworks]);
+
+  // 获取套图的图片数量（基于所有作品，不受筛选影响）
+  const getCollectionCount = useCallback((collectionId: string): number => {
+    // 使用原始artworks数组，而不是filteredArtworks，确保显示的是套图的总数
+    return artworks.filter((a) => a.collectionId === collectionId).length;
+  }, [artworks]);
 
   // 瀑布流算法：将图片按时间顺序交替分配到左右两列
   // 这样可以确保时间顺序正确：第一张在左列，第二张在右列，第三张在左列，以此类推
@@ -330,25 +447,109 @@ function Gallery({ artworks, onOpenUpload, onDeleteArtwork, onEditArtwork, onSet
     return { leftColumn, rightColumn };
   }, [sortedArtworks, renderedCount]);
 
-  // 重置渲染数量当排序或筛选改变时
+  // 重置渲染数量当排序或筛选改变时（基于filters和sortBy，而不是sortedArtworks.length）
+  const filtersKey = useMemo(() => {
+    return JSON.stringify({
+      timeRange: filters.timeRange,
+      rating: filters.rating,
+      duration: filters.duration,
+      tags: filters.tags.sort(),
+      sortBy: filters.sortBy,
+    });
+  }, [filters]);
+
   useEffect(() => {
+    // 修复：如果正在从详情页恢复滚动位置，不要干扰
+    if (isRestoringScrollRef.current) {
+      return;
+    }
+    
+    // 修复：保存当前滚动位置，使用更可靠的方法
+    const savedScrollPosition = typeof window !== "undefined" 
+      ? window.scrollY || window.pageYOffset || document.documentElement.scrollTop 
+      : 0;
+    
     setRenderedCount(INITIAL_RENDER_COUNT);
     setLoadedImages(new Set());
-  }, [sortedArtworks.length]);
+    
+    // 恢复滚动位置（使用更可靠的机制，确保DOM已完全渲染）
+    if (savedScrollPosition > 0 && typeof window !== "undefined") {
+      // 使用setTimeout确保DOM已更新，并添加重试机制
+      let retryCount = 0;
+      const maxRetries = 5;
+      
+      const attemptScroll = () => {
+        // 再次检查窗口是否仍然存在
+        if (typeof window === "undefined") {
+          return;
+        }
+        
+        // 获取当前文档高度
+        const maxScroll = Math.max(
+          document.documentElement.scrollHeight,
+          document.body.scrollHeight,
+          window.innerHeight
+        );
+        
+        // 如果文档高度还不够，等待一下再试
+        if (maxScroll < savedScrollPosition + window.innerHeight && retryCount < maxRetries) {
+          retryCount++;
+          setTimeout(attemptScroll, 50);
+          return;
+        }
+        
+        // 计算目标滚动位置，确保不超过文档高度
+        const targetScroll = Math.min(savedScrollPosition, Math.max(0, maxScroll - window.innerHeight));
+        
+        // 使用scrollTo恢复位置
+        if (targetScroll >= 0) {
+          try {
+            window.scrollTo({
+              top: targetScroll,
+              behavior: 'instant' as ScrollBehavior, // 立即滚动，不使用动画
+            });
+          } catch (error) {
+            // 如果scrollTo失败，尝试使用scrollTop
+            console.debug("[Gallery] scrollTo failed, using scrollTop", error);
+            try {
+              document.documentElement.scrollTop = targetScroll;
+              document.body.scrollTop = targetScroll;
+            } catch (e) {
+              console.warn("[Gallery] Failed to restore scroll position", e);
+            }
+          }
+        }
+      };
+      
+      // 使用双重requestAnimationFrame确保DOM已更新
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          attemptScroll();
+        });
+      });
+    }
+  }, [filtersKey]);
 
   // 使用 Intersection Observer 实现无限滚动加载
   useEffect(() => {
-    if (typeof window === "undefined" || !loadMoreTriggerRef.current) {
+    // 修复：当sortedArtworks为空时，不需要创建observer
+    if (typeof window === "undefined" || !loadMoreTriggerRef.current || sortedArtworks.length === 0) {
+      // 清理旧的 observer
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+        observerRef.current = null;
+      }
       return;
     }
 
     // 清理旧的 observer
     if (observerRef.current) {
       observerRef.current.disconnect();
+      observerRef.current = null;
     }
 
     // 创建新的 observer 用于加载更多
-    observerRef.current = new IntersectionObserver(
+    const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting && renderedCount < sortedArtworks.length) {
@@ -364,44 +565,91 @@ function Gallery({ artworks, onOpenUpload, onDeleteArtwork, onEditArtwork, onSet
       },
     );
 
-    observerRef.current.observe(loadMoreTriggerRef.current);
+    observerRef.current = observer;
+    
+    // 修复：添加错误处理，防止observer失败
+    try {
+      observer.observe(loadMoreTriggerRef.current);
+    } catch (error) {
+      console.warn("[Gallery] Failed to observe load more trigger", error);
+      observer.disconnect();
+      observerRef.current = null;
+    }
 
     return () => {
       if (observerRef.current) {
-        observerRef.current.disconnect();
+        try {
+          observerRef.current.disconnect();
+        } catch (error) {
+          // 忽略已断开的observer错误
+          console.debug("[Gallery] Observer already disconnected (safe to ignore)", error);
+        }
+        observerRef.current = null;
       }
     };
   }, [renderedCount, sortedArtworks.length]);
 
   // 使用 Intersection Observer 优化图片懒加载
+  // 修复：当 renderedCount 变化时，需要重新观察新添加的元素
+  // 使用稳定的 observer，只在需要时添加新元素的观察
   useEffect(() => {
     if (typeof window === "undefined" || !containerRef.current) {
+      // 如果容器不存在，确保清理observer
+      if (imageObserverRef.current) {
+        try {
+          imageObserverRef.current.disconnect();
+        } catch (error) {
+          // 忽略已断开的observer错误
+          console.debug("[Gallery] Observer already disconnected (safe to ignore)", error);
+        }
+        imageObserverRef.current = null;
+      }
       return;
     }
 
-    const imageObserver = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            const element = entry.target;
-            const artworkId = element.getAttribute("data-artwork-id");
-            if (artworkId && !loadedImages.has(artworkId)) {
-              // 标记为已加载
-              setLoadedImages((prev) => new Set(prev).add(artworkId));
+    // 如果 observer 不存在，创建它
+    if (!imageObserverRef.current) {
+      const imageObserver = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              const element = entry.target;
+              const artworkId = element.getAttribute("data-artwork-id");
+              if (artworkId) {
+                // 使用函数式更新，避免依赖loadedImages
+                setLoadedImages((prev) => {
+                  if (prev.has(artworkId)) {
+                    return prev; // 如果已存在，返回原Set（避免不必要的重新渲染）
+                  }
+                  return new Set(prev).add(artworkId);
+                });
+              }
             }
-          }
-        });
-      },
-      {
-        root: null, // 使用视口作为root，而不是container
-        rootMargin: "200px", // 提前200px开始加载
-        threshold: 0.01,
-      },
-    );
+          });
+        },
+        {
+          root: null, // 使用视口作为root，而不是container
+          rootMargin: "200px", // 提前200px开始加载
+          threshold: 0.01,
+        },
+      );
+      imageObserverRef.current = imageObserver;
+    }
 
-    // 观察所有占位符和图片元素
+    const imageObserver = imageObserverRef.current;
+
+    // 观察所有占位符和图片元素（包括新添加的）
     const elements = containerRef.current.querySelectorAll("[data-artwork-id]");
-    elements.forEach((el) => imageObserver.observe(el));
+    const elementArray = Array.from(elements);
+    
+    // 观察所有元素（包括新添加的）
+    elementArray.forEach((el) => {
+      // 检查元素是否已经被观察（通过检查是否有 data-observed 属性）
+      if (!el.hasAttribute("data-observed")) {
+        imageObserver.observe(el);
+        el.setAttribute("data-observed", "true");
+      }
+    });
 
     // 立即检查视口内的元素，避免等待observer触发
     const checkInitialVisibility = () => {
@@ -409,7 +657,8 @@ function Gallery({ artworks, onOpenUpload, onDeleteArtwork, onEditArtwork, onSet
       const viewportBottom = viewportTop + window.innerHeight;
       const margin = 200; // 与rootMargin保持一致
 
-      elements.forEach((el) => {
+      // 检查所有元素是否在视口内
+      elementArray.forEach((el) => {
         const rect = el.getBoundingClientRect();
         const elementTop = viewportTop + rect.top;
         const elementBottom = elementTop + rect.height;
@@ -417,22 +666,36 @@ function Gallery({ artworks, onOpenUpload, onDeleteArtwork, onEditArtwork, onSet
         // 检查元素是否在视口内（包括margin）
         if (elementBottom >= viewportTop - margin && elementTop <= viewportBottom + margin) {
           const artworkId = el.getAttribute("data-artwork-id");
-          if (artworkId && !loadedImages.has(artworkId)) {
-            setLoadedImages((prev) => new Set(prev).add(artworkId));
+          if (artworkId) {
+            setLoadedImages((prev) => {
+              if (prev.has(artworkId)) {
+                return prev;
+              }
+              return new Set(prev).add(artworkId);
+            });
           }
         }
       });
     };
 
     // 延迟执行，确保DOM已渲染
-    requestAnimationFrame(() => {
-      requestAnimationFrame(checkInitialVisibility);
-    });
-
-    return () => {
-      imageObserver.disconnect();
+    let rafId: number | null = null;
+    const scheduleCheck = () => {
+      rafId = requestAnimationFrame(() => {
+        requestAnimationFrame(checkInitialVisibility);
+      }) as unknown as number;
     };
-  }, [distributedArtworks, loadedImages]);
+    scheduleCheck();
+
+    // 清理函数：只清理动画帧，不清理 observer（因为 observer 需要持续工作）
+    return () => {
+      // 先取消动画帧
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+    };
+  }, [renderedCount, sortedArtworks.length]); // 当 renderedCount 或作品数量变化时，重新观察新元素
 
   // 处理详情页打开/关闭时的滚动位置
   useEffect(() => {
@@ -441,20 +704,82 @@ function Gallery({ artworks, onOpenUpload, onDeleteArtwork, onEditArtwork, onSet
     }
 
     if (selectedIndex !== null) {
-      // 打开详情页时，保存当前滚动位置
-      galleryScrollPositionRef.current = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
-      // 滚动到顶部，确保详情页从顶部开始
-      requestAnimationFrame(() => {
-        window.scrollTo(0, 0);
-      });
+      // 打开详情页时，滚动位置已经在点击图片时保存了
+      // 这里不需要再次保存，避免覆盖点击时保存的准确位置
     } else {
-      // 关闭详情页时，恢复之前保存的滚动位置
+      // 关闭详情页时，微调滚动位置（主要恢复已在 onBack 中完成）
+      // 这里只做微调，确保位置准确，避免闪烁
       const savedPosition = galleryScrollPositionRef.current;
-      requestAnimationFrame(() => {
-        window.scrollTo(0, savedPosition);
-      });
+      
+      if (savedPosition > 0) {
+        // 标记正在恢复滚动位置，防止其他 effect 干扰
+        isRestoringScrollRef.current = true;
+        
+        // 轻量级的微调逻辑，只检查一次，不做多次重试
+        const fineTuneScroll = () => {
+          if (typeof window === "undefined") {
+            isRestoringScrollRef.current = false;
+            return;
+          }
+          
+          // 获取文档高度
+          const maxScroll = Math.max(
+            document.documentElement.scrollHeight,
+            document.body.scrollHeight,
+            window.innerHeight
+          );
+          
+          // 计算目标滚动位置，确保不超过文档高度
+          const targetScroll = Math.min(savedPosition, Math.max(0, maxScroll - window.innerHeight));
+          
+          // 获取当前滚动位置
+          const currentScroll = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
+          const diff = Math.abs(currentScroll - targetScroll);
+          
+          // 如果位置已经正确（差异小于 5px），不需要调整
+          if (diff < 5) {
+            isRestoringScrollRef.current = false;
+            return;
+          }
+          
+          // 微调滚动位置
+          try {
+            window.scrollTo({
+              top: targetScroll,
+              behavior: 'instant' as ScrollBehavior,
+            });
+          } catch (error) {
+            try {
+              document.documentElement.scrollTop = targetScroll;
+              document.body.scrollTop = targetScroll;
+            } catch (e) {
+              console.debug("[Gallery] Failed to fine-tune scroll position", e);
+            }
+          }
+          
+          isRestoringScrollRef.current = false;
+        };
+        
+        // 等待 DOM 更新后微调一次即可
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            fineTuneScroll();
+          });
+        });
+        
+        // 清理函数
+        return () => {
+          isRestoringScrollRef.current = false;
+        };
+      } else {
+        isRestoringScrollRef.current = false;
+      }
     }
   }, [selectedIndex]);
+
+  // 修复：添加防抖ref，防止快速操作时的竞态条件
+  const navigationLockRef = useRef(false);
+  const filterChangeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleShare = useCallback((artwork: Artwork) => {
     const hasNavigator = typeof navigator !== "undefined";
@@ -487,28 +812,272 @@ function Gallery({ artworks, onOpenUpload, onDeleteArtwork, onEditArtwork, onSet
     }
   }, []);
 
+  // 用于存储当前查看的套图作品列表和索引
+  const [collectionArtworksState, setCollectionArtworksState] = useState<{
+    artworks: Artwork[];
+    currentIndex: number;
+    collectionId: string;
+  } | null>(null);
+
+  // 当选中作品改变时，更新套图状态
+  useEffect(() => {
+    if (selectedIndex === null) {
+      setCollectionArtworksState(null);
+      return;
+    }
+
+    const selectedArtwork = sortedArtworks[selectedIndex];
+    if (!selectedArtwork) {
+      setCollectionArtworksState(null);
+      return;
+    }
+
+    if (selectedArtwork.collectionId) {
+      const artworksToNavigate = getCollectionArtworks(selectedArtwork.collectionId);
+      // 过滤掉不存在的作品（可能已被删除）
+      const validArtworks = artworksToNavigate.filter((a) => 
+        artworks.some((original) => original.id === a.id)
+      );
+      
+      if (validArtworks.length === 0) {
+        // 如果套图内所有作品都被删除，关闭详情页
+        setSelectedIndex(null);
+        setCollectionArtworksState(null);
+        return;
+      }
+      
+      const currentIndexInCollection = validArtworks.findIndex((a) => a.id === selectedArtwork.id);
+      
+      setCollectionArtworksState({
+        artworks: validArtworks,
+        currentIndex: currentIndexInCollection >= 0 ? currentIndexInCollection : 0,
+        collectionId: selectedArtwork.collectionId,
+      });
+    } else {
+      setCollectionArtworksState(null);
+    }
+  }, [selectedIndex, sortedArtworks, getCollectionArtworks, artworks]);
+
+  // 修复：当artworks数组变化时，检查selectedIndex是否仍然有效
+  // 如果当前选中的作品被删除，关闭详情页
+  useEffect(() => {
+    if (selectedIndex === null) {
+      return;
+    }
+
+    // 检查当前选中的作品是否仍然存在
+    const selectedArtwork = sortedArtworks[selectedIndex];
+    if (!selectedArtwork) {
+      // 作品不存在，关闭详情页
+      setSelectedIndex(null);
+      setCollectionArtworksState(null);
+      return;
+    }
+
+    // 检查作品是否在原始artworks数组中（可能被删除）
+    const artworkExists = artworks.some((a) => a.id === selectedArtwork.id);
+    if (!artworkExists) {
+      // 作品已被删除，关闭详情页
+      setSelectedIndex(null);
+      setCollectionArtworksState(null);
+      return;
+    }
+
+    // 如果selectedIndex超出范围，调整到最后一个有效索引
+    if (selectedIndex >= sortedArtworks.length && sortedArtworks.length > 0) {
+      setSelectedIndex(sortedArtworks.length - 1);
+    }
+  }, [artworks, sortedArtworks, selectedIndex]);
+
   if (selectedIndex !== null) {
     const selectedArtwork = sortedArtworks[selectedIndex];
-    const hasPrev = selectedIndex > 0;
-    const hasNext = selectedIndex < sortedArtworks.length - 1;
+    if (!selectedArtwork) {
+      // 如果选中的作品不存在，重置选择并显示错误提示
+      console.warn("[Gallery] Selected artwork not found, resetting selection");
+      setSelectedIndex(null);
+      return null;
+    }
+    
+    // 如果是套图，需要获取套图内的所有图片
+    let artworksToNavigate: Artwork[] = [];
+    let currentIndexInCollection = -1;
+    
+    if (selectedArtwork.collectionId && collectionArtworksState) {
+      artworksToNavigate = collectionArtworksState.artworks;
+      currentIndexInCollection = collectionArtworksState.currentIndex;
+    } else if (selectedArtwork.collectionId) {
+      // 如果状态还没更新，使用临时数据
+      artworksToNavigate = getCollectionArtworks(selectedArtwork.collectionId);
+      currentIndexInCollection = artworksToNavigate.findIndex((a) => a.id === selectedArtwork.id);
+      // 如果找不到当前作品在套图中的位置，使用0作为默认值
+      if (currentIndexInCollection < 0) {
+        currentIndexInCollection = 0;
+      }
+    } else {
+      artworksToNavigate = sortedArtworks;
+      currentIndexInCollection = selectedIndex;
+    }
+    
+    // 确保索引在有效范围内
+    if (currentIndexInCollection < 0) {
+      currentIndexInCollection = 0;
+    }
+    if (currentIndexInCollection >= artworksToNavigate.length && artworksToNavigate.length > 0) {
+      currentIndexInCollection = artworksToNavigate.length - 1;
+    }
+    
+    const hasPrev = currentIndexInCollection > 0;
+    const hasNext = currentIndexInCollection < artworksToNavigate.length - 1;
+
+    // 使用当前实际的作品（可能是套图内的任意一张）
+    // 如果是套图且状态已更新，优先使用套图中的作品；否则使用selectedArtwork
+    // 确保索引安全
+    const safeIndex = artworksToNavigate.length > 0 
+      ? Math.max(0, Math.min(currentIndexInCollection, artworksToNavigate.length - 1))
+      : 0;
+    
+    const currentArtwork = selectedArtwork.collectionId && collectionArtworksState && artworksToNavigate.length > 0 && safeIndex >= 0 && safeIndex < artworksToNavigate.length
+      ? artworksToNavigate[safeIndex] || selectedArtwork
+      : selectedArtwork;
+
+    // 如果是套图，计算正确的collectionIndex（基于在套图中的位置，从1开始）
+    let displayArtwork = { ...currentArtwork };
+    if (selectedArtwork.collectionId && collectionArtworksState && currentIndexInCollection >= 0 && currentIndexInCollection < artworksToNavigate.length) {
+      // 套图内索引从0开始（最新的是0），显示时应该从1开始（I, II, III...）
+      // 最新上传的显示为I，第二新的显示为II，以此类推
+      // 确保索引在有效范围内
+      const safeIndex = Math.max(0, Math.min(currentIndexInCollection, artworksToNavigate.length - 1));
+      const displayIndex = safeIndex + 1;
+      displayArtwork = {
+        ...currentArtwork,
+        collectionIndex: displayIndex,
+      };
+    } else if (selectedArtwork.collectionId && currentArtwork.collectionIndex) {
+      // 如果状态还没更新，但作品本身有collectionIndex，使用它
+      displayArtwork = {
+        ...currentArtwork,
+        collectionIndex: currentArtwork.collectionIndex,
+      };
+    }
 
     return (
       <ArtworkDetails
-        artwork={selectedArtwork}
+        artwork={displayArtwork}
         hasPrev={hasPrev}
         hasNext={hasNext}
-        onBack={() => setSelectedIndex(null)}
+        onBack={() => {
+          // 在关闭详情页之前，立即恢复滚动位置，避免闪烁
+          const savedPosition = galleryScrollPositionRef.current;
+          if (savedPosition > 0 && typeof window !== "undefined") {
+            // 立即设置滚动位置，不等待状态更新
+            try {
+              window.scrollTo({
+                top: savedPosition,
+                behavior: 'instant' as ScrollBehavior,
+              });
+            } catch (error) {
+              try {
+                document.documentElement.scrollTop = savedPosition;
+                document.body.scrollTop = savedPosition;
+              } catch (e) {
+                console.debug("[Gallery] Failed to immediately restore scroll position", e);
+              }
+            }
+          }
+          setSelectedIndex(null);
+          setCollectionArtworksState(null);
+        }}
         onShare={(artwork) => handleShare(artwork)}
-        onDelete={(artwork) => onDeleteArtwork?.(artwork)}
+        onDelete={(artwork) => {
+          // 修复：删除作品前检查是否是当前查看的作品
+          const isCurrentArtwork = selectedArtwork.id === artwork.id || 
+            (collectionArtworksState && collectionArtworksState.artworks.some(a => a.id === artwork.id));
+          
+          onDeleteArtwork?.(artwork);
+          
+          // 如果删除的是当前查看的作品，关闭详情页
+          if (isCurrentArtwork) {
+            setSelectedIndex(null);
+            setCollectionArtworksState(null);
+          }
+        }}
         onEdit={(artwork) => onEditArtwork?.(artwork)}
         onSetAsFeatured={(artwork) => onSetAsFeatured?.(artwork)}
+        onRemoveFromFeatured={(artwork) => onRemoveFromFeatured?.(artwork)}
         onNavigate={(direction) => {
-          if (direction === "prev" && hasPrev) {
-            setSelectedIndex((index) => (index === null ? null : Math.max(0, index - 1)));
-          } else if (direction === "next" && hasNext) {
-            setSelectedIndex((index) =>
-              index === null ? null : Math.min(sortedArtworks.length - 1, index + 1),
-            );
+          // 修复：添加导航锁，防止快速操作时的竞态条件
+          if (navigationLockRef.current) {
+            return;
+          }
+          navigationLockRef.current = true;
+          
+          // 在操作完成后释放锁
+          setTimeout(() => {
+            navigationLockRef.current = false;
+          }, 300);
+          
+          try {
+            if (selectedArtwork.collectionId && collectionArtworksState && collectionArtworksState.artworks.length > 0) {
+              // 套图内切换
+              const collectionArtworks = collectionArtworksState.artworks;
+              const currentIdx = collectionArtworksState.currentIndex;
+              const maxIdx = collectionArtworks.length - 1;
+              
+              // 确保当前索引在有效范围内
+              const safeCurrentIdx = Math.max(0, Math.min(currentIdx, maxIdx));
+              
+              // 确保artworks数组不为空且索引有效
+              if (collectionArtworks.length === 0 || safeCurrentIdx < 0 || safeCurrentIdx >= collectionArtworks.length) {
+                console.warn("[Gallery] Invalid collection state, cannot navigate");
+                return;
+              }
+              
+              const newIndex = direction === "prev"
+                ? Math.max(0, safeCurrentIdx - 1)
+                : Math.min(maxIdx, safeCurrentIdx + 1);
+              
+              // 确保新索引有效且与当前索引不同，且新索引对应的作品存在
+              if (newIndex === safeCurrentIdx || newIndex < 0 || newIndex >= collectionArtworks.length || !collectionArtworks[newIndex]) {
+                return;
+              }
+              
+              const newArtwork = collectionArtworks[newIndex];
+              
+              // 修复：检查新作品是否仍然存在（可能被删除）
+              // 注意：这里检查的是原始artworks数组（组件props），而不是collectionArtworksState.artworks
+              if (!newArtwork || !artworks.some(a => a.id === newArtwork.id)) {
+                console.warn("[Gallery] Artwork no longer exists, cannot navigate");
+                return;
+              }
+              
+              // 直接更新套图状态，不依赖sortedArtworks的索引
+              setCollectionArtworksState({
+                artworks: collectionArtworksState.artworks,
+                currentIndex: newIndex,
+                collectionId: collectionArtworksState.collectionId,
+              });
+              // 尝试在sortedArtworks中找到对应的索引
+              // 如果找不到（比如作品被筛选掉了），仍然使用当前的selectedIndex
+              // 但是套图状态已更新，详情页会通过collectionArtworksState显示正确的作品
+              const foundIndex = sortedArtworks.findIndex((a) => a.id === newArtwork.id);
+              if (foundIndex >= 0) {
+                setSelectedIndex(foundIndex);
+              }
+              // 注意：即使找不到索引，套图状态已更新，详情页会通过collectionArtworksState正确显示新作品
+              // 这是预期行为，因为套图内的作品可能在筛选后的列表中不可见
+            } else {
+              // 非套图切换
+              if (direction === "prev" && hasPrev) {
+                setSelectedIndex((index) => (index === null ? null : Math.max(0, index - 1)));
+              } else if (direction === "next" && hasNext) {
+                setSelectedIndex((index) =>
+                  index === null ? null : Math.min(sortedArtworks.length - 1, index + 1),
+                );
+              }
+            }
+          } catch (error) {
+            console.error("[Gallery] Navigation error", error);
+            navigationLockRef.current = false;
           }
         }}
       />
@@ -577,6 +1146,15 @@ function Gallery({ artworks, onOpenUpload, onDeleteArtwork, onEditArtwork, onSet
                             data-artwork-id={artwork.id}
                             loading="lazy"
                             decoding="async"
+                            onError={(e) => {
+                              // 修复：图片加载失败时显示占位符
+                              const target = e.currentTarget;
+                              target.style.display = 'none';
+                              const placeholder = target.nextElementSibling as HTMLElement;
+                              if (placeholder && placeholder.classList.contains('gallery-item__image--placeholder')) {
+                                placeholder.style.display = 'flex';
+                              }
+                            }}
                           />
                         ) : (
                           <div
@@ -598,6 +1176,11 @@ function Gallery({ artworks, onOpenUpload, onDeleteArtwork, onEditArtwork, onSet
                                 borderRadius: "4px",
                               }}
                             />
+                          </div>
+                        )}
+                        {artwork.collectionId && showInfo && (
+                          <div className="gallery-item__collection-badge">
+                            套图·{getCollectionCount(artwork.collectionId)}
                           </div>
                         )}
                         <figcaption
@@ -647,6 +1230,15 @@ function Gallery({ artworks, onOpenUpload, onDeleteArtwork, onEditArtwork, onSet
                             data-artwork-id={artwork.id}
                             loading="lazy"
                             decoding="async"
+                            onError={(e) => {
+                              // 修复：图片加载失败时显示占位符
+                              const target = e.currentTarget;
+                              target.style.display = 'none';
+                              const placeholder = target.nextElementSibling as HTMLElement;
+                              if (placeholder && placeholder.classList.contains('gallery-item__image--placeholder')) {
+                                placeholder.style.display = 'flex';
+                              }
+                            }}
                           />
                         ) : (
                           <div
@@ -668,6 +1260,11 @@ function Gallery({ artworks, onOpenUpload, onDeleteArtwork, onEditArtwork, onSet
                                 borderRadius: "4px",
                               }}
                             />
+                          </div>
+                        )}
+                        {artwork.collectionId && showInfo && (
+                          <div className="gallery-item__collection-badge">
+                            套图·{getCollectionCount(artwork.collectionId)}
                           </div>
                         )}
                         <figcaption
@@ -712,11 +1309,23 @@ function Gallery({ artworks, onOpenUpload, onDeleteArtwork, onEditArtwork, onSet
         filters={draftFilters}
         stats={stats}
         onChange={setDraftFilters}
-        onClose={() => setFilterOpen(false)}
+        onClose={() => {
+          // 关闭时重置draftFilters为当前应用的filters，确保下次打开时显示正确的值
+          setDraftFilters(filters);
+          setFilterOpen(false);
+        }}
         onReset={() => setDraftFilters(createDefaultFilters(stats))}
         onApply={() => {
-          setFilters(draftFilters);
-          setFilterOpen(false);
+          // 修复：添加防抖，防止快速操作时的竞态条件
+          if (filterChangeTimeoutRef.current) {
+            clearTimeout(filterChangeTimeoutRef.current);
+          }
+          
+          filterChangeTimeoutRef.current = setTimeout(() => {
+            setFilters(draftFilters);
+            setFilterOpen(false);
+            filterChangeTimeoutRef.current = null;
+          }, 100);
         }}
       />
     </div>

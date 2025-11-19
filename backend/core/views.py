@@ -6,14 +6,14 @@ import calendar
 import mimetypes
 import os
 import logging
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime, timezone as dt_timezone
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.mail import send_mail
 from django.core.validators import validate_email
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from django.db.models import Max
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404
@@ -96,7 +96,14 @@ from core.models import (
     LongTermPlanCopy,
     Notification,
     ShortTermGoal,
+    ShortTermGoalTaskCompletion,
     ShortTermTaskPreset,
+    Test,
+    TestQuestion,
+    TestOptionText,
+    TestOption,
+    TestDimension,
+    UserTestResult,
     UploadConditionalMessage,
     UserProfile,
     UserTaskPreset,
@@ -142,6 +149,33 @@ def _extract_error_message(exc: Exception, default_message: str) -> str:
     return getattr(exc, "message", None) or str(exc) or default_message
 
 
+def _validate_password_strength(password: str) -> tuple[bool, str]:
+    """
+    验证密码强度。
+    
+    要求：
+    - 至少8个字符
+    - 至少包含一个数字
+    - 至少包含一个字母（大小写均可）
+    
+    Returns:
+        (is_valid, error_message)
+    """
+    if len(password) < 8:
+        return False, "密码长度至少 8 位"
+    
+    has_digit = any(c.isdigit() for c in password)
+    has_letter = any(c.isalpha() for c in password)
+    
+    if not has_digit:
+        return False, "密码必须包含至少一个数字"
+    
+    if not has_letter:
+        return False, "密码必须包含至少一个字母"
+    
+    return True, ""
+
+
 def _user_payload(user):
     # 获取用户资料，包括注册编号
     profile = None
@@ -174,15 +208,27 @@ def health_check(_request):
 @api_view(["GET"])
 @permission_classes([AllowAny])  # 允许不认证访问，方便调试
 def debug_timezone(request):
-    """调试端点：检查时区计算是否正确"""
+    """
+    调试端点：检查时区计算是否正确
+    
+    安全注意：此端点仅应在开发/调试环境中使用。
+    生产环境应通过环境变量控制访问或完全禁用。
+    """
+    # 生产环境安全检查：如果不在DEBUG模式，限制访问
+    if not settings.DEBUG:
+        # 生产环境可以完全禁用此端点，或要求管理员权限
+        # 这里选择返回最小信息，不暴露敏感数据
+        return Response({
+            "error": "此调试端点在生产环境中已禁用",
+            "note": "如需调试时区问题，请联系管理员"
+        }, status=status.HTTP_403_FORBIDDEN)
+    
     import datetime
     now_utc = timezone.now()
     today_shanghai = get_today_shanghai()
     
-    # 计算各种时区的当前时间
+    # 计算各种时区的当前时间（仅返回非敏感信息）
     info = {
-        "timezone_now_utc": now_utc.isoformat() if now_utc else None,
-        "timezone_is_naive": timezone.is_naive(now_utc) if now_utc else None,
         "today_shanghai": today_shanghai.isoformat() if today_shanghai else None,
         "django_timezone": str(settings.TIME_ZONE),
         "django_use_tz": settings.USE_TZ,
@@ -196,14 +242,17 @@ def debug_timezone(request):
             info["shanghai_time"] = shanghai_time.isoformat()
             info["shanghai_date"] = shanghai_time.date().isoformat()
         except Exception as e:
-            info["shanghai_time_error"] = str(e)
+            # 不暴露详细错误信息
+            info["shanghai_time_error"] = "时区转换失败"
+            logger.warning(f"时区转换失败: {e}", exc_info=True)
     
-    # 如果用户已登录，显示用户打卡状态
+    # 如果用户已登录，显示用户打卡状态（但不暴露邮箱）
     if request.user.is_authenticated:
         user = request.user
         stats = _get_check_in_stats(user)
         info["user_checkin_stats"] = stats
-        info["user_email"] = user.email
+        # 不暴露用户邮箱，只显示用户ID（已脱敏）
+        info["user_id"] = user.id
     else:
         info["user_checkin_stats"] = None
         info["note"] = "未登录，无法显示用户打卡状态。请登录后访问或使用前端应用访问 /api/goals/check-in/"
@@ -263,13 +312,23 @@ def send_verification_code(request):
             "如果这不是您的操作，请忽略此邮件。"
         )
 
-    # 获取客户端IP地址
+    # 获取客户端IP地址（安全地处理X-Forwarded-For头）
     def get_client_ip(request):
+        # 优先使用REMOTE_ADDR，这是最可靠的
+        ip = request.META.get('REMOTE_ADDR', 'unknown')
+        
+        # 如果存在X-Forwarded-For头，取第一个IP（可能是代理链）
+        # 但要注意：X-Forwarded-For可以被伪造，所以只作为参考
         x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
         if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0].strip()
-        else:
-            ip = request.META.get('REMOTE_ADDR', 'unknown')
+            # 取第一个IP，并清理空白字符
+            first_ip = x_forwarded_for.split(',')[0].strip()
+            # 基本验证：确保是有效的IP格式（简单检查）
+            if first_ip and len(first_ip) <= 45:  # IPv6最长45字符
+                # 在生产环境中，应该验证IP是否在可信代理列表中
+                # 这里为了安全，优先使用REMOTE_ADDR
+                pass
+        
         return ip
     
     client_ip = get_client_ip(request)
@@ -295,13 +354,50 @@ def send_verification_code(request):
         )
     
     # 2. 检查IP级别的发送频率限制（每小时最多10次）
+    # 增强：同时检查IP和邮箱的组合，防止通过多个邮箱绕过IP限流
     one_hour_ago = now - timedelta(hours=1)
     ip_send_count = EmailVerification.objects.filter(
         metadata__ip=client_ip,
         created_at__gte=one_hour_ago
     ).count()
     
+    # 检查该IP是否使用了过多不同的邮箱（可能是自动化攻击）
+    unique_emails_from_ip = EmailVerification.objects.filter(
+        metadata__ip=client_ip,
+        created_at__gte=one_hour_ago
+    ).values('email').distinct().count()
+    
+    # 如果同一IP使用了超过5个不同邮箱，可能是攻击行为
+    MAX_UNIQUE_EMAILS_PER_IP_PER_HOUR = 5
+    if unique_emails_from_ip > MAX_UNIQUE_EMAILS_PER_IP_PER_HOUR:
+        logger.warning(
+            f"检测到可疑行为：IP {client_ip} 在1小时内使用了 {unique_emails_from_ip} 个不同邮箱",
+            extra={"ip": client_ip, "unique_emails": unique_emails_from_ip}
+        )
+        return Response(
+            {
+                "detail": "检测到异常行为，请稍后再试",
+                "retry_after": 3600,  # 1小时后重试
+            },
+            status=status.HTTP_429_TOO_MANY_REQUESTS,
+        )
+    
     if ip_send_count >= IP_RATE_LIMIT_PER_HOUR:
+        # 计算下次可用的时间
+        oldest_in_hour = EmailVerification.objects.filter(
+            metadata__ip=client_ip,
+            created_at__gte=one_hour_ago
+        ).order_by('created_at').first()
+        if oldest_in_hour:
+            next_available = oldest_in_hour.created_at + timedelta(hours=1)
+            remaining_seconds = int((next_available - now).total_seconds())
+            return Response(
+                {
+                    "detail": f"该IP地址发送验证码过于频繁，请 {max(remaining_seconds // 60, 1)} 分钟后再试",
+                    "retry_after": max(remaining_seconds, 0),
+                },
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
         return Response(
             {
                 "detail": f"该IP地址发送验证码过于频繁，请1小时后再试",
@@ -368,7 +464,7 @@ def send_verification_code(request):
             exc_info=True
         )
         # 生产环境不返回详细错误信息
-        payload = {"detail": "验证码发送失败，请稍后重试"}
+        payload = {"detail": "验证码发送失败，请检查网络连接后重试。如果问题持续，请联系客服。"}
         return Response(payload, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     return Response({"detail": "验证码已发送"}, status=status.HTTP_200_OK)
@@ -406,9 +502,11 @@ def register(request):
             {"detail": "两次输入的密码不一致"}, status=status.HTTP_400_BAD_REQUEST
         )
 
-    if len(password) < 8:
+    # 验证密码强度
+    is_valid, error_msg = _validate_password_strength(password)
+    if not is_valid:
         return Response(
-            {"detail": "密码长度至少 8 位"}, status=status.HTTP_400_BAD_REQUEST
+            {"detail": error_msg}, status=status.HTTP_400_BAD_REQUEST
         )
 
     user_model = get_user_model()
@@ -436,7 +534,7 @@ def register(request):
 
     if not verification:
         return Response(
-            {"detail": "验证码不正确，请重新获取"},
+            {"detail": "验证码不正确，请检查后重新输入。验证码有效期为10分钟，如已过期请重新获取。"},
             status=status.HTTP_400_BAD_REQUEST,
         )
 
@@ -454,18 +552,39 @@ def register(request):
         )
         verification.mark_used()
         
-        # 分配注册编号：获取当前最大注册编号，然后+1
-        max_reg_number = UserProfile.objects.filter(
+        # 分配注册编号：使用select_for_update锁定，防止并发竞态条件
+        # 获取当前最大注册编号，然后+1
+        max_profile = UserProfile.objects.filter(
             registration_number__isnull=False
-        ).aggregate(
-            max_num=Max("registration_number")
-        )["max_num"] or 0
+        ).order_by('-registration_number').select_for_update().first()
+        
+        max_reg_number = max_profile.registration_number if max_profile else 0
         
         # 创建用户资料并分配注册编号
-        UserProfile.objects.create(
-            user=user,
-            registration_number=max_reg_number + 1,
-        )
+        # 如果发生唯一性约束冲突（极少数情况），重试
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                UserProfile.objects.create(
+                    user=user,
+                    registration_number=max_reg_number + 1,
+                )
+                break  # 成功创建，退出循环
+            except IntegrityError:
+                # 如果因为并发导致唯一性冲突，重新获取最大编号
+                if attempt < max_retries - 1:
+                    max_profile = UserProfile.objects.filter(
+                        registration_number__isnull=False
+                    ).order_by('-registration_number').select_for_update().first()
+                    max_reg_number = max_profile.registration_number if max_profile else 0
+                else:
+                    # 最后一次尝试失败，记录错误并抛出
+                    logger.error(
+                        f"注册编号分配失败，已重试{max_retries}次",
+                        extra={"user_id": user.id, "email": user.email},
+                        exc_info=True
+                    )
+                    raise
 
     token_key = AuthToken.issue_for_user(user)
 
@@ -507,9 +626,11 @@ def reset_password(request):
             {"detail": "两次输入的密码不一致"}, status=status.HTTP_400_BAD_REQUEST
         )
 
-    if len(password) < 8:
+    # 验证密码强度
+    is_valid, error_msg = _validate_password_strength(password)
+    if not is_valid:
         return Response(
-            {"detail": "密码长度至少 8 位"}, status=status.HTTP_400_BAD_REQUEST
+            {"detail": error_msg}, status=status.HTTP_400_BAD_REQUEST
         )
 
     user_model = get_user_model()
@@ -539,7 +660,7 @@ def reset_password(request):
 
     if not verification:
         return Response(
-            {"detail": "验证码不正确，请重新获取"},
+            {"detail": "验证码不正确，请检查后重新输入。验证码有效期为10分钟，如已过期请重新获取。"},
             status=status.HTTP_400_BAD_REQUEST,
         )
 
@@ -586,12 +707,12 @@ def login(request):
         user = user_model.objects.get(email__iexact=email)
     except user_model.DoesNotExist:
         return Response(
-            {"detail": "账号或密码不正确"}, status=status.HTTP_400_BAD_REQUEST
+            {"detail": "邮箱或密码错误，请检查后重试。如忘记密码，可使用\"忘记密码\"功能重置。"}, status=status.HTTP_400_BAD_REQUEST
         )
 
     if not user.check_password(password):
         return Response(
-            {"detail": "账号或密码不正确"}, status=status.HTTP_400_BAD_REQUEST
+            {"detail": "邮箱或密码错误，请检查后重试。如忘记密码，可使用\"忘记密码\"功能重置。"}, status=status.HTTP_400_BAD_REQUEST
         )
 
     token_key = AuthToken.issue_for_user(user)
@@ -949,14 +1070,31 @@ class UserUploadListCreateView(generics.ListCreateAPIView):
         shanghai_time = uploaded_at.astimezone(SHANGHAI_TZ)
         checkin_date = shanghai_time.date()
 
-        checkin, created = DailyCheckIn.objects.get_or_create(
-            user=self.request.user,
-            date=checkin_date,
-            defaults={"source": "upload"},
-        )
-        if not created and not checkin.source:
-            checkin.source = "upload"
-            checkin.save(update_fields=["source"])
+        # 使用事务和异常处理防止并发竞态条件
+        try:
+            checkin, created = DailyCheckIn.objects.get_or_create(
+                user=self.request.user,
+                date=checkin_date,
+                defaults={"source": "upload"},
+            )
+            if not created and not checkin.source:
+                checkin.source = "upload"
+                checkin.save(update_fields=["source"])
+        except IntegrityError:
+            # 处理并发情况下的唯一性约束冲突
+            try:
+                checkin = DailyCheckIn.objects.get(user=self.request.user, date=checkin_date)
+                if not checkin.source:
+                    checkin.source = "upload"
+                    checkin.save(update_fields=["source"])
+            except DailyCheckIn.DoesNotExist:
+                # 如果仍然不存在，记录错误并重新抛出
+                logger.error(
+                    f"上传作品时打卡记录并发冲突后无法获取记录",
+                    extra={"user_id": self.request.user.id, "date": checkin_date.isoformat()},
+                    exc_info=True
+                )
+                raise
 
 
 class UserUploadDetailView(generics.RetrieveDestroyAPIView):
@@ -1091,6 +1229,70 @@ class ShortTermGoalDetailView(generics.RetrieveDestroyAPIView):
         return ShortTermGoal.objects.filter(user=self.request.user).only(
             "id", "title", "duration_days", "plan_type", "schedule", "created_at", "updated_at", "user"
         )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def short_term_goal_task_completions(request, goal_id):
+    """
+    获取短期目标的任务完成记录（任务图片关联）和打卡时间。
+    """
+    user = request.user
+    try:
+        goal = ShortTermGoal.objects.get(pk=goal_id, user=user)
+    except ShortTermGoal.DoesNotExist:
+        return Response(
+            {"detail": "指定的短期目标不存在或不属于当前用户。"},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    
+    # 获取所有任务完成记录
+    completions = ShortTermGoalTaskCompletion.objects.filter(
+        goal=goal
+    ).select_related("upload").order_by("date", "task_id")
+    
+    # 构建返回数据：按日期和任务ID组织
+    # 使用任务完成记录的创建时间作为该目标的完成时间（而不是DailyCheckIn的时间）
+    result = {}
+    checkin_times = {}
+    for completion in completions:
+        date_key = completion.date.isoformat()
+        if date_key not in result:
+            result[date_key] = {}
+        
+        # 使用任务完成记录的创建时间作为该目标的完成时间
+        # 对于同一天，使用最早的任务完成时间（第一次完成的时间）
+        if date_key not in checkin_times:
+            checkin_times[date_key] = completion.created_at.isoformat()
+        else:
+            # 如果已有时间，使用更早的时间（第一次完成的时间）
+            try:
+                # 解析已有的ISO格式时间字符串
+                existing_time_str = checkin_times[date_key]
+                if isinstance(existing_time_str, str):
+                    # 使用datetime.fromisoformat（Python 3.7+）
+                    existing_time = datetime.fromisoformat(existing_time_str.replace('Z', '+00:00'))
+                    if completion.created_at < existing_time:
+                        checkin_times[date_key] = completion.created_at.isoformat()
+                else:
+                    checkin_times[date_key] = completion.created_at.isoformat()
+            except (ValueError, TypeError, AttributeError):
+                # 如果解析失败，使用当前记录的时间
+                checkin_times[date_key] = completion.created_at.isoformat()
+        
+        # 构建上传记录信息
+        upload_data = {
+            "id": completion.upload.id,
+            "title": completion.upload.title,
+            "image": completion.upload.image.url if completion.upload.image else None,
+            "uploaded_at": completion.upload.uploaded_at.isoformat(),
+        }
+        result[date_key][completion.task_id] = upload_data
+    
+    return Response({
+        "completions": result,
+        "checkin_times": checkin_times,
+    })
 
 
 class UserTaskPresetListCreateView(generics.ListCreateAPIView):
@@ -1421,6 +1623,8 @@ def check_in(request):
     if request.method == "POST":
         date_str = request.data.get("date")
         source = (request.data.get("source") or "").strip() or "app"
+        task_images = request.data.get("task_images")  # 新增：任务图片关联信息
+        notes = request.data.get("notes", "").strip()  # 新增：用户备注
 
         if date_str:
             if not isinstance(date_str, str):
@@ -1431,26 +1635,145 @@ def check_in(request):
             try:
                 target_date = date.fromisoformat(date_str.strip())
             except (ValueError, AttributeError) as e:
+                # 生产环境不暴露原始输入，防止信息泄露
+                logger.debug(f"日期解析失败: {date_str!r}", extra={"error": str(e)})
                 return Response(
-                    {"detail": f"日期格式不正确，应为 YYYY-MM-DD。收到: {date_str!r}"},
+                    {"detail": "日期格式不正确，应为 YYYY-MM-DD 格式（如：2024-01-01）"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
         else:
             target_date = today
 
         if target_date > today:
+            # 生产环境不暴露具体日期，只提示错误
+            logger.debug(
+                f"尝试为未来日期打卡: {target_date.isoformat()}, 今天: {today.isoformat()}",
+                extra={"target_date": target_date.isoformat(), "today": today.isoformat()}
+            )
             return Response(
-                {"detail": f"不能为未来日期打卡。目标日期: {target_date.isoformat()}, 今天: {today.isoformat()}"},
+                {"detail": "不能为未来日期打卡，请选择今天或之前的日期"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # 验证任务图片关联信息（如果提供）
+        goal_id = None
+        if task_images:
+            if not isinstance(task_images, dict):
+                return Response(
+                    {"detail": "task_images 参数必须是对象格式。"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            # 从task_images中提取goal_id（如果存在）
+            goal_id = request.data.get("goal_id")
+            if goal_id:
+                try:
+                    goal_id = int(goal_id)
+                except (ValueError, TypeError):
+                    return Response(
+                        {"detail": "goal_id 参数必须是整数。"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                # 验证目标是否存在且属于当前用户
+                try:
+                    goal = ShortTermGoal.objects.get(pk=goal_id, user=user)
+                except ShortTermGoal.DoesNotExist:
+                    return Response(
+                        {"detail": "指定的短期目标不存在或不属于当前用户。"},
+                        status=status.HTTP_404_NOT_FOUND,
+                    )
+
         with transaction.atomic():
-            checkin, created = DailyCheckIn.objects.get_or_create(
-                user=user, date=target_date, defaults={"source": source}
-            )
-            if not created and source and not checkin.source:
-                checkin.source = source
-                checkin.save(update_fields=["source"])
+            # 使用select_for_update锁定，防止并发问题
+            # 先尝试获取并锁定记录
+            try:
+                checkin = DailyCheckIn.objects.select_for_update().get(
+                    user=user, date=target_date
+                )
+                created = False
+                update_fields = []
+                if source and not checkin.source:
+                    checkin.source = source
+                    update_fields.append("source")
+                if notes is not None:
+                    checkin.notes = notes
+                    update_fields.append("notes")
+                # 每次打卡都更新完成时间（无论是否有其他字段更新）
+                from django.utils import timezone
+                checkin.checked_at = timezone.now()
+                update_fields.append("checked_at")
+                checkin.save(update_fields=update_fields)
+            except DailyCheckIn.DoesNotExist:
+                # 记录不存在，创建新记录
+                try:
+                    from django.utils import timezone
+                    checkin = DailyCheckIn.objects.create(
+                        user=user, date=target_date, source=source, notes=notes or "", checked_at=timezone.now()
+                    )
+                    created = True
+                except IntegrityError:
+                    # 并发情况下，可能在创建时记录已存在，重新获取
+                    try:
+                        checkin = DailyCheckIn.objects.get(user=user, date=target_date)
+                        created = False
+                        update_fields = []
+                        if source and not checkin.source:
+                            checkin.source = source
+                            update_fields.append("source")
+                        if notes is not None:
+                            checkin.notes = notes
+                            update_fields.append("notes")
+                        # 每次打卡都更新完成时间（无论是否有其他字段更新）
+                        from django.utils import timezone
+                        checkin.checked_at = timezone.now()
+                        update_fields.append("checked_at")
+                        checkin.save(update_fields=update_fields)
+                    except DailyCheckIn.DoesNotExist:
+                        # 如果仍然不存在，记录错误并重新抛出
+                        logger.error(
+                            f"打卡记录并发冲突后无法获取记录",
+                            extra={"user_id": user.id, "date": target_date.isoformat()},
+                            exc_info=True
+                        )
+                        raise
+
+            # 保存任务图片关联（如果提供）
+            if task_images and goal_id:
+                goal = ShortTermGoal.objects.get(pk=goal_id, user=user)
+                for task_id, upload_id in task_images.items():
+                    if not isinstance(task_id, str) or not task_id.strip():
+                        continue
+                    try:
+                        upload_id_int = int(upload_id)
+                    except (ValueError, TypeError):
+                        logger.warning(
+                            f"无效的上传ID: {upload_id}",
+                            extra={"user_id": user.id, "task_id": task_id}
+                        )
+                        continue
+                    
+                    # 验证上传记录是否存在且属于当前用户
+                    try:
+                        upload = UserUpload.objects.get(pk=upload_id_int, user=user)
+                    except UserUpload.DoesNotExist:
+                        logger.warning(
+                            f"上传记录不存在或不属于当前用户: {upload_id_int}",
+                            extra={"user_id": user.id, "task_id": task_id}
+                        )
+                        continue
+                    
+                    # 创建或更新任务完成记录
+                    # 如果是新创建，created_at会自动设置为当前时间
+                    # 如果是更新，保持原有的created_at不变
+                    completion, created = ShortTermGoalTaskCompletion.objects.get_or_create(
+                        goal=goal,
+                        task_id=task_id.strip(),
+                        date=target_date,
+                        defaults={"upload": upload}
+                    )
+                    # 如果是更新，更新upload字段
+                    if not created:
+                        completion.upload = upload
+                        completion.save(update_fields=["upload", "updated_at"])
 
         stats = _get_check_in_stats(user)
         payload = {
@@ -1458,6 +1781,14 @@ def check_in(request):
             "created": created,
             "checked_date": target_date.isoformat(),
         }
+        # 确保checkin对象存在且checked_at字段存在
+        if checkin and hasattr(checkin, 'checked_at'):
+            payload["checked_at"] = checkin.checked_at.isoformat()
+        else:
+            # 如果没有checked_at字段，使用当前时间
+            from django.utils import timezone
+            payload["checked_at"] = timezone.now().isoformat()
+        
         return Response(
             payload,
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
@@ -1594,12 +1925,25 @@ class LongTermGoalView(APIView):
         payload_serializer.is_valid(raise_exception=True)
         data = payload_serializer.validated_data
 
+        # 修复：使用上海时区设置started_at，确保时区一致
+        # 获取上海时区的当前时间
+        if SHANGHAI_TZ is not None:
+            now_utc = timezone.now()
+            if timezone.is_naive(now_utc):
+                now_utc = timezone.make_aware(now_utc)
+            started_at_shanghai = now_utc.astimezone(SHANGHAI_TZ)
+        else:
+            # 回退：使用timezone.now()，但确保时区正确
+            started_at_shanghai = timezone.now()
+            if timezone.is_naive(started_at_shanghai):
+                started_at_shanghai = timezone.make_aware(started_at_shanghai)
+
         defaults = {
             "title": data["title"],
             "description": data.get("description", ""),
             "target_hours": data["target_hours"],
             "checkpoint_count": data["checkpoint_count"],
-            "started_at": timezone.now(),
+            "started_at": started_at_shanghai,
         }
 
         goal, created = LongTermGoal.objects.get_or_create(
@@ -1618,8 +1962,19 @@ class LongTermGoalView(APIView):
             goal.target_hours = data["target_hours"]
             goal.checkpoint_count = data["checkpoint_count"]
 
-            if should_reset or hours_changed or checkpoints_changed:
-                goal.started_at = timezone.now()
+            # 修复：只有在用户明确选择"重置进度"时才重置started_at
+            # 修改目标参数时，保持started_at不变，只更新目标值
+            if should_reset:
+                # 用户明确选择重置，使用上海时区
+                if SHANGHAI_TZ is not None:
+                    now_utc = timezone.now()
+                    if timezone.is_naive(now_utc):
+                        now_utc = timezone.make_aware(now_utc)
+                    goal.started_at = now_utc.astimezone(SHANGHAI_TZ)
+                else:
+                    goal.started_at = timezone.now()
+            # 注意：不再因为hours_changed或checkpoints_changed而重置started_at
+            # 这样用户可以修改目标而不丢失进度
 
             goal.save()
 
@@ -1645,10 +2000,36 @@ class LongTermGoalView(APIView):
 
     @staticmethod
     def _fetch_uploads(user, started_at):
-        return list(
-            UserUpload.objects.filter(user=user, uploaded_at__gte=started_at).order_by(
-                "uploaded_at", "id"
+        """
+        获取用户在长期目标开始后的所有上传记录。
+        
+        修复：使用日期范围查询，确保时区一致，避免遗漏边界时间点的上传。
+        """
+        # 确保started_at是aware datetime
+        if timezone.is_naive(started_at):
+            started_at = timezone.make_aware(started_at)
+        
+        # 获取started_at的日期（上海时区），用于更准确的查询
+        if SHANGHAI_TZ is not None:
+            started_at_shanghai = started_at.astimezone(SHANGHAI_TZ)
+            # 使用当天的开始时间（00:00:00）作为查询起点，确保包含当天所有上传
+            start_date = started_at_shanghai.date()
+            start_datetime = timezone.make_aware(
+                datetime.combine(start_date, datetime.min.time()),
+                timezone=SHANGHAI_TZ
             )
+            # 转换为UTC用于数据库查询
+            if settings.USE_TZ:
+                start_datetime = start_datetime.astimezone(dt_timezone.utc)
+        else:
+            # 回退：使用原始started_at，但确保时区正确
+            start_datetime = started_at
+        
+        return list(
+            UserUpload.objects.filter(
+                user=user, 
+                uploaded_at__gte=start_datetime
+            ).order_by("uploaded_at", "id")
         )
 
 
@@ -1695,13 +2076,22 @@ def high_five_increment(request):
         request.session.create()
         session_key = request.session.session_key
     
-    count, success = HighFiveCounter.increment(user=user, session_key=session_key)
+    count, success, clicked_at = HighFiveCounter.increment(user=user, session_key=session_key)
+    
+    response_data = {
+        "count": count,
+        "success": success,
+    }
+    
+    if clicked_at:
+        response_data["clicked_at"] = clicked_at.isoformat()
     
     if success:
-        return Response({"count": count, "success": True})
+        return Response(response_data)
     else:
+        response_data["message"] = "您已经点击过了"
         return Response(
-            {"count": count, "success": False, "message": "您已经点击过了"},
+            response_data,
             status=status.HTTP_200_OK
         )
 
@@ -1716,5 +2106,214 @@ def high_five_has_clicked(request):
     user = request.user if request.user.is_authenticated else None
     session_key = request.session.session_key
     
-    has_clicked = HighFiveCounter.has_clicked(user=user, session_key=session_key)
-    return Response({"has_clicked": has_clicked})
+    has_clicked, clicked_at = HighFiveCounter.has_clicked(user=user, session_key=session_key)
+    response_data = {"has_clicked": has_clicked}
+    
+    if clicked_at:
+        response_data["clicked_at"] = clicked_at.isoformat()
+    
+    return Response(response_data)
+
+
+# ==================== 用户测试 API ====================
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def user_tests_list(request):
+    """获取可用的测试列表（只返回激活的测试）"""
+    tests = Test.objects.filter(is_active=True).order_by("display_order", "id")
+    
+    # 使用简化的序列化器，只返回必要字段
+    from core.serializers import TestDimensionSerializer
+    
+    result = []
+    for test in tests:
+        dimensions = test.dimensions.all().order_by("display_order", "id")
+        result.append({
+            "id": test.id,
+            "slug": test.slug,
+            "name": test.name,
+            "description": test.description or "",
+            "test_type": test.test_type,
+            "question_count": test.questions.filter(is_active=True).count(),
+            "dimensions": TestDimensionSerializer(dimensions, many=True).data,
+        })
+    
+    return Response(result)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def user_test_detail(request, test_id):
+    """获取测试详情（包含题目）"""
+    test = get_object_or_404(Test, id=test_id, is_active=True)
+    
+    # 获取所有激活的题目
+    questions = test.questions.filter(is_active=True).order_by("display_order", "id")
+    
+    from core.serializers import TestQuestionSerializer, TestDimensionSerializer
+    
+    # 序列化题目
+    questions_data = []
+    for question in questions:
+        question_data = {
+            "id": question.id,
+            "question_text": question.question_text,
+            "dimension_id": question.dimension.id if question.dimension else None,
+            "dimension_name": question.dimension.name if question.dimension else None,
+            "endpoint_code": question.endpoint_code or None,
+            "score_config": question.score_config or None,
+        }
+        
+        # 如果是类型2，需要包含选项文本
+        if test.test_type == Test.TYPE_2:
+            option_texts = question.option_texts.filter(is_active=True).order_by("display_order", "id")
+            question_data["option_texts"] = []
+            for option_text in option_texts:
+                option_data = {
+                    "id": option_text.id,
+                    "text": option_text.text,
+                    "options": [],
+                }
+                # 获取该选项文本对应的所有选项
+                options = option_text.options.filter(is_active=True)
+                for option in options:
+                    option_data["options"].append({
+                        "endpoint_code": option.endpoint_code,
+                        "score_config": option.score_config or {},
+                    })
+                question_data["option_texts"].append(option_data)
+        else:
+            question_data["option_texts"] = []
+        
+        questions_data.append(question_data)
+    
+    # 获取维度
+    dimensions = test.dimensions.all().order_by("display_order", "id")
+    
+    result = {
+        "id": test.id,
+        "slug": test.slug,
+        "name": test.name,
+        "description": test.description or "",
+        "test_type": test.test_type,
+        "questions": questions_data,
+        "dimensions": TestDimensionSerializer(dimensions, many=True).data,
+    }
+    
+    return Response(result)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def user_test_submit(request):
+    """提交测试答案"""
+    user = request.user
+    test_id = request.data.get("test_id")
+    answers = request.data.get("answers", {})
+    
+    if not test_id:
+        return Response(
+            {"detail": "test_id 不能为空"}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    if not isinstance(answers, dict):
+        return Response(
+            {"detail": "answers 必须是字典格式"}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    test = get_object_or_404(Test, id=test_id, is_active=True)
+    
+    # 获取所有激活的题目
+    questions = test.questions.filter(is_active=True).order_by("display_order", "id")
+    
+    # 验证答案完整性
+    question_ids = {str(q.id) for q in questions}
+    answer_ids = set(answers.keys())
+    
+    if question_ids != answer_ids:
+        missing = question_ids - answer_ids
+        return Response(
+            {"detail": f"缺少以下题目的答案: {', '.join(missing)}"}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # 计算维度得分
+    dimension_scores = {}
+    
+    if test.test_type == Test.TYPE_1:
+        # 类型1：根据选择强度和score_config计算得分
+        for question in questions:
+            answer_value = answers.get(str(question.id))
+            if answer_value is None:
+                continue
+            
+            try:
+                intensity = int(answer_value)
+            except (ValueError, TypeError):
+                continue
+            
+            if question.dimension and question.endpoint_code:
+                endpoint_code = question.endpoint_code
+                score_config = question.score_config or {}
+                score = score_config.get(str(intensity), 0)
+                
+                if endpoint_code not in dimension_scores:
+                    dimension_scores[endpoint_code] = 0
+                dimension_scores[endpoint_code] += score
+    else:
+        # 类型2：根据选择的选项计算得分
+        for question in questions:
+            answer_value = answers.get(str(question.id))
+            if answer_value is None:
+                continue
+            
+            try:
+                option_text_id = int(answer_value)
+            except (ValueError, TypeError):
+                continue
+            
+            # 查找对应的选项文本
+            try:
+                option_text = question.option_texts.get(id=option_text_id, is_active=True)
+            except TestOptionText.DoesNotExist:
+                continue
+            
+            # 获取该选项文本对应的所有选项，累加得分
+            options = option_text.options.filter(is_active=True)
+            for option in options:
+                endpoint_code = option.endpoint_code
+                score = option.get_score()
+                
+                if endpoint_code not in dimension_scores:
+                    dimension_scores[endpoint_code] = 0
+                dimension_scores[endpoint_code] += score
+    
+    # 创建测试结果
+    result = UserTestResult.objects.create(
+        user=user,
+        test=test,
+        dimension_scores=dimension_scores,
+        answers=answers,
+        completed_at=timezone.now(),
+    )
+    
+    from core.serializers import UserTestResultSerializer
+    
+    serializer = UserTestResultSerializer(result)
+    return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def user_test_result(request, result_id):
+    """获取测试结果"""
+    user = request.user
+    result = get_object_or_404(UserTestResult, id=result_id, user=user)
+    
+    from core.serializers import UserTestResultSerializer
+    
+    serializer = UserTestResultSerializer(result)
+    return Response(serializer.data)

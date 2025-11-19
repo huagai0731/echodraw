@@ -12,7 +12,6 @@ import {
   AUTH_CHANGED_EVENT,
   fetchGoalsCalendar,
   fetchLongTermGoal,
-  fetchShortTermGoals,
   hasAuthToken,
   type GoalsCalendarDay,
   type LongTermGoal,
@@ -24,6 +23,15 @@ import {
   USER_ARTWORK_STORAGE_KEY,
 } from "@/services/artworkStorage";
 import type { Artwork } from "@/types/artwork";
+import {
+  formatISODateInShanghai,
+  isValidISODate,
+  normalizeUploadedDateInShanghai,
+  parseISODateInShanghai,
+  startOfWeekInShanghai,
+} from "@/utils/dateUtils";
+import { useShortTermGoals } from "@/hooks/useShortTermGoals";
+import { useCheckInDates } from "@/hooks/useCheckInDates";
 
 import "./Goals.css";
 
@@ -37,8 +45,6 @@ const MONTHLY_CHART_BOTTOM_PADDING = 28;
 
 const LONG_TERM_GOAL_CACHE_KEY = "echo-long-term-goal-cache";
 const LONG_TERM_GOAL_CACHE_TIMESTAMP_KEY = "echo-long-term-goal-cache-timestamp";
-const SHORT_TERM_GOALS_CACHE_KEY = "echo-short-term-goals-cache";
-const SHORT_TERM_GOALS_CACHE_TIMESTAMP_KEY = "echo-short-term-goals-cache-timestamp";
 const CACHE_MAX_AGE = 5 * 60 * 1000; // 5分钟缓存有效期
 
 const FALLBACK_COVER_GRADIENTS = [
@@ -101,19 +107,42 @@ function extractDurationMinutes(artwork: Artwork): number {
 }
 
 function startOfWeek(reference: Date): Date {
-  const result = new Date(reference.getFullYear(), reference.getMonth(), reference.getDate());
-  const day = result.getDay();
-  const diff = (day + 6) % 7;
-  result.setDate(result.getDate() - diff);
-  result.setHours(0, 0, 0, 0);
-  return result;
+  return startOfWeekInShanghai(reference);
 }
 
 function computeWeeklyStats(uploads: Artwork[], reference: Date): WeeklyStat[] {
   const start = startOfWeek(reference);
-  const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6);
+  // 使用上海时区格式化开始日期，然后解析以确保时区一致
+  const startDateStr = formatISODateInShanghai(start);
+  if (!startDateStr) {
+    // 如果格式化失败，返回空统计
+    return WEEKDAY_LABELS.map((label, index) => ({
+      label,
+      minutes: 0,
+      valueHours: 0,
+      dateKey: formatISODate(new Date(start.getFullYear(), start.getMonth(), start.getDate() + index)),
+    }));
+  }
+  
+  const startParsed = parseISODateInShanghai(startDateStr);
+  if (!startParsed) {
+    return WEEKDAY_LABELS.map((label, index) => ({
+      label,
+      minutes: 0,
+      valueHours: 0,
+      dateKey: formatISODate(new Date(start.getFullYear(), start.getMonth(), start.getDate() + index)),
+    }));
+  }
+  
+  // 计算结束日期（第7天，即周日）
+  const endParsed = new Date(startParsed);
+  endParsed.setDate(endParsed.getDate() + 6);
+  endParsed.setHours(23, 59, 59, 999);
+  const endDateStr = formatISODateInShanghai(endParsed);
+  
   const stats = WEEKDAY_LABELS.map((label, index) => {
-    const dayDate = new Date(start.getFullYear(), start.getMonth(), start.getDate() + index);
+    const dayDate = new Date(startParsed);
+    dayDate.setDate(dayDate.getDate() + index);
     return {
       label,
       minutes: 0,
@@ -124,15 +153,34 @@ function computeWeeklyStats(uploads: Artwork[], reference: Date): WeeklyStat[] {
 
   uploads.forEach((artwork) => {
     const dateKey = normalizeUploadedDate(artwork.uploadedDate ?? null, artwork.uploadedAt ?? null);
-    if (!dateKey) {
+    if (!dateKey || !isValidISODate(dateKey)) {
       return;
     }
-    const [year, month, day] = dateKey.split("-").map(Number);
-    const uploadDate = new Date(year, (month || 1) - 1, day || 1);
-    if (uploadDate < start || uploadDate > end) {
+    // 使用上海时区解析日期
+    const uploadDate = parseISODateInShanghai(dateKey);
+    if (!uploadDate) {
       return;
     }
-    const diffDays = Math.floor((uploadDate.getTime() - start.getTime()) / 86400000);
+    
+    // 使用日期字符串比较，避免时区问题
+    if (!endDateStr || dateKey < startDateStr || dateKey > endDateStr) {
+      return;
+    }
+    
+    // 计算日期差（使用日期字符串比较）
+    const uploadDateStr = formatISODateInShanghai(uploadDate);
+    if (!uploadDateStr) {
+      return;
+    }
+    
+    // 解析两个日期字符串，计算天数差
+    const [startY, startM, startD] = startDateStr.split("-").map(Number);
+    const [uploadY, uploadM, uploadD] = uploadDateStr.split("-").map(Number);
+    
+    const startDateObj = new Date(startY, startM - 1, startD);
+    const uploadDateObj = new Date(uploadY, uploadM - 1, uploadD);
+    const diffDays = Math.floor((uploadDateObj.getTime() - startDateObj.getTime()) / 86400000);
+    
     const minutes = extractDurationMinutes(artwork);
     if (diffDays >= 0 && diffDays < stats.length) {
       stats[diffDays].minutes += minutes;
@@ -163,18 +211,57 @@ function generateMonthlyLabels(daysInMonth: number): string[] {
 }
 
 function buildMonthlySeries(uploads: Artwork[], reference: Date): MonthlySeries {
-  const year = reference.getFullYear();
-  const monthIndex = reference.getMonth();
+  // 使用上海时区格式化参考日期，确保时区一致
+  const referenceDateStr = formatISODateInShanghai(reference);
+  if (!referenceDateStr) {
+    // 如果格式化失败，使用本地时区作为fallback
+    const year = reference.getFullYear();
+    const monthIndex = reference.getMonth();
+    const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+    return {
+      path: `M0 ${MONTHLY_CHART_HEIGHT - MONTHLY_CHART_BOTTOM_PADDING} L ${MONTHLY_CHART_WIDTH} ${MONTHLY_CHART_HEIGHT - MONTHLY_CHART_BOTTOM_PADDING}`,
+      labels: generateMonthlyLabels(daysInMonth),
+      hasData: false,
+      points: [],
+      defaultHintIndex: 0,
+      year,
+      monthIndex,
+    };
+  }
+  
+  const referenceParsed = parseISODateInShanghai(referenceDateStr);
+  if (!referenceParsed) {
+    const year = reference.getFullYear();
+    const monthIndex = reference.getMonth();
+    const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+    return {
+      path: `M0 ${MONTHLY_CHART_HEIGHT - MONTHLY_CHART_BOTTOM_PADDING} L ${MONTHLY_CHART_WIDTH} ${MONTHLY_CHART_HEIGHT - MONTHLY_CHART_BOTTOM_PADDING}`,
+      labels: generateMonthlyLabels(daysInMonth),
+      hasData: false,
+      points: [],
+      defaultHintIndex: 0,
+      year,
+      monthIndex,
+    };
+  }
+  
+  const year = referenceParsed.getFullYear();
+  const monthIndex = referenceParsed.getMonth();
   const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
   const totals = new Array<number>(daysInMonth).fill(0);
 
   uploads.forEach((artwork) => {
     const dateKey = normalizeUploadedDate(artwork.uploadedDate ?? null, artwork.uploadedAt ?? null);
-    if (!dateKey) {
+    if (!dateKey || !isValidISODate(dateKey)) {
       return;
     }
+    // 验证日期格式并解析
     const [y, m, d] = dateKey.split("-").map(Number);
-    if (y !== year || (m || 0) - 1 !== monthIndex || !d) {
+    // 验证日期有效性
+    if (Number.isNaN(y) || Number.isNaN(m) || Number.isNaN(d) || d < 1 || d > daysInMonth) {
+      return;
+    }
+    if (y !== year || m - 1 !== monthIndex || !d) {
       return;
     }
     const minutes = extractDurationMinutes(artwork);
@@ -275,29 +362,68 @@ function formatShortTermGoalSubtitle(goal: ShortTermGoal): string {
 }
 
 function formatISODate(source: Date) {
-  const year = source.getFullYear();
-  const month = String(source.getMonth() + 1).padStart(2, "0");
-  const day = String(source.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  const shanghaiDate = formatISODateInShanghai(source);
+  return shanghaiDate || "";
 }
 
 function normalizeUploadedDate(uploadedDate?: string | null, uploadedAt?: string | null) {
-  if (uploadedDate && /^\d{4}-\d{2}-\d{2}$/.test(uploadedDate)) {
-    return uploadedDate;
-  }
-  if (!uploadedAt) {
-    return null;
-  }
-  const timestamp = Date.parse(uploadedAt);
-  if (Number.isNaN(timestamp)) {
-    return null;
-  }
-  return formatISODate(new Date(timestamp));
+  return normalizeUploadedDateInShanghai(uploadedDate, uploadedAt);
 }
 
 function buildMonthSkeleton(reference: Date): GoalsCalendarDay[] {
-  const monthIndex = reference.getMonth();
-  const year = reference.getFullYear();
+  // 使用上海时区格式化参考日期，确保时区一致
+  const referenceDateStr = formatISODateInShanghai(reference);
+  if (!referenceDateStr) {
+    // Fallback to local timezone
+    const monthIndex = reference.getMonth();
+    const year = reference.getFullYear();
+    const firstOfMonth = new Date(year, monthIndex, 1);
+    const firstWeekday = firstOfMonth.getDay();
+    const displayStart = new Date(year, monthIndex, 1 - firstWeekday);
+    const lastOfMonth = new Date(year, monthIndex + 1, 0);
+    const lastWeekday = lastOfMonth.getDay();
+    const displayEnd = new Date(year, monthIndex, lastOfMonth.getDate() + (6 - lastWeekday));
+    const days: GoalsCalendarDay[] = [];
+    let cursor = new Date(displayStart);
+    while (cursor.getTime() <= displayEnd.getTime()) {
+      days.push({
+        date: formatISODate(cursor),
+        day: cursor.getDate(),
+        in_month: cursor.getMonth() === monthIndex,
+        status: "none",
+      });
+      cursor = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + 1);
+    }
+    return days;
+  }
+  
+  const referenceParsed = parseISODateInShanghai(referenceDateStr);
+  if (!referenceParsed) {
+    // Fallback
+    const monthIndex = reference.getMonth();
+    const year = reference.getFullYear();
+    const firstOfMonth = new Date(year, monthIndex, 1);
+    const firstWeekday = firstOfMonth.getDay();
+    const displayStart = new Date(year, monthIndex, 1 - firstWeekday);
+    const lastOfMonth = new Date(year, monthIndex + 1, 0);
+    const lastWeekday = lastOfMonth.getDay();
+    const displayEnd = new Date(year, monthIndex, lastOfMonth.getDate() + (6 - lastWeekday));
+    const days: GoalsCalendarDay[] = [];
+    let cursor = new Date(displayStart);
+    while (cursor.getTime() <= displayEnd.getTime()) {
+      days.push({
+        date: formatISODate(cursor),
+        day: cursor.getDate(),
+        in_month: cursor.getMonth() === monthIndex,
+        status: "none",
+      });
+      cursor = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + 1);
+    }
+    return days;
+  }
+  
+  const monthIndex = referenceParsed.getMonth();
+  const year = referenceParsed.getFullYear();
 
   const firstOfMonth = new Date(year, monthIndex, 1);
   const firstWeekday = firstOfMonth.getDay(); // 0 (Sun) - 6 (Sat)
@@ -310,12 +436,15 @@ function buildMonthSkeleton(reference: Date): GoalsCalendarDay[] {
   const days: GoalsCalendarDay[] = [];
   let cursor = new Date(displayStart);
   while (cursor.getTime() <= displayEnd.getTime()) {
-    days.push({
-      date: formatISODate(cursor),
-      day: cursor.getDate(),
-      in_month: cursor.getMonth() === monthIndex,
-      status: "none",
-    });
+    const dateStr = formatISODate(cursor);
+    if (dateStr) {
+      days.push({
+        date: dateStr,
+        day: cursor.getDate(),
+        in_month: cursor.getMonth() === monthIndex,
+        status: "none",
+      });
+    }
     cursor = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + 1);
   }
 
@@ -353,46 +482,30 @@ function saveCachedLongTermGoal(goal: LongTermGoal | null) {
       window.sessionStorage.removeItem(LONG_TERM_GOAL_CACHE_KEY);
       window.sessionStorage.removeItem(LONG_TERM_GOAL_CACHE_TIMESTAMP_KEY);
     }
-  } catch {
-    // ignore cache errors
-  }
-}
-
-function loadCachedShortTermGoals(): ShortTermGoal[] | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-  try {
-    const cached = window.sessionStorage.getItem(SHORT_TERM_GOALS_CACHE_KEY);
-    const timestamp = window.sessionStorage.getItem(SHORT_TERM_GOALS_CACHE_TIMESTAMP_KEY);
-    if (cached && timestamp) {
-      const age = Date.now() - Number.parseInt(timestamp, 10);
-      if (age < CACHE_MAX_AGE) {
-        return JSON.parse(cached) as ShortTermGoal[];
-      }
-    }
-  } catch {
-    // ignore cache errors
-  }
-  return null;
-}
-
-function saveCachedShortTermGoals(goals: ShortTermGoal[]) {
-  if (typeof window === "undefined") {
-    return;
-  }
-  try {
-    if (goals.length > 0) {
-      window.sessionStorage.setItem(SHORT_TERM_GOALS_CACHE_KEY, JSON.stringify(goals));
-      window.sessionStorage.setItem(SHORT_TERM_GOALS_CACHE_TIMESTAMP_KEY, String(Date.now()));
-    } else {
-      window.sessionStorage.removeItem(SHORT_TERM_GOALS_CACHE_KEY);
-      window.sessionStorage.removeItem(SHORT_TERM_GOALS_CACHE_TIMESTAMP_KEY);
+    // 注意：sessionStorage的storage事件只能在其他标签页中触发，当前页面不会收到
+    // 如果需要跨标签页同步，应该使用BroadcastChannel API或自定义事件
+    // 这里使用localStorage作为事件通道来触发跨标签页通知
+    try {
+      // 使用localStorage作为事件通道（只在同域的其他标签页间同步）
+      const eventKey = `${LONG_TERM_GOAL_CACHE_KEY}-updated`;
+      window.localStorage.setItem(eventKey, String(Date.now()));
+      // 立即删除，避免localStorage堆积
+      setTimeout(() => {
+        try {
+          window.localStorage.removeItem(eventKey);
+        } catch {
+          // ignore
+        }
+      }, 100);
+    } catch {
+      // 如果localStorage不可用，忽略跨标签页同步
     }
   } catch {
     // ignore cache errors
   }
 }
+
+// 短期目标相关的缓存和状态管理已移动到 useShortTermGoals hook
 
 function Goals() {
   const [range, setRange] = useState<RangeKey>("weekly");
@@ -408,19 +521,39 @@ function Goals() {
   const [calendarLoading, setCalendarLoading] = useState(false);
   const [calendarError, setCalendarError] = useState<string | null>(null);
   const [activeMonth, setActiveMonth] = useState(() => {
+    // 使用上海时区的当前日期
+    const todayStr = formatISODateInShanghai(new Date());
+    if (todayStr) {
+      const parsed = parseISODateInShanghai(todayStr);
+      if (parsed) {
+        return new Date(parsed.getFullYear(), parsed.getMonth(), 1);
+      }
+    }
+    // Fallback
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const [uploads, setUploads] = useState<Artwork[]>([]);
-  const [localUploadDates, setLocalUploadDates] = useState<Set<string>>(new Set());
-  const [shortTermGoals, setShortTermGoals] = useState<ShortTermGoal[]>([]);
-  const [shortTermLoading, setShortTermLoading] = useState(false);
-  const [shortTermError, setShortTermError] = useState<string | null>(null);
   const [activeGoalDetail, setActiveGoalDetail] = useState<ShortTermGoal | null>(null);
   const [monthlyHoverIndex, setMonthlyHoverIndex] = useState<number | null>(null);
   const [monthlySelectedIndex, setMonthlySelectedIndex] = useState<number | null>(null);
   const [monthlyPointerActive, setMonthlyPointerActive] = useState(false);
   const [authVersion, setAuthVersion] = useState(0);
+
+  // 使用自定义 hooks 管理短期目标和打卡记录
+  const {
+    goals: shortTermGoals,
+    loading: shortTermLoading,
+    error: shortTermError,
+    addGoal,
+    removeGoal,
+  } = useShortTermGoals();
+
+  const {
+    checkInDates: localUploadDates,
+    refreshCheckInDates,
+    addCheckInDate,
+  } = useCheckInDates();
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -431,21 +564,46 @@ function Goals() {
       setAuthVersion((prev) => prev + 1);
     };
 
+    // 处理多标签页缓存同步
+    const handleStorageChange = (event: StorageEvent) => {
+      // 如果其他标签页更新了缓存，清除当前缓存并重新加载
+      if (
+        event.key === LONG_TERM_GOAL_CACHE_KEY ||
+        event.key === LONG_TERM_GOAL_CACHE_TIMESTAMP_KEY
+      ) {
+        // 触发重新加载
+        setAuthVersion((prev) => prev + 1);
+      }
+    };
+
     window.addEventListener(AUTH_CHANGED_EVENT, handleAuthChange);
+    window.addEventListener("storage", handleStorageChange);
     return () => {
       window.removeEventListener(AUTH_CHANGED_EVENT, handleAuthChange);
+      window.removeEventListener("storage", handleStorageChange);
     };
   }, []);
 
   const hasLongTermGoal = Boolean(longTermGoal);
 
-  const weeklyStats = useMemo(() => computeWeeklyStats(uploads, new Date()), [uploads]);
+  // 获取上海时区的当前日期用于统计
+  const todayInShanghai = useMemo(() => {
+    // 使用formatISODateInShanghai获取今天的日期字符串，然后解析为Date对象
+    const todayStr = formatISODateInShanghai(new Date());
+    if (todayStr) {
+      const parsed = parseISODateInShanghai(todayStr);
+      return parsed || new Date();
+    }
+    return new Date();
+  }, []);
+
+  const weeklyStats = useMemo(() => computeWeeklyStats(uploads, todayInShanghai), [uploads, todayInShanghai]);
   const maxWeekly = useMemo(
     () => weeklyStats.reduce((max, item) => Math.max(max, item.valueHours), 0),
     [weeklyStats],
   );
   const hasWeeklyData = weeklyStats.some((item) => item.minutes > 0);
-  const monthlySeries = useMemo(() => buildMonthlySeries(uploads, new Date()), [uploads]);
+  const monthlySeries = useMemo(() => buildMonthlySeries(uploads, todayInShanghai), [uploads, todayInShanghai]);
   const monthlyHint = useMemo(() => {
     if (!monthlySeries.hasData || monthlySeries.points.length === 0) {
       return null;
@@ -580,60 +738,64 @@ function Goals() {
   const refreshUploadData = useCallback(() => {
     const stored = loadStoredArtworks();
     setUploads(stored);
-    const next = new Set<string>();
-    stored.forEach((artwork) => {
-      const dateKey = normalizeUploadedDate(artwork.uploadedDate ?? null, artwork.uploadedAt ?? null);
-      if (dateKey) {
-        next.add(dateKey);
-      }
-    });
-    setLocalUploadDates(next);
   }, []);
 
-  // 从日历数据中提取实际上传作品的日期并更新 localUploadDates
-  const refreshCheckInDates = useCallback(async () => {
-    if (!hasAuthToken()) {
+  // 计算目标的日期范围辅助函数
+  const getGoalDateRange = useCallback((goal: ShortTermGoal): { startDate: Date; endDate: Date } | null => {
+    if (!goal.createdAt) {
+      return null;
+    }
+
+    const startDateStr = formatISODateInShanghai(goal.createdAt);
+    if (!startDateStr) {
+      return null;
+    }
+
+    const parsedStart = parseISODateInShanghai(startDateStr);
+    if (!parsedStart) {
+      return null;
+    }
+
+    parsedStart.setHours(0, 0, 0, 0);
+    const endDate = new Date(parsedStart);
+    endDate.setDate(endDate.getDate() + goal.durationDays - 1);
+    endDate.setHours(23, 59, 59, 999);
+
+    return { startDate: parsedStart, endDate };
+  }, []);
+
+  // 初始化时刷新上传数据和打卡记录
+  useEffect(() => {
+    refreshUploadData();
+    refreshCheckInDates();
+  }, [refreshUploadData, refreshCheckInDates]);
+
+  // 监听跨标签页的缓存更新（用于同步数据）
+  useEffect(() => {
+    if (typeof window === "undefined") {
       return;
     }
 
-    try {
-      const today = new Date();
-      const currentYear = today.getFullYear();
-      const currentMonth = today.getMonth() + 1;
-      
-      // 获取当前月的打卡记录
-      const data = await fetchGoalsCalendar({ year: currentYear, month: currentMonth });
-      
-      // 从日历数据中只提取实际上传了作品的日期（status === "upload"）
-      const uploadDates = new Set<string>();
-      data.days.forEach((day) => {
-        if (day.status === "upload") {
-          uploadDates.add(day.date);
+    const handleStorageChange = (event: StorageEvent) => {
+      // 监听localStorage的变化（用于跨标签页同步）
+      if (event.key === `${LONG_TERM_GOAL_CACHE_KEY}-updated`) {
+        // 长期目标缓存已更新，清除本地缓存并重新加载
+        try {
+          window.sessionStorage.removeItem(LONG_TERM_GOAL_CACHE_KEY);
+          window.sessionStorage.removeItem(LONG_TERM_GOAL_CACHE_TIMESTAMP_KEY);
+        } catch {
+          // ignore
         }
-      });
-      
-      // 合并本地存储的上传日期和API返回的上传日期
-      const stored = loadStoredArtworks();
-      stored.forEach((artwork) => {
-        const dateKey = normalizeUploadedDate(artwork.uploadedDate ?? null, artwork.uploadedAt ?? null);
-        if (dateKey) {
-          uploadDates.add(dateKey);
-        }
-      });
-      
-      setLocalUploadDates(uploadDates);
-    } catch (error) {
-      console.warn("[Goals] Failed to refresh check-in dates", error);
-      // 如果API调用失败，至少使用本地存储的数据
-      refreshUploadData();
-    }
-  }, [refreshUploadData]);
+        // 重新加载长期目标
+        reloadLongTermGoal();
+      }
+    };
 
-  useEffect(() => {
-    refreshUploadData();
-    // 同时从 API 刷新打卡记录，确保状态同步
-    refreshCheckInDates();
-  }, [refreshUploadData, refreshCheckInDates]);
+    window.addEventListener("storage", handleStorageChange);
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+    };
+  }, [reloadLongTermGoal]);
 
   useEffect(() => {
     let active = true;
@@ -702,67 +864,7 @@ function Goals() {
     };
   }, [authVersion]);
 
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadShortTerm() {
-      // 先尝试从缓存加载，避免闪烁
-      const cached = loadCachedShortTermGoals();
-      if (cached && isMounted) {
-        setShortTermGoals(cached);
-        setShortTermError(null);
-        setShortTermLoading(false);
-      } else {
-        setShortTermLoading(true);
-      }
-
-      if (!hasAuthToken()) {
-        setShortTermGoals([]);
-        setShortTermError("登录后可查看短期目标。");
-        saveCachedShortTermGoals([]);
-        return;
-      }
-
-      try {
-        const data = await fetchShortTermGoals();
-        if (!isMounted) {
-          return;
-        }
-        setShortTermGoals(data);
-        setShortTermError(null);
-        saveCachedShortTermGoals(data);
-      } catch (error) {
-        if (!isMounted) {
-          return;
-        }
-        const status = (error as { response?: { status?: number } })?.response?.status;
-        if (status === 401 || status === 403) {
-          setShortTermGoals([]);
-          setShortTermError("登录后可查看短期目标。");
-          saveCachedShortTermGoals([]);
-        } else {
-          console.warn("Failed to load short-term goals", error);
-          // 如果出错但有缓存，保持使用缓存，不显示错误
-          if (!cached) {
-            setShortTermGoals([]);
-            setShortTermError("获取短期目标失败，请稍后重试。");
-          } else {
-            setShortTermError(null);
-          }
-        }
-      } finally {
-        if (isMounted) {
-          setShortTermLoading(false);
-        }
-      }
-    }
-
-    loadShortTerm();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [authVersion]);
+  // 短期目标加载已由 useShortTermGoals hook 管理
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -854,17 +956,12 @@ function Goals() {
     setShowWizard(false);
   }, []);
 
-  const handleGoalSaved = useCallback((goal: ShortTermGoal) => {
-    setShortTermGoals((prev) => {
-      const filtered = prev.filter((item) => item.id !== goal.id);
-      const next = [goal, ...filtered];
-      next.sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      );
-      return next;
-    });
-    setShortTermError(null);
-  }, []);
+  const handleGoalSaved = useCallback(
+    (goal: ShortTermGoal) => {
+      addGoal(goal);
+    },
+    [addGoal]
+  );
 
   const handleLongTermSaved = useCallback(
     (goal: LongTermGoal) => {
@@ -900,38 +997,98 @@ function Goals() {
     }
   }, []);
 
-  const handleGoalComplete = useCallback((dateKey: string) => {
-    // 立即更新本地状态，确保完成状态不会丢失
-    setLocalUploadDates((prev) => {
-      const next = new Set(prev);
-      next.add(dateKey);
-      console.log("[Goals] Updated localUploadDates after goal completion", {
-        dateKey,
-        allDates: Array.from(next)
-      });
-      return next;
-    });
-    // 然后异步刷新打卡记录，确保与服务器同步
-    refreshCheckInDates();
-  }, [refreshCheckInDates]);
+  const handleGoalComplete = useCallback(
+    async (dateKey: string) => {
+      if (!isValidISODate(dateKey)) {
+        console.error("[Goals] Invalid date format in handleGoalComplete", dateKey);
+        return;
+      }
+
+      // 立即更新打卡记录状态
+      addCheckInDate(dateKey);
+
+      // 刷新打卡记录，确保与服务器同步
+      try {
+        const dateRange = activeGoalDetail ? getGoalDateRange(activeGoalDetail) : null;
+        if (dateRange) {
+          await refreshCheckInDates(dateRange);
+        } else {
+          await refreshCheckInDates();
+        }
+      } catch (error) {
+        console.error("[Goals] Failed to refresh check-in dates after goal completion", error);
+      }
+    },
+    [activeGoalDetail, addCheckInDate, refreshCheckInDates, getGoalDateRange]
+  );
 
   const handleGoalClose = useCallback(() => {
-    // 关闭时也刷新一下，确保状态同步
-    refreshCheckInDates();
+    // 关闭时刷新打卡记录，确保状态同步
+    const dateRange = activeGoalDetail ? getGoalDateRange(activeGoalDetail) : null;
+    if (dateRange) {
+      refreshCheckInDates(dateRange);
+    } else {
+      refreshCheckInDates();
+    }
     setActiveGoalDetail(null);
-  }, [refreshCheckInDates]);
+  }, [activeGoalDetail, refreshCheckInDates, getGoalDateRange]);
 
-  const handleGoalDeleted = useCallback((goalId: number) => {
-    // 从列表中移除已删除的目标
-    setShortTermGoals((prev) => prev.filter((goal) => goal.id !== goalId));
-    console.log("[Goals] Removed deleted goal from list", goalId);
-  }, []);
+  const handleGoalDeleted = useCallback(
+    (goalId: number) => {
+      removeGoal(goalId);
+    },
+    [removeGoal]
+  );
 
-  const handleGoalOpen = useCallback((goal: ShortTermGoal) => {
-    // 打开详情页面时刷新打卡记录，确保显示最新状态
-    refreshCheckInDates();
-    setActiveGoalDetail(goal);
-  }, [refreshCheckInDates]);
+  const handleGoalOpen = useCallback(
+    async (goal: ShortTermGoal) => {
+      // 打开详情页面时刷新打卡记录，确保显示最新状态
+      const dateRange = getGoalDateRange(goal);
+      if (dateRange) {
+        await refreshCheckInDates(dateRange);
+      } else {
+        await refreshCheckInDates();
+      }
+      setActiveGoalDetail(goal);
+    },
+    [refreshCheckInDates, getGoalDateRange]
+  );
+
+  // 优化：只传递该目标自己的完成日期对应的打卡记录，用于验证
+  // 因为已经完全隔离，每个目标只使用自己的 goalCompletedDates
+  // uploadDates 的作用只是验证这些日期是否真的有打卡记录
+  // 这样不限制日期范围，用户可以随时完成任何一天的任务
+  // 注意：这个 hook 必须在所有早期返回之前调用，遵守 React Hooks 规则
+  const filteredUploadDates = useMemo(() => {
+    if (!activeGoalDetail?.id) {
+      return new Set<string>();
+    }
+    
+    // 从 localStorage 读取该目标的完成日期列表
+    try {
+      const completedDatesKey = `short-term-goal-${activeGoalDetail.id}-completed-dates`;
+      const stored = localStorage.getItem(completedDatesKey);
+      if (!stored) {
+        // 如果还没有完成日期，返回空集合
+        return new Set<string>();
+      }
+      
+      const completedDates = JSON.parse(stored) as string[];
+      const filtered = new Set<string>();
+      
+      // 只传递该目标自己的完成日期对应的打卡记录
+      completedDates.forEach((dateKey) => {
+        if (localUploadDates.has(dateKey)) {
+          filtered.add(dateKey);
+        }
+      });
+      
+      return filtered;
+    } catch (error) {
+      console.warn("[Goals] Failed to load completed dates for filtering", error);
+      return new Set<string>();
+    }
+  }, [localUploadDates, activeGoalDetail?.id]);
 
   if (showLongTermMetaEdit && longTermGoal) {
     return (
@@ -945,6 +1102,24 @@ function Goals() {
   }
 
   if (activeLongTermGoal) {
+    // 验证数据完整性，确保 progress 和 checkpoints 存在
+    const safeGoal: LongTermGoal = {
+      ...activeLongTermGoal,
+      progress: activeLongTermGoal.progress ?? {
+        spentMinutes: 0,
+        spentHours: 0,
+        progressRatio: 0,
+        progressPercent: 0,
+        targetHours: activeLongTermGoal.targetHours,
+        elapsedDays: 0,
+        completedCheckpoints: 0,
+        totalCheckpoints: activeLongTermGoal.checkpointCount,
+        nextCheckpoint: null,
+        startedDate: activeLongTermGoal.startedAt,
+      },
+      checkpoints: activeLongTermGoal.checkpoints ?? [],
+    };
+
     return (
       <ErrorBoundary
         fallback={
@@ -968,7 +1143,7 @@ function Goals() {
         }}
       >
         <LongTermGoalDetails
-          goal={activeLongTermGoal}
+          goal={safeGoal}
           onClose={handleCloseLongTermDetails}
           onEdit={() => {
             setActiveLongTermGoal(null);
@@ -985,7 +1160,7 @@ function Goals() {
       <ShortTermGoalDetails
         goal={activeGoalDetail}
         onClose={handleGoalClose}
-        uploadDates={localUploadDates}
+        uploadDates={filteredUploadDates}
         onComplete={handleGoalComplete}
         onDeleted={handleGoalDeleted}
       />
@@ -1038,12 +1213,19 @@ function Goals() {
             </div>
           ) : hasLongTermGoal && longTermGoal ? (
             (() => {
-              const progressPercent = clampPercent(longTermGoal.progress.progressPercent);
-              const spentLabel = `${formatHours(longTermGoal.progress.spentHours)}h`;
+              const progress = longTermGoal.progress ?? {
+                progressPercent: 0,
+                spentHours: 0,
+                elapsedDays: 0,
+                completedCheckpoints: 0,
+                totalCheckpoints: 0,
+              };
+              const progressPercent = clampPercent(progress.progressPercent);
+              const spentLabel = `${formatHours(progress.spentHours)}h`;
               const targetLabel = `${formatHours(longTermGoal.targetHours)}h`;
               const startDateLabel = formatDateLabel(longTermGoal.startedAt);
-              const elapsedDays = longTermGoal.progress.elapsedDays;
-              const checkpointSummary = `${longTermGoal.progress.completedCheckpoints}/${longTermGoal.progress.totalCheckpoints}`;
+              const elapsedDays = progress.elapsedDays;
+              const checkpointSummary = `${progress.completedCheckpoints}/${progress.totalCheckpoints}`;
               const progressLabel = `${spentLabel} / ${targetLabel}`;
               const showLabelInside = progressPercent >= 50;
               return (
@@ -1376,7 +1558,7 @@ function formatHours(value: number): string {
   return rounded.toFixed(1);
 }
 
-function formatDateLabel(iso: string): string {
+function formatDateLabel(iso: string | null | undefined): string {
   if (!iso) {
     return "";
   }

@@ -11,6 +11,16 @@ import "@fontsource/material-symbols-outlined/index.css";
 import "./index.css";
 import App from "./App.tsx";
 
+// 开发模式下检查 PWA 配置
+if (import.meta.env.DEV) {
+  import("./utils/pwaCheck").then(({ logPWADiagnostics }) => {
+    // 等待 Service Worker 注册完成后再检查
+    setTimeout(async () => {
+      await logPWADiagnostics();
+    }, 3000);
+  });
+}
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <App />

@@ -11,6 +11,7 @@ import {
   type TagPreferences,
 } from "@/services/tagPreferences";
 import { fetchCurrentUser } from "@/services/api";
+import { handleInstallClick, isPWAInstalled } from "@/utils/pwaInstall";
 
 import "./Settings.css";
 
@@ -54,6 +55,11 @@ const SETTINGS_ITEMS: SettingsItem[] = [
     title: "修改自定义标签",
     subtitleDefault: "管理你专属的创作标签",
   },
+  {
+    id: "install-app",
+    title: "添加到主屏幕",
+    subtitleDefault: "将 Echo 安装为应用",
+  },
 ];
 
 function Settings({
@@ -70,6 +76,7 @@ function Settings({
   const [validationMessage, setValidationMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [tagPreferences, setTagPreferences] = useState<TagPreferences>(getDefaultTagPreferences);
+  const [pwaInstalled, setPwaInstalled] = useState(isPWAInstalled());
   const [userInfo, setUserInfo] = useState<{
     email: string | null;
     dateJoined: string | null;
@@ -144,13 +151,26 @@ function Settings({
         onOpenTagManager();
         return;
       }
+      if (item.id === "install-app") {
+        handleInstallClick()
+          .then(() => {
+            // 检查安装状态
+            setTimeout(() => {
+              setPwaInstalled(isPWAInstalled());
+            }, 500);
+          })
+          .catch((error) => {
+            console.warn("[Echo] Failed to handle install click:", error);
+          });
+        return;
+      }
       if (item.dialog) {
         handleOpenDialog(item.dialog);
         return;
       }
 
       if (typeof window !== "undefined" && typeof window.alert === "function") {
-        window.alert(`“${item.title}” 功能即将上线，敬请期待。`);
+        window.alert(`"${item.title}" 功能即将上线，敬请期待。`);
       } else {
         console.info("[Echo] Settings action requested:", item.id);
       }
@@ -199,9 +219,15 @@ function Settings({
           subtitle,
         };
       }
+      if (item.id === "install-app") {
+        return {
+          ...item,
+          subtitle: pwaInstalled ? "已安装到主屏幕" : item.subtitleDefault,
+        };
+      }
       return { ...item, subtitle: item.subtitleDefault };
     });
-  }, [displayName, signature, tagPreferences]);
+  }, [displayName, signature, tagPreferences, pwaInstalled]);
 
   useEffect(() => {
     const refresh = () => {

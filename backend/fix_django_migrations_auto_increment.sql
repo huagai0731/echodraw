@@ -15,3 +15,5 @@ MODIFY COLUMN `id` INT AUTO_INCREMENT NOT NULL;
 -- AND TABLE_NAME = 'django_migrations'
 -- AND COLUMN_NAME = 'id';
 
+
+

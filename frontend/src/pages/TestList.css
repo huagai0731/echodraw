@@ -223,3 +223,20 @@
   transform: scale(0.95);
 }
 
+.test-list__loading,
+.test-list__error {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1rem;
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.72);
+  text-align: center;
+}
+
+.test-list__error {
+  color: #ff6b6b;
+}
+

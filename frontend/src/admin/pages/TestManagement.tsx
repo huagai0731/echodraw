@@ -301,6 +301,19 @@ function TestManagementPage() {
       // 获取完整的测试数据（包含题目和选项）
       const fullTest = await getTest(test.id);
       
+      // 将维度转换为Draft格式（需要在构建questions之前声明）
+      const dimensionsDraft: DimensionDraft[] = fullTest.dimensions.map((d) => ({
+        id: d.id,
+        code: d.code,
+        name: d.name,
+        endpoint_a_code: d.endpoint_a_code,
+        endpoint_a_name: d.endpoint_a_name,
+        endpoint_b_code: d.endpoint_b_code,
+        endpoint_b_name: d.endpoint_b_name,
+        description: d.description || "",
+        display_order: d.display_order,
+      }));
+      
       // 构建questions数据
       const questions: QuestionDraft[] = fullTest.questions.map((q) => {
         if (fullTest.test_type === "type_1") {
@@ -338,19 +351,6 @@ function TestManagementPage() {
           };
         }
       });
-
-      // 将维度转换为Draft格式
-      const dimensionsDraft: DimensionDraft[] = fullTest.dimensions.map((d) => ({
-        id: d.id,
-        code: d.code,
-        name: d.name,
-        endpoint_a_code: d.endpoint_a_code,
-        endpoint_a_name: d.endpoint_a_name,
-        endpoint_b_code: d.endpoint_b_code,
-        endpoint_b_name: d.endpoint_b_name,
-        description: d.description || "",
-        display_order: d.display_order,
-      }));
 
       setDraft({
         slug: fullTest.slug,

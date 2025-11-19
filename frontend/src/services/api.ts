@@ -52,6 +52,7 @@ const api = axios.create({
     "Content-Type": "application/json",
   },
   withCredentials: true,
+  timeout: 30000, // 30秒超时，适用于大多数请求
 });
 
 if (typeof window !== "undefined") {
@@ -239,6 +240,7 @@ export type CheckInStatus = {
 export type CheckInMutationResponse = CheckInStatus & {
   created: boolean;
   checked_date: string;
+  checked_at?: string; // 完成时间（ISO格式）
 };
 
 export type HomeMessagesResponse = {
@@ -351,13 +353,19 @@ export async function fetchCheckInStatus() {
 type SubmitCheckInOptions = {
   date?: string;
   source?: string;
+  goal_id?: number;
+  task_images?: Record<string, number>; // taskId -> uploadId
+  notes?: string; // 用户备注
 };
 
 export async function submitCheckIn(options: SubmitCheckInOptions = {}) {
   if (!hasAuthToken()) {
     throw createUnauthorizedError();
   }
-  const response = await api.post<CheckInMutationResponse>("/goals/check-in/", options);
+  // 打卡请求使用更长的超时时间，因为可能涉及图片处理等耗时操作
+  const response = await api.post<CheckInMutationResponse>("/goals/check-in/", options, {
+    timeout: 60000, // 60秒超时
+  });
   return response.data;
 }
 
@@ -914,6 +922,25 @@ export async function deleteShortTermGoal(id: number) {
   await api.delete(`/goals/short-term/${id}/`);
 }
 
+export type TaskCompletionRecord = {
+  id: number;
+  title: string;
+  image: string | null;
+  uploaded_at: string;
+};
+
+export type TaskCompletionsResponse = {
+  completions: Record<string, Record<string, TaskCompletionRecord>>;
+  checkin_times: Record<string, string>; // dateKey -> checkedAt (ISO)
+};
+
+export async function fetchShortTermGoalTaskCompletions(goalId: number) {
+  const response = await api.get<TaskCompletionsResponse>(
+    `/goals/short-term/${goalId}/task-completions/`
+  );
+  return response.data;
+}
+
 export async function createUserUpload(input: CreateUserUploadInput) {
   const formData = new FormData();
   if (input.file) {
@@ -939,13 +966,105 @@ export async function deleteUserUpload(id: number) {
   await api.delete(`/uploads/${id}/`);
 }
 
+// 请求重试配置
+const MAX_RETRIES = 2; // 最多重试2次
+const RETRY_DELAY = 1000; // 重试延迟1秒
+
+// 判断HTTP方法是否幂等
+function isIdempotentMethod(method: string | undefined): boolean {
+  if (!method) return false;
+  const upperMethod = method.toUpperCase();
+  // 幂等方法：GET, HEAD, PUT, DELETE, OPTIONS, TRACE
+  // 非幂等方法：POST, PATCH（某些情况下）
+  return ['GET', 'HEAD', 'PUT', 'DELETE', 'OPTIONS', 'TRACE'].includes(upperMethod);
+}
+
+// 判断是否应该重试
+function shouldRetry(error: HttpLikeError, retryCount: number, method?: string): boolean {
+  if (retryCount >= MAX_RETRIES) {
+    return false;
+  }
+  
+  // 只对幂等请求进行重试，防止重复操作
+  if (!isIdempotentMethod(method)) {
+    return false;
+  }
+  
+  const status = error?.response?.status;
+  // 只对网络错误和5xx错误进行重试
+  if (!status) {
+    // 网络错误，可以重试（仅限幂等方法）
+    return true;
+  }
+  
+  // 5xx服务器错误，可以重试（仅限幂等方法）
+  if (status >= 500 && status < 600) {
+    return true;
+  }
+  
+  // 429 Too Many Requests，可以重试（仅限幂等方法，使用指数退避）
+  if (status === 429) {
+    return true;
+  }
+  
+  // 408 Request Timeout，可以重试（仅限幂等方法）
+  if (status === 408) {
+    return true;
+  }
+  
+  return false;
+}
+
+// 请求拦截器：添加重试逻辑
+api.interceptors.request.use(
+  (config) => {
+    // 为每个请求添加重试计数
+    if (!config.metadata) {
+      config.metadata = {};
+    }
+    if (config.metadata.retryCount === undefined) {
+      config.metadata.retryCount = 0;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// 响应拦截器：处理错误和重试
 api.interceptors.response.use(
   (response) => response,
-  (error: HttpLikeError) => {
+  async (error: HttpLikeError) => {
     const status = error?.response?.status;
     if (status === 401) {
       handleUnauthorizedResponse();
+      throw error;
     }
+    
+    // 获取原始请求配置
+    const originalRequest = error.config;
+    
+    // 检查是否应该重试（只对幂等方法重试，确保不会重复提交）
+    if (originalRequest && shouldRetry(error, originalRequest.metadata?.retryCount || 0, originalRequest.method)) {
+      const retryCount = (originalRequest.metadata?.retryCount || 0) + 1;
+      originalRequest.metadata = { ...originalRequest.metadata, retryCount };
+      
+      // 使用指数退避策略，避免重试风暴
+      // 对于429错误，使用更长的延迟时间
+      const status = error?.response?.status;
+      const backoffDelay = status === 429 
+        ? RETRY_DELAY * Math.pow(2, retryCount) * 2  // 429错误使用更长的延迟
+        : RETRY_DELAY * Math.pow(2, retryCount);     // 指数退避
+      
+      await new Promise((resolve) => setTimeout(resolve, Math.min(backoffDelay, 10000))); // 最多等待10秒
+      
+      // 幂等性检查：只对幂等方法重试
+      if (isIdempotentMethod(originalRequest.method)) {
+        return api(originalRequest);
+      }
+    }
+    
     throw error;
   },
 );
@@ -1056,17 +1175,131 @@ export async function getHighFiveCount(): Promise<number> {
 /**
  * 增加击掌按钮点击计数
  */
-export async function incrementHighFiveCount(): Promise<{ count: number; success: boolean; message?: string }> {
-  const response = await api.post<{ count: number; success: boolean; message?: string }>("/high-five/increment/");
+export async function incrementHighFiveCount(): Promise<{ count: number; success: boolean; message?: string; clicked_at?: string }> {
+  const response = await api.post<{ count: number; success: boolean; message?: string; clicked_at?: string }>("/high-five/increment/");
   return response.data;
 }
 
 /**
  * 检查当前用户是否已经点击过
  */
-export async function hasHighFiveClicked(): Promise<boolean> {
-  const response = await api.get<{ has_clicked: boolean }>("/high-five/has-clicked/");
-  return response.data.has_clicked;
+export async function hasHighFiveClicked(): Promise<{ has_clicked: boolean; clicked_at?: string }> {
+  const response = await api.get<{ has_clicked: boolean; clicked_at?: string }>("/high-five/has-clicked/");
+  return response.data;
+}
+
+// ==================== 用户测试 API ====================
+
+export type UserTest = {
+  id: number;
+  slug: string;
+  name: string;
+  description: string;
+  test_type: "type_1" | "type_2";
+  question_count: number;
+  dimensions: Array<{
+    id: number;
+    code: string;
+    name: string;
+    endpoint_a_code: string;
+    endpoint_a_name: string;
+    endpoint_b_code: string;
+    endpoint_b_name: string;
+    description: string;
+  }>;
+};
+
+export type UserTestQuestion = {
+  id: number;
+  question_text: string;
+  dimension_id: number | null;
+  dimension_name: string | null;
+  endpoint_code: string | null;
+  score_config: Record<string, number> | null;
+  option_texts: Array<{
+    id: number;
+    text: string;
+    options: Array<{
+      endpoint_code: string;
+      score_config: {
+        selected?: number;
+        value?: number;
+      };
+    }>;
+  }>;
+};
+
+export type UserTestDetail = {
+  id: number;
+  slug: string;
+  name: string;
+  description: string;
+  test_type: "type_1" | "type_2";
+  questions: UserTestQuestion[];
+  dimensions: Array<{
+    id: number;
+    code: string;
+    name: string;
+    endpoint_a_code: string;
+    endpoint_a_name: string;
+    endpoint_b_code: string;
+    endpoint_b_name: string;
+    description: string;
+  }>;
+};
+
+export type UserTestResult = {
+  id: number;
+  test_id: number;
+  test_name: string;
+  dimension_scores: Record<string, number>;
+  answers: Record<string, unknown>;
+  completed_at: string;
+};
+
+export type SubmitTestAnswerInput = {
+  test_id: number;
+  answers: Record<string, string | number>; // question_id -> answer (option_id for type_2, score for type_1)
+};
+
+/**
+ * 获取可用的测试列表
+ */
+export async function fetchUserTests(): Promise<UserTest[]> {
+  const response = await api.get<UserTest[]>("/tests/");
+  return response.data;
+}
+
+/**
+ * 获取测试详情（包含题目）
+ */
+export async function fetchUserTestDetail(testId: number): Promise<UserTestDetail> {
+  const response = await api.get<UserTestDetail>(`/tests/${testId}/`);
+  return response.data;
+}
+
+/**
+ * 提交测试答案
+ */
+export async function submitTestAnswer(input: SubmitTestAnswerInput): Promise<UserTestResult> {
+  const response = await api.post<UserTestResult>("/tests/submit/", input);
+  return response.data;
+}
+
+/**
+ * 获取用户的测试结果
+ */
+export async function fetchUserTestResult(resultId: number): Promise<UserTestResult> {
+  const response = await api.get<UserTestResult>(`/tests/results/${resultId}/`);
+  return response.data;
+}
+
+/**
+ * 获取用户的所有测试结果列表
+ */
+export async function fetchUserTestResults(): Promise<UserTestResult[]> {
+  const response = await api.get<UserTestResult[]>("/tests/results/");
+  return response.data;
 }
 
 export default api;

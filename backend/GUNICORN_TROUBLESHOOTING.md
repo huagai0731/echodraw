@@ -251,3 +251,5 @@ WorkingDirectory=/path/to/echo/backend
 4. 检查 Django 日志：`tail -f backend/logs/django.log`
 
 
+
+
