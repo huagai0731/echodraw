@@ -879,12 +879,13 @@ function FullMonthlyReport({ open, onClose, targetMonth }: FullMonthlyReportProp
 
     // 计算该时段与其他时段的平均分差
     const allAvgRating = rated.reduce((sum, u) => sum + (u.self_rating || 0), 0) / rated.length;
-    const diff = bestWindow.avgRating - allAvgRating;
+    const window: { start: number; end: number; avgRating: number } = bestWindow;
+    const diff = window.avgRating - allAvgRating;
 
     // 只有当差异大于0.3时才显示
     if (diff < 0.3) return null;
 
-    return { ...bestWindow, diff } as { start: number; end: number; avgRating: number; diff: number };
+    return { ...window, diff };
   }, [monthlyUploads]);
 
   // 个性化洞察：时长临界点（超过多少分钟后评分下降）
@@ -945,9 +946,12 @@ function FullMonthlyReport({ open, onClose, targetMonth }: FullMonthlyReportProp
       }
     });
 
-    const diff = bestMood ? ((bestMood.avgRating - allAvgRating) / allAvgRating) * 100 : 0;
+    if (!bestMood) return null;
 
-    return bestMood ? { ...bestMood, diff } as { mood: string; avgRating: number; diff: number } : null;
+    const mood: { mood: string; avgRating: number } = bestMood;
+    const diff = ((mood.avgRating - allAvgRating) / allAvgRating) * 100;
+
+    return { ...mood, diff };
   }, [monthlyUploads]);
 
   const activeScreen = useMemo(
@@ -1001,16 +1005,6 @@ function FullMonthlyReport({ open, onClose, targetMonth }: FullMonthlyReportProp
       document.body.style.overflow = originalOverflow;
     };
   }, [open]);
-
-  // 格式化月份显示
-  const formatMonthDisplay = useCallback((monthStr: string): string => {
-    const [year, month] = monthStr.split("-").map(Number);
-    const monthNames = [
-      "一月", "二月", "三月", "四月", "五月", "六月",
-      "七月", "八月", "九月", "十月", "十一月", "十二月"
-    ];
-    return `${year}年${monthNames[month - 1]}`;
-  }, []);
 
   // 格式化日期显示
   const formatDateDisplay = useCallback((dateStr: string): string => {
@@ -1497,7 +1491,7 @@ function FullMonthlyReport({ open, onClose, targetMonth }: FullMonthlyReportProp
                             </div>
                           )}
                           {mostUnexpectedUpload && (() => {
-                            const upload = mostUnexpectedUpload;
+                            const upload: UserUploadRecord = mostUnexpectedUpload;
                             return (
                               <div className="milestone__highlight-item">
                                 {upload.image && (
