@@ -614,10 +614,6 @@ function UserApp() {
     setActivePage("test-results");
   }, []);
 
-  const handleOpenMentalStateAssessment = useCallback(() => {
-    setActivePage("mental-state-assessment");
-  }, []);
-
   const handleCloseMentalStateAssessment = useCallback(() => {
     setActivePage("test-list");
   }, []);

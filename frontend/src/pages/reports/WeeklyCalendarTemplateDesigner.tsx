@@ -955,7 +955,7 @@ function drawCellImage(
   width: number,
   height: number,
   image: HTMLImageElement | undefined,
-  data: TemplateViewModel,
+  _data: TemplateViewModel,
 ) {
   context.save();
   const radius = width * 0.03;

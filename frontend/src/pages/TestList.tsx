@@ -3,7 +3,7 @@ import { isAxiosError } from "axios";
 
 import MaterialIcon from "@/components/MaterialIcon";
 import TopNav from "@/components/TopNav";
-import { fetchUserTests, type UserTest } from "@/services/api";
+import { fetchUserTests } from "@/services/api";
 
 import testCardImage1 from "@/assets/test-card-1.jpg";
 import testCardImage2 from "@/assets/test-card-2.jpg";

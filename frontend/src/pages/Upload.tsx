@@ -769,7 +769,9 @@ function Upload({ onClose, onSave }: UploadProps) {
                 }}
                 aria-label="取消选择套图"
               >
-                <MaterialIcon name="close" style={{ fontSize: "1rem" }} />
+                <span style={{ fontSize: "1rem" }}>
+                  <MaterialIcon name="close" />
+                </span>
               </button>
             </div>
           )}

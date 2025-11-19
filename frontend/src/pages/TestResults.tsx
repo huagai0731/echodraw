@@ -88,20 +88,6 @@ function TestResults({ resultId, onBack }: TestResultsProps) {
   const dimensions = test?.dimensions || [];
   const dimensionScores = result.dimension_scores || {};
 
-  // 计算每个维度的得分范围（用于显示百分比）
-  const getDimensionScoreRange = (dimensionCode: string) => {
-    // 这里可以根据实际测试逻辑计算得分范围
-    // 暂时使用固定范围，实际应该从测试配置中获取
-    return { min: -100, max: 100 };
-  };
-
-  // 计算得分百分比
-  const getScorePercentage = (score: number, min: number, max: number) => {
-    const range = max - min;
-    if (range === 0) return 50;
-    return ((score - min) / range) * 100;
-  };
-
   // 格式化日期
   const formatDate = (dateString: string) => {
     try {

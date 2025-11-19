@@ -1,0 +1,48 @@
+# 火山云服务器SSH修复命令集
+# 通过"发送命令"功能执行以下命令
+
+# ============================================
+# 命令1：检查SSH服务状态
+# ============================================
+systemctl status sshd
+
+# ============================================
+# 命令2：检查SSH配置文件内容
+# ============================================
+cat /etc/ssh/sshd_config | grep -E "PasswordAuthentication|PubkeyAuthentication|Port|PermitRootLogin"
+
+# ============================================
+# 命令3：备份SSH配置并修改（启用密码登录）
+# ============================================
+cp /etc/ssh/sshd_config /etc/ssh/sshd_config.backup.$(date +%Y%m%d_%H%M%S) && \
+sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config && \
+sed -i 's/^#*PubkeyAuthentication.*/PubkeyAuthentication yes/' /etc/ssh/sshd_config && \
+sed -i 's/^#*PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config && \
+echo "SSH配置已修改"
+
+# ============================================
+# 命令4：确认修改后的配置
+# ============================================
+cat /etc/ssh/sshd_config | grep -E "PasswordAuthentication|PubkeyAuthentication|PermitRootLogin"
+
+# ============================================
+# 命令5：重启SSH服务
+# ============================================
+systemctl restart sshd && systemctl status sshd
+
+# ============================================
+# 命令6：检查SSH端口监听情况
+# ============================================
+netstat -tlnp | grep ssh || ss -tlnp | grep ssh
+
+# ============================================
+# 命令7：检查防火墙状态（如果使用firewalld）
+# ============================================
+firewall-cmd --list-ports 2>/dev/null || echo "未使用firewalld"
+
+# ============================================
+# 命令8：重置root密码（如果需要）
+# ============================================
+# 注意：这个命令会设置新密码为 Test123456，执行后请立即修改
+# echo 'root:Test123456' | chpasswd && echo "密码已重置为 Test123456"
+

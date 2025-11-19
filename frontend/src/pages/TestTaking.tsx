@@ -79,7 +79,7 @@ function TestTaking({ testId, onBack, onComplete }: TestTakingProps) {
     if (unansweredQuestions.length > 0) {
       // 显示未答题的题号
       const unansweredNumbers = unansweredQuestions
-        .map((q, index) => {
+        .map((q) => {
           const questionIndex = test.questions.findIndex((tq) => tq.id === q.id);
           return questionIndex + 1; // 题号从1开始
         })

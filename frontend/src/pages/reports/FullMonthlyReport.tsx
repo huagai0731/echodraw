@@ -763,14 +763,6 @@ function FullMonthlyReport({ open, onClose, targetMonth }: FullMonthlyReportProp
     return mostUnexpected;
   }, [monthlyUploads]);
 
-  // 筛选本月的高分作品（用于其他页面）
-  const topRatedUploads = useMemo(() => {
-    return monthlyUploads
-      .filter((upload) => upload.self_rating !== null && upload.self_rating > 0)
-      .sort((a, b) => (b.self_rating || 0) - (a.self_rating || 0))
-      .slice(0, 4);
-  }, [monthlyUploads]);
-
   // 创作深度：判断创作类型（碎片型/深度型）
   const creatorDepthType = useMemo(() => {
     if (monthlyUploads.length === 0) return { type: "碎片型", percentage: 0 };
@@ -832,7 +824,6 @@ function FullMonthlyReport({ open, onClose, targetMonth }: FullMonthlyReportProp
     const [year, month] = effectiveTargetMonth.split("-").map(Number);
     const threeMonthsAgo = month <= 3 ? month + 9 : month - 3;
     const threeMonthsAgoYear = month <= 3 ? year - 1 : year;
-    const startMonthStr = `${threeMonthsAgoYear}-${String(threeMonthsAgo).padStart(2, "0")}`;
     
     // 计算近三个月的平均值
     let totalUploads = 0;
@@ -893,7 +884,7 @@ function FullMonthlyReport({ open, onClose, targetMonth }: FullMonthlyReportProp
     // 只有当差异大于0.3时才显示
     if (diff < 0.3) return null;
 
-    return { ...bestWindow, diff };
+    return { ...bestWindow, diff } as { start: number; end: number; avgRating: number; diff: number };
   }, [monthlyUploads]);
 
   // 个性化洞察：时长临界点（超过多少分钟后评分下降）
@@ -956,7 +947,7 @@ function FullMonthlyReport({ open, onClose, targetMonth }: FullMonthlyReportProp
 
     const diff = bestMood ? ((bestMood.avgRating - allAvgRating) / allAvgRating) * 100 : 0;
 
-    return bestMood ? { ...bestMood, diff } : null;
+    return bestMood ? { ...bestMood, diff } as { mood: string; avgRating: number; diff: number } : null;
   }, [monthlyUploads]);
 
   const activeScreen = useMemo(
@@ -1054,7 +1045,6 @@ function FullMonthlyReport({ open, onClose, targetMonth }: FullMonthlyReportProp
   }
 
   const creatorType = getCreatorType();
-  const monthDisplay = effectiveTargetMonth ? formatMonthDisplay(effectiveTargetMonth) : "";
 
   return (
     <div className="full-monthly-report" role="dialog" aria-modal="true" aria-label="完整月报">
@@ -1318,11 +1308,10 @@ function FullMonthlyReport({ open, onClose, targetMonth }: FullMonthlyReportProp
                             <div className="rhythm__weekly-grid-line rhythm__weekly-grid-line--middle-1"></div>
                             <div className="rhythm__weekly-grid-line rhythm__weekly-grid-line--middle-2"></div>
                             <div className="rhythm__weekly-bars-content">
-                              {["一", "二", "三", "四", "五", "六", "日"].map((label, index) => {
+                              {["一", "二", "三", "四", "五", "六", "日"].map((_label, index) => {
                                 const stats = weeklyDistribution[index];
                                 const maxCount = Math.max(...weeklyDistribution.map(w => w.count), 1);
                                 const heightPercent = stats && maxCount > 0 ? (stats.count / maxCount) * 100 : 0;
-                                const isWeekend = index >= 5;
                                 const hasGlow = stats && heightPercent > 70;
                                 return (
                                   <div key={index} className={`rhythm__weekly-bar ${hasGlow ? "rhythm__weekly-bar--glow" : ""}`} style={{ width: "20px", height: `${heightPercent}%` }}>
@@ -1365,7 +1354,7 @@ function FullMonthlyReport({ open, onClose, targetMonth }: FullMonthlyReportProp
                             {/* 顶部柱状图 - 显示前3个标签 */}
                             <div className="tag-snapshot__chart">
                               <div className="tag-snapshot__chart-bars">
-                                {tagStats.slice(0, 3).map((tag, index) => {
+                                {tagStats.slice(0, 3).map((tag, _index) => {
                                   // 找出最高的百分比
                                   const maxPercentage = Math.max(...tagStats.slice(0, 3).map(t => t.percentage));
                                   const isTop = tag.percentage === maxPercentage;
@@ -1507,21 +1496,24 @@ function FullMonthlyReport({ open, onClose, targetMonth }: FullMonthlyReportProp
                               </p>
                             </div>
                           )}
-                          {mostUnexpectedUpload && (
-                            <div className="milestone__highlight-item">
-                              {mostUnexpectedUpload.image && (
-                                <img
-                                  src={replaceLocalhostInUrl(mostUnexpectedUpload.image)}
-                                  alt={mostUnexpectedUpload.title}
-                                  className="milestone__thumbnail"
-                                />
-                              )}
-                              <p className="milestone__duration">{formatDurationShort(mostUnexpectedUpload.duration_minutes || 0)}</p>
-                              <p className="milestone__rating">
-                                {mostUnexpectedUpload.self_rating ? `${mostUnexpectedUpload.self_rating.toFixed(1)} ★` : "未评分"} | {mostUnexpectedUpload.mood_label || "无情绪"}
-                              </p>
-                            </div>
-                          )}
+                          {mostUnexpectedUpload && (() => {
+                            const upload = mostUnexpectedUpload;
+                            return (
+                              <div className="milestone__highlight-item">
+                                {upload.image && (
+                                  <img
+                                    src={replaceLocalhostInUrl(upload.image)}
+                                    alt={upload.title}
+                                    className="milestone__thumbnail"
+                                  />
+                                )}
+                                <p className="milestone__duration">{formatDurationShort(upload.duration_minutes || 0)}</p>
+                                <p className="milestone__rating">
+                                  {upload.self_rating ? `${upload.self_rating.toFixed(1)} ★` : "未评分"} | {upload.mood_label || "无情绪"}
+                                </p>
+                              </div>
+                            );
+                          })()}
                         </div>
                         
                         {mostUnexpectedUpload && (

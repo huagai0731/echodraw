@@ -154,7 +154,7 @@ function LongTermGoalDetails({
           checkpoint={selectedCheckpoint}
           goal={goal}
           onClose={handleCloseArtworkModal}
-          onSelect={(artwork) => {
+          onSelect={(_artwork) => {
             // 注意：onSelectShowcase 只需要 checkpoint，artwork 信息已经在 checkpoint 中
             onSelectShowcase?.(selectedCheckpoint);
             handleCloseArtworkModal();

@@ -108,7 +108,7 @@ function MembershipOptions({ onBack, currentTier, onSelectTier }: MembershipOpti
         .then(([count, result]) => {
           setHighFiveCount(count);
           setHasClicked(result.has_clicked || false);
-          setClickedAt(result.clicked_at || null);
+          setClickedAt("clicked_at" in result ? result.clicked_at || null : null);
         })
         .catch((error) => {
           console.warn("Failed to load high-five data", error);
@@ -420,7 +420,7 @@ function MembershipOptions({ onBack, currentTier, onSelectTier }: MembershipOpti
                         .then(([count, result]) => {
                           setHighFiveCount(count);
                           setHasClicked(result.has_clicked || false);
-                          setClickedAt(result.clicked_at || null);
+                          setClickedAt("clicked_at" in result ? result.clicked_at || null : null);
                         })
                         .catch(() => {});
                     }

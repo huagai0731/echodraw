@@ -1,4 +1,13 @@
-import axios from "axios";
+import axios, { type InternalAxiosRequestConfig } from "axios";
+
+// 扩展 axios 请求配置类型以支持 metadata
+declare module "axios" {
+  export interface InternalAxiosRequestConfig {
+    metadata?: {
+      retryCount?: number;
+    };
+  }
+}
 
 function stripTrailingSlash(url: string) {
   return url.endsWith("/") ? url.slice(0, -1) : url;
@@ -35,6 +44,7 @@ type HttpLikeError = Error & {
   response?: {
     status?: number;
   };
+  config?: InternalAxiosRequestConfig;
 };
 
 function createUnauthorizedError(): HttpLikeError {

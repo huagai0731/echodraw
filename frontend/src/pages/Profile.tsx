@@ -87,12 +87,13 @@ function storePreferences(email: string, displayName: string, signature: string)
     return;
   }
 
+  const payload: StoredPreferences = {
+    email,
+    displayName,
+    signature,
+  };
+
   try {
-    const payload: StoredPreferences = {
-      email,
-      displayName,
-      signature,
-    };
     window.localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify(payload));
   } catch (error) {
     // 处理localStorage配额超出错误

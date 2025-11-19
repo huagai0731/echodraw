@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   fetchGoalsCalendar,
   hasAuthToken,
-  type GoalsCalendarDay,
 } from "@/services/api";
 import { loadStoredArtworks } from "@/services/artworkStorage";
 import {
