@@ -33,12 +33,12 @@ fi
 # 显示当前迁移状态
 echo ""
 echo "当前迁移状态:"
-python manage.py showmigrations core | tail -20
+python3 manage.py showmigrations core | tail -20
 
 # 检查并修复 django_migrations 表的 AUTO_INCREMENT（如果需要）
 echo ""
 echo "检查 django_migrations 表..."
-if python manage.py dbshell -c "SELECT COLUMN_NAME, EXTRA FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'django_migrations' AND COLUMN_NAME = 'id';" 2>/dev/null | grep -q "auto_increment"; then
+if python3 manage.py dbshell -c "SELECT COLUMN_NAME, EXTRA FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'django_migrations' AND COLUMN_NAME = 'id';" 2>/dev/null | grep -q "auto_increment"; then
     echo "✅ django_migrations 表的 AUTO_INCREMENT 已设置"
 else
     echo "⚠️  检测到 django_migrations 表可能需要修复 AUTO_INCREMENT"
@@ -48,12 +48,12 @@ fi
 # 运行迁移
 echo ""
 echo "开始应用迁移..."
-python manage.py migrate --verbosity=2
+python3 manage.py migrate --verbosity=2
 
 # 再次显示迁移状态
 echo ""
 echo "迁移后的状态:"
-python manage.py showmigrations core | tail -20
+python3 manage.py showmigrations core | tail -20
 
 echo ""
 echo "=========================================="
