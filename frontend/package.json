@@ -22,7 +22,6 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.36.0",
-    "@types/localforage": "^0.0.34",
     "@types/node": "^24.6.0",
     "@types/react": "^19.1.16",
     "@types/react-dom": "^19.1.9",
