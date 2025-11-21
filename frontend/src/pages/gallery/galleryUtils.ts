@@ -204,7 +204,8 @@ export function filterArtworks(
 /**
  * 获取套图首图映射（从服务器数据中获取，不依赖本地存储）
  */
-function getCollectionThumbnails(): Record<string, string> {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
+export function getCollectionThumbnails(): Record<string, string> {
   // 套图信息完全依赖服务器，不读取本地存储
   // 首图信息应该从服务器返回的 artwork 数据中获取
   return {};
@@ -229,7 +230,7 @@ export function processCollectionArtworks(artworks: Artwork[]): Artwork[] {
   });
 
   const collectionCovers: Artwork[] = [];
-  collectionMap.forEach((collectionArtworks, collectionId) => {
+  collectionMap.forEach((collectionArtworks, _collectionId) => {
     if (collectionArtworks.length > 0) {
       // 优先选择 collectionIndex === 1 的作品作为首图
       let selectedArtwork = collectionArtworks.find((a) => a.collectionIndex === 1);

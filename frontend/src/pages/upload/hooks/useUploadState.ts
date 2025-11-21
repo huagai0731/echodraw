@@ -19,7 +19,8 @@ export type ValidationError = {
   message: string;
 };
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+// eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
+export const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
 const ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"];
 const MAX_TITLE_LENGTH = 20;

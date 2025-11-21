@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import type { Mood } from "@/services/api";
+import { useCallback, useEffect, useState } from "react";
 import TopNav from "@/components/TopNav";
 import MaterialIcon from "@/components/MaterialIcon";
 import type { Artwork } from "@/types/artwork";
 import { TagManager } from "@/pages/upload/components/TagManager";
+import type { TagOption } from "@/services/tagPreferences";
 import { MoodSelector } from "@/pages/upload/components/MoodSelector";
 import { DurationPicker } from "@/pages/upload/components/DurationPicker";
 import { ScoreSlider as UploadScoreSlider } from "@/pages/upload/components/ScoreSlider";
@@ -41,7 +41,7 @@ export function ArtworkEditPage({ artwork, onBack, onSave }: ArtworkEditPageProp
     return true; // 默认显示，和上传页面一样
   });
   const [isSaving, setIsSaving] = useState(false);
-  const [tagOptions, setTagOptions] = useState<Array<{ id: string | number; name: string }>>([]);
+  const [tagOptions, setTagOptions] = useState<TagOption[]>([]);
   const [tagsLoading, setTagsLoading] = useState(true);
 
   // 加载标签选项并初始化选中的标签
@@ -179,7 +179,7 @@ export function ArtworkEditPage({ artwork, onBack, onSave }: ArtworkEditPageProp
     return 0;
   });
 
-  const { totalMinutes: durationTotalMinutes, formattedDuration, setHours, setMinutes } = useDuration(
+  const { totalMinutes: durationTotalMinutes, formattedDuration } = useDuration(
     durationHours,
     durationMinutes,
     (hours, minutes) => {
@@ -195,14 +195,6 @@ export function ArtworkEditPage({ artwork, onBack, onSave }: ArtworkEditPageProp
     });
   }, []);
 
-  const handleAddTagShortcut = useCallback((tagName: string) => {
-    // 查找标签ID
-    const tag = tagOptions.find((opt) => opt.name === tagName);
-    if (tag) {
-      handleToggleTag(tag.id);
-    }
-  }, [tagOptions, handleToggleTag]);
-
   const handleSave = useCallback(async () => {
     if (isSaving) return;
 
@@ -213,7 +205,7 @@ export function ArtworkEditPage({ artwork, onBack, onSave }: ArtworkEditPageProp
         ...artwork,
         title: title.trim(),
         description: description.trim(),
-        tags: selectedTags,
+        tags: selectedTags.map((tag) => String(tag)),
         rating: showRating && rating > 0 ? String(rating) : "",
         mood: selectedMood ? selectedMood.name : "",
         durationMinutes: durationTotalMinutes,
@@ -278,7 +270,10 @@ export function ArtworkEditPage({ artwork, onBack, onSave }: ArtworkEditPageProp
               selectedTags={selectedTags}
               isLoading={tagsLoading}
               onToggleTag={handleToggleTag}
-              onAddTagShortcut={handleAddTagShortcut}
+              onAddTag={() => {
+                // 这里可以添加创建新标签的逻辑
+                // 暂时留空，因为需要用户输入
+              }}
             />
           </section>
 

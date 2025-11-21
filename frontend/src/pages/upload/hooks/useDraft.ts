@@ -8,7 +8,7 @@ type DraftData = {
   title: string;
   description: string;
   tags: (string | number)[];
-  mood: string;
+  mood: number | null; // 改为 number | null 以匹配 UploadState
   rating: number;
   durationHours: number;
   durationMinutes: number;
@@ -31,7 +31,7 @@ export function useDraft(
   state: UploadState,
   onLoadDraft: (draft: Partial<UploadState>) => void
 ) {
-  const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isSavingRef = useRef(false);
 
   const saveDraft = useCallback(

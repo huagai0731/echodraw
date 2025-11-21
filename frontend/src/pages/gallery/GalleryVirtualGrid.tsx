@@ -132,7 +132,6 @@ export function GalleryVirtualGrid({
         if (typeof window === "undefined" || !containerRef.current) return;
 
         const scrollTop = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
-        const viewportHeight = window.innerHeight;
 
         // 简单估算：假设每张图片平均高度为300px
         const estimatedItemHeight = 300;

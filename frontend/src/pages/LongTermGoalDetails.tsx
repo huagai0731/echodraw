@@ -245,7 +245,7 @@ function CheckpointCard({
   spentMinutes,
   stageStartedAt,
   onSelectShowcase,
-  onEditCompletionNote,
+  onEditCompletionNote: _onEditCompletionNote,
   onAddMessage,
   onViewImage,
 }: CheckpointCardProps) {
@@ -258,7 +258,6 @@ function CheckpointCard({
     checkpoint.status === "completed"
       ? calculateDurationDays(stageStartedAt, checkpoint.reachedAt)
       : null;
-  const completionNote = checkpoint.completionNote?.trim();
 
   if (checkpoint.status === "completed") {
     return (
@@ -398,7 +397,8 @@ function formatHours(value: number): string {
   return rounded.toFixed(1);
 }
 
-function formatMinutes(value: number | null | undefined): string {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
+export function formatMinutes(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) {
     return "0 分钟";
   }
@@ -455,7 +455,8 @@ function formatDays(value: number | null): string {
   return String(value);
 }
 
-function formatCompletionFallback(
+// eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
+export function formatCompletionFallback(
   reachedAt: string | null | undefined,
   thresholdHours: number,
 ): string {

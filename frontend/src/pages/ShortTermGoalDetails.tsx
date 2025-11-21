@@ -370,6 +370,7 @@ function ShortTermGoalDetails({
                 description: "",
                 uploaded_at: taskCompletion.uploaded_at,
                 self_rating: null,
+                mood_id: null,
                 mood_label: "",
                 tags: [],
                 duration_minutes: null,

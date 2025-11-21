@@ -40,9 +40,7 @@ import { clearCache } from "@/utils/apiCache";
 import {
   formatDateKey,
   isUserArtwork,
-  loadStoredArtworks,
   persistStoredArtworks,
-  readFileAsDataUrl,
   USER_ARTWORKS_CHANGED_EVENT,
   USER_ARTWORK_STORAGE_KEY,
 } from "@/services/artworkStorage";
@@ -337,7 +335,7 @@ function UserApp() {
 
   // 使用ref跟踪正在进行的请求，避免重复请求
   const isRefreshingRef = useRef(false);
-  const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const refreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // 使用ref存储最新的mapUploadRecordToArtwork函数，避免依赖变化导致无限循环
   const mapUploadRecordToArtworkRef = useRef(mapUploadRecordToArtwork);
   
@@ -567,7 +565,7 @@ function UserApp() {
     }
 
     // 事件防抖：避免短时间内多次触发导致频繁请求
-    let eventTimeout: NodeJS.Timeout | null = null;
+    let eventTimeout: ReturnType<typeof setTimeout> | null = null;
 
     const handleStorage = (event: StorageEvent) => {
       if (event.key && event.key !== USER_ARTWORK_STORAGE_KEY) {
@@ -1221,12 +1219,10 @@ function UserApp() {
       }
 
       let shouldRemove = true;
-      let deleteError: unknown = null;
 
       try {
         await deleteUserUpload(uploadId);
       } catch (error) {
-        deleteError = error;
         const status = (error as { response?: { status?: number } })?.response?.status;
         
         // 404表示作品已不存在，可以继续删除本地数据

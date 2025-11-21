@@ -53,8 +53,8 @@ function isValidImageUrl(url: string | undefined | null): boolean {
       allowedDomains.push(
         ...allowedDomainsEnv
           .split(",")
-          .map((d) => d.trim())
-          .filter((d) => d.length > 0)
+          .map((d: string) => d.trim())
+          .filter((d: string) => d.length > 0)
       );
     }
     
@@ -188,7 +188,7 @@ function ArtworkDetails({
   artwork,
   collectionArtworks = [],
   onBack,
-  onShare,
+  onShare: _onShare,
   onDelete,
   onEdit,
   onSetAsFeatured,
@@ -196,7 +196,7 @@ function ArtworkDetails({
   onNavigate,
   onUpdateCollectionThumbnail,
   onUpdateCollectionName,
-  onUpdateArtwork,
+  onUpdateArtwork: _onUpdateArtwork,
   hasPrev = false,
   hasNext = false,
 }: ArtworkDetailsProps) {
@@ -813,8 +813,8 @@ function ArtworkDetails({
                   try {
                     const result = onDelete?.(artwork);
                     // 如果返回 Promise，等待完成
-                    if (result instanceof Promise) {
-                      await result;
+                    if (result && typeof (result as Promise<unknown>).then === "function") {
+                      await (result as Promise<unknown>);
                     }
                   } catch (error) {
                     // 如果删除失败，不关闭详情页，让用户看到错误信息

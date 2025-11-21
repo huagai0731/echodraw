@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getActiveUserEmail } from "@/services/authStorage";
 import {
   buildTagOptionsAsync,
@@ -13,7 +13,7 @@ export function useTagManager() {
   const [tagOptions, setTagOptions] = useState<TagOption[]>([]);
   const [selectedTags, setSelectedTags] = useState<(string | number)[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadTags = useCallback(async () => {
     try {

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+// useMemo 未使用，移除导入
 import MaterialIcon from "@/components/MaterialIcon";
 
 type DurationPickerProps = {
@@ -112,7 +112,7 @@ function DurationCard({
 export function DurationPicker({
   hours,
   minutes,
-  totalMinutes,
+  totalMinutes: _totalMinutes,
   formattedDuration,
   incrementalDuration,
   onChange,

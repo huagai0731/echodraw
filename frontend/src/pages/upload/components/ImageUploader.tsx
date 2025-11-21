@@ -12,7 +12,7 @@ export function ImageUploader({
   previewUrl,
   isProcessing,
   onFileSelect,
-  onFileChange,
+  onFileChange: _onFileChange,
 }: ImageUploaderProps) {
   const fileInputId = useId();
   const fileInputRef = useRef<HTMLInputElement | null>(null);

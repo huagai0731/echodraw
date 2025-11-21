@@ -74,7 +74,7 @@ export function UploadPage({ onClose, onSave }: UploadPageProps) {
     isLoading: tagsLoading,
     toggleTag,
     handleAddTagShortcut,
-    setSelectedTags,
+    setSelectedTags: _setSelectedTags,
   } = useTagManager();
 
   const { moodMatrix, selectedMood, isLoading: moodsLoading, selectMood } = useMood(state.mood, (moodId) => {
@@ -84,8 +84,8 @@ export function UploadPage({ onClose, onSave }: UploadPageProps) {
   const {
     totalMinutes: durationTotalMinutes,
     formattedDuration,
-    setHours,
-    setMinutes,
+    setHours: _setHours,
+    setMinutes: _setMinutes,
   } = useDuration(state.durationHours, state.durationMinutes, (hours, minutes) => {
     updateState({ durationHours: hours, durationMinutes: minutes });
   });

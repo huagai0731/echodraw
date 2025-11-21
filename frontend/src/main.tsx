@@ -1,4 +1,4 @@
-import { StrictMode } from "react";
+// StrictMode 已注释，不需要导入
 import { createRoot } from "react-dom/client";
 import "@fontsource/manrope/200.css";
 import "@fontsource/manrope/300.css";
