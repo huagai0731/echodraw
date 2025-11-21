@@ -5,6 +5,7 @@ import type { ShortTermGoal, ShortTermGoalTask, UserUploadRecord } from "@/servi
 import { fetchUserUploads, submitCheckIn, fetchShortTermGoalTaskCompletions, deleteShortTermGoal } from "@/services/api";
 import { replaceLocalhostInUrl } from "@/utils/urlUtils";
 import { parseISODateInShanghai, getTodayInShanghai, formatISODateInShanghai } from "@/utils/dateUtils";
+import { USER_ARTWORKS_CHANGED_EVENT } from "@/services/artworkStorage";
 
 import "./ShortTermGoalDetails.css";
 
@@ -265,29 +266,51 @@ function ShortTermGoalDetails({
     });
   }, [uploadDates]);
 
-  // 加载上传记录（使用 API 缓存）
-  useEffect(() => {
-    let cancelled = false;
-    
-    fetchUserUploads(true) // 使用缓存
+  // 加载上传记录
+  const loadRecentUploads = useCallback((forceRefresh: boolean = false) => {
+    // 打开弹窗时强制刷新，确保获取最新数据
+    fetchUserUploads(true, forceRefresh)
       .then((uploads) => {
-        if (!cancelled) {
-          const sorted = uploads.sort(
-            (a, b) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime()
-          );
-          setRecentUploads(sorted.slice(0, 16));
-        }
+        const sorted = uploads.sort(
+          (a, b) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime()
+        );
+        setRecentUploads(sorted.slice(0, 16));
       })
       .catch((error) => {
-        if (!cancelled) {
-          console.warn("Failed to fetch uploads", error);
-        }
+        console.warn("Failed to fetch uploads", error);
       });
-
-    return () => {
-      cancelled = true;
-    };
   }, []);
+
+  // 初始加载
+  useEffect(() => {
+    loadRecentUploads(false);
+  }, [loadRecentUploads]);
+
+  // 当打开上传弹窗时，强制刷新数据，确保获取最新画作列表
+  useEffect(() => {
+    if (selectedTaskKey) {
+      // 打开弹窗时强制刷新，不使用缓存
+      loadRecentUploads(true);
+    }
+  }, [selectedTaskKey, loadRecentUploads]);
+
+  // 监听画作数据变化事件，当画集页面删除或上传作品时自动刷新
+  useEffect(() => {
+    const handleArtworksChanged = () => {
+      // 如果弹窗已打开，立即刷新数据
+      if (selectedTaskKey) {
+        loadRecentUploads(true);
+      }
+      // 即使弹窗未打开，也刷新数据（为下次打开做准备）
+      // 但使用缓存，避免不必要的请求
+      loadRecentUploads(false);
+    };
+
+    window.addEventListener(USER_ARTWORKS_CHANGED_EVENT, handleArtworksChanged);
+    return () => {
+      window.removeEventListener(USER_ARTWORKS_CHANGED_EVENT, handleArtworksChanged);
+    };
+  }, [selectedTaskKey, loadRecentUploads]);
 
   // 加载已保存的任务图片关联
   const loadTaskCompletions = useCallback(() => {

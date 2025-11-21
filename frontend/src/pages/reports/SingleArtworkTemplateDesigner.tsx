@@ -212,7 +212,7 @@ function SingleArtworkTemplateDesigner({ open, artworks, onClose }: SingleArtwor
       ),
     ).slice(0, MAX_TAG_COUNT);
     setSelectedTags(defaults);
-  }, [selectedArtwork?.id, selectedArtwork]);
+  }, [selectedArtwork?.id]);
 
   useEffect(() => {
     if (!open || !selectedArtwork) {

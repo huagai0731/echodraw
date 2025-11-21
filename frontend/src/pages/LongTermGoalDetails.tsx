@@ -16,6 +16,7 @@ type LongTermGoalDetailsProps = {
   onExport?: () => void;
   onSelectShowcase?: (checkpoint: LongTermGoalCheckpoint) => void;
   onEditCompletionNote?: (checkpoint: LongTermGoalCheckpoint) => void;
+  onAddMessage?: (checkpoint: LongTermGoalCheckpoint) => void;
 };
 
 function LongTermGoalDetails({
@@ -25,18 +26,46 @@ function LongTermGoalDetails({
   onExport,
   onSelectShowcase,
   onEditCompletionNote,
+  onAddMessage,
 }: LongTermGoalDetailsProps) {
   const [selectedCheckpoint, setSelectedCheckpoint] = useState<LongTermGoalCheckpoint | null>(null);
   const [showArtworkModal, setShowArtworkModal] = useState(false);
   const [showImageViewer, setShowImageViewer] = useState(false);
   const [viewingImage, setViewingImage] = useState<string | null>(null);
 
-  const progressPercent = clampPercent((goal.progress?.progressRatio ?? 0) * 100);
+  // 计算进度轴应该到达的位置：到达当前进行中的checkpoint的圆圈
+  const timelineProgressPercent = useMemo(() => {
+    const checkpoints = goal.checkpoints ?? [];
+    if (checkpoints.length === 0) return 0;
+    
+    // 找到当前进行中的checkpoint索引
+    const currentIndex = checkpoints.findIndex(cp => cp.status === "current");
+    
+    if (currentIndex === -1) {
+      // 如果没有进行中的，找到最后一个已完成的
+      let lastCompletedIndex = -1;
+      for (let i = checkpoints.length - 1; i >= 0; i--) {
+        if (checkpoints[i].status === "completed") {
+          lastCompletedIndex = i;
+          break;
+        }
+      }
+      if (lastCompletedIndex === -1) return 0;
+      // 进度到达最后一个已完成的checkpoint的圆圈位置
+      // 每个checkpoint占据 1/n 的空间，圆圈在checkpoint的顶部
+      return clampPercent(((lastCompletedIndex + 1) / checkpoints.length) * 100);
+    }
+    
+    // 进度到达当前进行中的checkpoint的圆圈位置
+    // 每个checkpoint占据 1/n 的空间，圆圈在checkpoint的顶部
+    return clampPercent(((currentIndex + 1) / checkpoints.length) * 100);
+  }, [goal.checkpoints]);
+  
   const timelineStyle = useMemo(() => {
     return {
-      "--timeline-progress": `${progressPercent}%`,
+      "--timeline-progress": `${timelineProgressPercent}%`,
     } as CSSProperties;
-  }, [progressPercent]);
+  }, [timelineProgressPercent]);
 
   const checkpointHours =
     goal.checkpointCount > 0 ? goal.targetHours / goal.checkpointCount : goal.targetHours;
@@ -125,11 +154,21 @@ function LongTermGoalDetails({
                       <TimelineDotContent status={checkpoint.status} />
                     </span>
                     <p className="timeline-status">
-                      {checkpoint.status === "completed"
-                        ? formatDateLabel(checkpoint.reachedAt)
-                        : checkpoint.status === "current"
-                        ? "进行中"
-                        : "即将开始"}
+                      {checkpoint.status === "completed" ? (
+                        <span className="timeline-status__completed">
+                          <span className="timeline-status__hours">
+                            {formatHours(checkpoint.thresholdMinutes / 60)}h
+                          </span>
+                          <span className="timeline-status__separator"> - </span>
+                          <span className="timeline-status__date">
+                            达成于{formatDateLabel(checkpoint.reachedAt)}
+                          </span>
+                        </span>
+                      ) : checkpoint.status === "current" ? (
+                        "进行中"
+                      ) : (
+                        "即将开始"
+                      )}
                     </p>
                   </div>
 
@@ -140,6 +179,7 @@ function LongTermGoalDetails({
                     stageStartedAt={stageStartedAt}
                     onSelectShowcase={handleSelectShowcase}
                     onEditCompletionNote={onEditCompletionNote}
+                    onAddMessage={onAddMessage}
                     onViewImage={handleViewImage}
                   />
                 </div>
@@ -195,6 +235,7 @@ type CheckpointCardProps = {
   stageStartedAt: string | null | undefined;
   onSelectShowcase?: (checkpoint: LongTermGoalCheckpoint) => void;
   onEditCompletionNote?: (checkpoint: LongTermGoalCheckpoint) => void;
+  onAddMessage?: (checkpoint: LongTermGoalCheckpoint) => void;
   onViewImage?: (imageUrl: string) => void;
 };
 
@@ -205,6 +246,7 @@ function CheckpointCard({
   stageStartedAt,
   onSelectShowcase,
   onEditCompletionNote,
+  onAddMessage,
   onViewImage,
 }: CheckpointCardProps) {
   const thresholdHours = checkpoint.thresholdMinutes / 60;
@@ -220,57 +262,60 @@ function CheckpointCard({
 
   if (checkpoint.status === "completed") {
     return (
-      <div className="ticket-card timeline-card timeline-card--completed">
+      <div className="timeline-card timeline-card--current">
         <div className="timeline-card__header">
           <p className="timeline-card__title">{checkpoint.label}</p>
           <span className="timeline-card__meta">
-            历经 {formatDays(stageDurationDays)} 天完成
+            历经 {formatDays(stageDurationDays)} 天
           </span>
         </div>
-        <button
-          type="button"
-          className="timeline-card__note-button"
-          onClick={() => onEditCompletionNote?.(checkpoint)}
-          disabled={!onEditCompletionNote}
-        >
-          <span className="timeline-card__note-text">
-            {completionNote || formatCompletionFallback(checkpoint.reachedAt, thresholdHours)}
+        <p className="timeline-card__subtitle">
+          累计 {formatHours(thresholdHours)} 小时
+        </p>
+        <div className="timeline-card__progress timeline-card__progress--completed">
+          <span className="timeline-card__progress-fill" style={{ width: "100%" }}>
+            <span className="timeline-card__progress-text">100%</span>
           </span>
-          {onEditCompletionNote ? <MaterialIcon name="edit" /> : null}
-        </button>
-        <div className="timeline-card__showcase">
-          {checkpoint.upload?.image ? (
-            <div className="timeline-card__showcase-container">
-              <button
-                type="button"
-                className="timeline-card__showcase-image-wrapper"
-                onClick={() => checkpoint.upload?.image && onViewImage?.(replaceLocalhostInUrl(checkpoint.upload.image!))}
-                aria-label="查看大图"
-              >
-                <img
-                  src={replaceLocalhostInUrl(checkpoint.upload.image)}
-                  alt={checkpoint.upload.title || "创作记录"}
-                  className="timeline-card__showcase-image"
-                />
-              </button>
-              <div className="timeline-card__showcase-info">
-                <p className="timeline-card__showcase-title">
-                  {checkpoint.upload.title || `第 ${checkpoint.index} 次创作`}
-                </p>
-                {onSelectShowcase && (
-                  <button
-                    type="button"
-                    className="timeline-card__showcase-change-btn"
-                    onClick={() => onSelectShowcase(checkpoint)}
-                    aria-label="更换代表作"
-                  >
-                    <MaterialIcon name="edit" />
-                    <span>更换图片</span>
-                  </button>
-                )}
-              </div>
+        </div>
+        {checkpoint.upload?.image ? (
+          <div className="timeline-card__showcase-completed">
+            <button
+              type="button"
+              className="timeline-card__showcase-image-wrapper"
+              onClick={() => checkpoint.upload?.image && onViewImage?.(replaceLocalhostInUrl(checkpoint.upload.image!))}
+              aria-label="查看大图"
+            >
+              <img
+                src={replaceLocalhostInUrl(checkpoint.upload.image)}
+                alt={checkpoint.upload.title || "创作记录"}
+                className="timeline-card__showcase-image"
+              />
+            </button>
+            <div className="timeline-card__showcase-actions">
+              {onSelectShowcase && (
+                <button
+                  type="button"
+                  className="timeline-card__action-btn"
+                  onClick={() => onSelectShowcase(checkpoint)}
+                  aria-label="更换代表作"
+                >
+                  <MaterialIcon name="edit" />
+                </button>
+              )}
+              {onAddMessage && (
+                <button
+                  type="button"
+                  className="timeline-card__action-btn"
+                  onClick={() => onAddMessage(checkpoint)}
+                  aria-label="留下想说的话"
+                >
+                  <MaterialIcon name="chat_bubble_outline" />
+                </button>
+              )}
             </div>
-          ) : (
+          </div>
+        ) : (
+          <div className="timeline-card__showcase-completed">
             <button
               type="button"
               className="timeline-card__showcase-trigger timeline-card__showcase-trigger--empty"
@@ -290,16 +335,17 @@ function CheckpointCard({
                 </span>
               </div>
             </button>
-          )}
-        </div>
-        {checkpoint.upload?.description ? (
-          <p className="timeline-card__note-description">{checkpoint.upload.description}</p>
-        ) : checkpoint.upload?.durationMinutes ? (
-          <p className="timeline-card__note-description">
-            本次创作用时 {formatMinutes(checkpoint.upload.durationMinutes)}。
-          </p>
-        ) : (
-          <p className="timeline-card__placeholder">尚未填写创作说明。</p>
+            {onAddMessage && (
+              <button
+                type="button"
+                className="timeline-card__action-btn"
+                onClick={() => onAddMessage(checkpoint)}
+                aria-label="留下想说的话"
+              >
+                <MaterialIcon name="chat_bubble_outline" />
+              </button>
+            )}
+          </div>
         )}
       </div>
     );
@@ -329,7 +375,7 @@ function CheckpointCard({
       <p className="timeline-card__subtitle">
         目标累计 {formatHours(thresholdHours)} 小时（每阶段约 {formatHours(checkpointHours)} 小时）
       </p>
-      <p className="timeline-card__placeholder">保持节奏，完成前一阶段后自动解锁这里的内容。</p>
+      <p className="timeline-card__placeholder">未来，无限可能。</p>
     </div>
   );
 }
@@ -483,7 +529,10 @@ function ArtworkSelectionModal({
     <div className="artwork-selection-modal" onClick={onClose}>
       <div className="artwork-selection-modal__content" onClick={(e) => e.stopPropagation()}>
         <div className="artwork-selection-modal__header">
-          <h3 className="artwork-selection-modal__title">选择代表作</h3>
+          <div className="artwork-selection-modal__header-content">
+            <h3 className="artwork-selection-modal__title">选择代表作</h3>
+            <p className="artwork-selection-modal__subtitle">请选择该阶段你最喜欢的作品</p>
+          </div>
           <button
             type="button"
             className="artwork-selection-modal__close"

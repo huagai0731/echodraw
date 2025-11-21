@@ -1,5 +1,5 @@
 import axios from "axios";
-import { getCachedData, setCachedData } from "@/utils/apiCache";
+import { getCachedData, setCachedData, clearCache } from "@/utils/apiCache";
 
 function stripTrailingSlash(url: string) {
   return url.endsWith("/") ? url.slice(0, -1) : url;
@@ -35,6 +35,7 @@ function resolveBaseURL() {
 type HttpLikeError = Error & {
   response?: {
     status?: number;
+    headers?: Record<string, string>;
   };
   config?: {
     metadata?: {
@@ -384,7 +385,8 @@ export type UserUploadRecord = {
   description: string;
   uploaded_at: string;
   self_rating: number | null;
-  mood_label: string;
+  mood_id: number | null;
+  mood_label: string; // 保持向后兼容，用于显示
   tags: string[];
   duration_minutes: number | null;
   image: string | null;
@@ -396,19 +398,27 @@ type CreateUserUploadInput = {
   file: File;
   title: string;
   description: string;
-  tags: string[];
-  moodLabel: string;
+  tags: (string | number)[]; // 支持字符串ID和数字ID
+  moodId: number | null; // 使用ID而不是字符串
   selfRating: number;
   durationMinutes: number;
+  collectionId?: string | null; // 套图ID
+  collectionName?: string | null; // 套图名称
+  collectionIndex?: number | null; // 在套图中的序号
 };
 
-export async function fetchUserUploads(useCache: boolean = true) {
+export async function fetchUserUploads(useCache: boolean = true, forceRefresh: boolean = false) {
   if (!hasAuthToken()) {
     return [];
   }
   
+  // 如果强制刷新，清除缓存
+  if (forceRefresh) {
+    clearCache("/uploads/");
+  }
+  
   // 尝试从缓存获取
-  if (useCache) {
+  if (useCache && !forceRefresh) {
     const cached = getCachedData<UserUploadRecord[]>("/uploads/");
     if (cached) {
       return cached;
@@ -964,37 +974,455 @@ export async function fetchShortTermGoalTaskCompletions(goalId: number) {
 }
 
 export async function createUserUpload(input: CreateUserUploadInput) {
-  const formData = new FormData();
-  if (input.file) {
-    formData.append("image", input.file);
+  // 验证文件是否存在
+  if (!input.file) {
+    throw new Error("上传文件不能为空");
   }
-  formData.append("title", input.title.trim());
-  formData.append("description", input.description.trim());
-  formData.append("mood_label", input.moodLabel);
+  
+  // 验证文件类型
+  if (!input.file.type.startsWith("image/")) {
+    throw new Error("只能上传图片文件");
+  }
+  
+  // 验证文件大小（例如：最大10MB）
+  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+  if (input.file.size > MAX_FILE_SIZE) {
+    throw new Error("文件大小不能超过10MB");
+  }
+  
+  const formData = new FormData();
+  formData.append("image", input.file);
+  // 标题和描述是可选的，如果为空则不发送或发送空字符串（后端允许blank=True）
+  const title = input.title.trim();
+  const description = input.description.trim();
+  if (title) {
+    formData.append("title", title);
+  } else {
+    formData.append("title", ""); // 发送空字符串，后端blank=True会接受
+  }
+  if (description) {
+    formData.append("description", description);
+  } else {
+    formData.append("description", ""); // 发送空字符串，后端allow_blank=True会接受
+  }
+  // 传递mood_id而不是mood_label
+  if (input.moodId !== null && input.moodId !== undefined) {
+    formData.append("mood_id", String(input.moodId));
+  }
   formData.append("self_rating", String(input.selfRating));
   formData.append("duration_minutes", String(input.durationMinutes));
+  
+  // 套图相关字段
+  if (input.collectionId) {
+    formData.append("collection_id", input.collectionId);
+  }
+  if (input.collectionName) {
+    formData.append("collection_name", input.collectionName);
+  }
+  if (input.collectionIndex !== null && input.collectionIndex !== undefined) {
+    formData.append("collection_index", String(input.collectionIndex));
+  }
+  
   // 支持标签ID数组（新格式）或标签名称数组（旧格式兼容）
+  let tagIds: number[] = [];
   if (Array.isArray(input.tags) && input.tags.length > 0) {
-    // 检查是否是ID数组（数字）还是名称数组（字符串）
-    const isIdArray = input.tags.every(tag => typeof tag === 'number' || (typeof tag === 'string' && /^\d+$/.test(tag)));
-    if (isIdArray) {
-      formData.append("tag_ids", JSON.stringify(input.tags.map(id => Number(id))));
-    } else {
-      formData.append("tags", JSON.stringify(input.tags));
+    // 将标签转换为数字数组，过滤掉无效值
+    tagIds = input.tags
+      .map(id => {
+        const num = typeof id === 'string' ? Number(id) : id;
+        return Number.isFinite(num) && num > 0 ? num : null;
+      })
+      .filter((id): id is number => id !== null);
+    
+    if (tagIds.length > 0) {
+      // 对于 FormData，使用 JSON 字符串格式，后端会解析
+      formData.append("tag_ids", JSON.stringify(tagIds));
     }
   }
-
+  
+  // 输出上传的所有信息到控制台
+  console.log("=".repeat(60));
+  console.log("[Echo] 上传图片 - 传给后端的信息：");
+  console.log("=".repeat(60));
+  console.log("文件信息:", {
+    fileName: input.file?.name || "未知",
+    fileSize: input.file?.size || 0,
+    fileType: input.file?.type || "未知",
+  });
+  console.log("标题:", input.title || "(空)");
+  console.log("简介:", input.description || "(空)");
+  console.log("Tag IDs (传给后端):", tagIds.length > 0 ? tagIds : "(无)");
+  console.log("创作状态ID:", input.moodId !== null && input.moodId !== undefined ? input.moodId : "(空)");
+  console.log("自评分:", input.selfRating || "(空)");
+  console.log("时长（分钟）:", input.durationMinutes || "(空)");
+  console.log("FormData 内容:");
+  for (const [key, value] of formData.entries()) {
+    if (key === "file") {
+      const file = value as File;
+      console.log(`  ${key}:`, {
+        name: file.name,
+        size: file.size,
+        type: file.type,
+      });
+    } else {
+      console.log(`  ${key}:`, value);
+    }
+  }
+  console.log("=".repeat(60));
+  
   const response = await api.post<UserUploadRecord>("/uploads/", formData, {
     headers: {
       "Content-Type": "multipart/form-data",
     },
+    timeout: 120000, // 上传图片使用更长的超时时间（120秒），适用于大文件上传
   });
+
+  console.log("[Echo] 后端返回的数据:", {
+    id: response.data.id,
+    title: response.data.title,
+    description: response.data.description,
+    tags: response.data.tags,
+    tagsType: Array.isArray(response.data.tags) ? response.data.tags.map(t => typeof t) : typeof response.data.tags,
+    image: response.data.image,
+    uploaded_at: response.data.uploaded_at,
+  });
+  console.log("=".repeat(60));
 
   return response.data;
 }
 
 export async function deleteUserUpload(id: number) {
+  // 验证ID是否有效
+  if (!Number.isFinite(id) || id <= 0) {
+    throw new Error("无效的作品ID");
+  }
+  
   await api.delete(`/uploads/${id}/`);
+}
+
+export type UpdateUserUploadInput = {
+  title?: string;
+  description?: string;
+  tags?: (string | number)[]; // 支持字符串ID和数字ID
+  moodId?: number | null; // 使用ID而不是字符串
+  selfRating?: number;
+  durationMinutes?: number;
+  collectionId?: string | null; // 套图ID
+  collectionName?: string | null; // 套图名称
+  collectionIndex?: number | null; // 在套图中的序号
+};
+
+export async function updateUserUpload(id: number, input: UpdateUserUploadInput) {
+  // 验证ID是否有效
+  if (!Number.isFinite(id) || id <= 0) {
+    throw new Error("无效的作品ID");
+  }
+  
+  const formData = new FormData();
+  
+  // 标题和描述是可选的
+  if (input.title !== undefined) {
+    formData.append("title", input.title.trim());
+  }
+  if (input.description !== undefined) {
+    formData.append("description", input.description.trim());
+  }
+  
+  // 传递mood_id而不是mood_label
+  if (input.moodId !== undefined) {
+    if (input.moodId !== null) {
+      formData.append("mood_id", String(input.moodId));
+    } else {
+      formData.append("mood_id", "");
+    }
+  }
+  
+  if (input.selfRating !== undefined) {
+    formData.append("self_rating", String(input.selfRating));
+  }
+  
+  if (input.durationMinutes !== undefined) {
+    formData.append("duration_minutes", String(input.durationMinutes));
+  }
+  
+  // 套图相关字段
+  if (input.collectionId !== undefined) {
+    formData.append("collection_id", input.collectionId || "");
+  }
+  if (input.collectionName !== undefined) {
+    formData.append("collection_name", input.collectionName || "");
+  }
+  if (input.collectionIndex !== undefined) {
+    formData.append("collection_index", input.collectionIndex !== null ? String(input.collectionIndex) : "");
+  }
+  
+  // 支持标签ID数组
+  if (input.tags !== undefined && Array.isArray(input.tags) && input.tags.length > 0) {
+    const tagIds = input.tags
+      .map(id => {
+        const num = typeof id === 'string' ? Number(id) : id;
+        return Number.isFinite(num) && num > 0 ? num : null;
+      })
+      .filter((id): id is number => id !== null);
+    
+    if (tagIds.length > 0) {
+      formData.append("tag_ids", JSON.stringify(tagIds));
+    } else {
+      formData.append("tag_ids", JSON.stringify([]));
+    }
+  }
+  
+  const response = await api.patch<UserUploadRecord>(`/uploads/${id}/`, formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
+  
+  return response.data;
+}
+
+/**
+ * 更新套图首图（通过批量更新作品实现）
+ * 将选中的作品设置为 collection_index: 1，并调整其他作品的索引
+ */
+export async function updateCollectionThumbnail(
+  collectionId: string,
+  thumbnailArtworkId: string,
+  allArtworks: Array<{ id: string; collectionId?: string | null; collectionIndex?: number | null; collectionName?: string | null }>,
+) {
+  if (!hasAuthToken()) {
+    throw createUnauthorizedError();
+  }
+  
+  // 获取套图内的所有作品
+  const collectionArtworks = allArtworks.filter(
+    (a) => a.collectionId === collectionId
+  );
+  
+  if (collectionArtworks.length === 0) {
+    throw new Error("套图中没有作品");
+  }
+  
+  // 找到要设置为首图的作品
+  const thumbnailArtwork = collectionArtworks.find((a) => a.id === thumbnailArtworkId);
+  if (!thumbnailArtwork) {
+    throw new Error("找不到指定的作品");
+  }
+  
+  // 构建更新列表：将选中的作品设置为索引1，其他作品按原顺序调整
+  const otherArtworks = collectionArtworks.filter((a) => a.id !== thumbnailArtworkId);
+  // 按当前索引排序（如果有的话）
+  otherArtworks.sort((a, b) => {
+    const indexA = a.collectionIndex ?? 0;
+    const indexB = b.collectionIndex ?? 0;
+    return indexA - indexB;
+  });
+  
+  // 批量更新：首图设置为1，其他作品从2开始
+  const updatePromises: Promise<UserUploadRecord>[] = [];
+  
+  // 从 "art-{id}" 格式中提取数字ID
+  const extractNumericId = (artworkId: string): number => {
+    const numericId = artworkId.replace(/^art-/, "");
+    const id = Number.parseInt(numericId, 10);
+    if (!Number.isFinite(id) || id <= 0) {
+      throw new Error(`无效的作品ID: ${artworkId}`);
+    }
+    return id;
+  };
+  
+  // 获取套图名称（从第一个作品获取，所有作品应该共享同一个 collectionName）
+  const firstArtwork = collectionArtworks[0];
+  const collectionName = firstArtwork?.collectionName || null;
+  
+  console.log("[updateCollectionThumbnail] 开始更新套图首图:", {
+    collectionId,
+    thumbnailArtworkId,
+    collectionArtworksCount: collectionArtworks.length,
+    collectionName,
+  });
+  
+  // 更新首图（保留 collectionId 和 collectionName）
+  updatePromises.push(
+    updateUserUpload(extractNumericId(thumbnailArtworkId), {
+      collectionId,
+      collectionName,
+      collectionIndex: 1,
+    })
+  );
+  
+  // 更新其他作品（保留 collectionId 和 collectionName）
+  otherArtworks.forEach((artwork, index) => {
+    updatePromises.push(
+      updateUserUpload(extractNumericId(artwork.id), {
+        collectionId,
+        collectionName,
+        collectionIndex: index + 2,
+      })
+    );
+  });
+  
+  const results = await Promise.all(updatePromises);
+  console.log("[updateCollectionThumbnail] 更新完成，更新了", results.length, "个作品");
+  return { success: true };
+}
+
+/**
+ * 更新套图名称（通过批量更新作品实现）
+ */
+export async function updateCollectionName(
+  collectionId: string,
+  collectionName: string,
+  allArtworks: Array<{ id: string; collectionId?: string | null; collectionIndex?: number | null; collectionName?: string | null; title?: string | null }>,
+) {
+  if (!hasAuthToken()) {
+    throw createUnauthorizedError();
+  }
+  
+  // 获取套图内的所有作品
+  const collectionArtworks = allArtworks.filter(
+    (a) => a.collectionId === collectionId
+  );
+  
+  if (collectionArtworks.length === 0) {
+    throw new Error("套图中没有作品");
+  }
+  
+  // 从 "art-{id}" 格式中提取数字ID
+  const extractNumericId = (artworkId: string): number => {
+    const numericId = artworkId.replace(/^art-/, "");
+    const id = Number.parseInt(numericId, 10);
+    if (!Number.isFinite(id) || id <= 0) {
+      throw new Error(`无效的作品ID: ${artworkId}`);
+    }
+    return id;
+  };
+  
+  // 验证 collectionId（所有作品应该共享同一个 collectionId）
+  const firstArtwork = collectionArtworks[0];
+  if (!firstArtwork) {
+    throw new Error("套图中没有作品");
+  }
+  if (!firstArtwork.collectionId || firstArtwork.collectionId !== collectionId) {
+    throw new Error("作品没有 collectionId 或 collectionId 不匹配");
+  }
+  
+  console.log("[updateCollectionName] 开始更新套图名称:", {
+    collectionId,
+    collectionName,
+    collectionArtworksCount: collectionArtworks.length,
+  });
+  
+  // 批量更新所有作品的 collection_name（保留 collectionId 和 collectionIndex）
+  // 同时需要更新 title：从 title 中移除旧的套图名，添加新的套图名
+  const updatePromises = collectionArtworks.map((artwork) => {
+    const numericId = extractNumericId(artwork.id);
+    
+    // 获取旧的套图名（从第一个作品获取，所有作品应该共享）
+    const oldCollectionName = artwork.collectionName || null;
+    
+    // 更新 title：如果 title 包含旧的套图名，需要替换为新的套图名
+    // title 格式可能是："旧套图名·作品标题" 或 "作品标题"
+    let updatedTitle = artwork.title || "";
+    if (oldCollectionName && updatedTitle) {
+      // 如果 title 以旧套图名开头（格式：旧套图名·作品标题），需要替换
+      const oldPrefix = `${oldCollectionName}·`;
+      if (updatedTitle.startsWith(oldPrefix)) {
+        // 移除旧的套图名前缀
+        updatedTitle = updatedTitle.slice(oldPrefix.length);
+      } else if (updatedTitle === oldCollectionName) {
+        // 如果 title 就是旧的套图名，直接替换
+        updatedTitle = "";
+      }
+      
+      // 添加新的套图名（如果有作品标题）
+      if (updatedTitle.trim()) {
+        updatedTitle = `${collectionName}·${updatedTitle.trim()}`;
+      } else {
+        updatedTitle = collectionName;
+      }
+    } else if (updatedTitle && !updatedTitle.includes(collectionName)) {
+      // 如果 title 不包含新的套图名，添加它
+      updatedTitle = `${collectionName}·${updatedTitle.trim()}`;
+    } else if (!updatedTitle) {
+      // 如果 title 为空，使用套图名
+      updatedTitle = collectionName;
+    }
+    
+    return updateUserUpload(numericId, {
+      collectionId,
+      collectionName,
+      collectionIndex: artwork.collectionIndex ?? null,
+      title: updatedTitle,
+    });
+  });
+  
+  const results = await Promise.all(updatePromises);
+  console.log("[updateCollectionName] 更新完成，更新了", results.length, "个作品");
+  return { success: true };
+}
+
+/**
+ * 更新套图顺序（通过批量更新作品实现）
+ */
+export async function updateCollectionOrder(
+  collectionId: string,
+  artworkIds: string[],
+  allArtworks: Array<{ id: string; collectionId?: string | null; collectionIndex?: number | null; collectionName?: string | null }>,
+) {
+  if (!hasAuthToken()) {
+    throw createUnauthorizedError();
+  }
+  
+  // 验证所有作品都属于同一个套图
+  const collectionArtworks = allArtworks.filter(
+    (a) => a.collectionId === collectionId && artworkIds.includes(a.id)
+  );
+  
+  if (collectionArtworks.length !== artworkIds.length) {
+    throw new Error("部分作品不属于该套图");
+  }
+  
+  // 从 "art-{id}" 格式中提取数字ID
+  const extractNumericId = (artworkId: string): number => {
+    const numericId = artworkId.replace(/^art-/, "");
+    const id = Number.parseInt(numericId, 10);
+    if (!Number.isFinite(id) || id <= 0) {
+      throw new Error(`无效的作品ID: ${artworkId}`);
+    }
+    return id;
+  };
+  
+  // 获取第一个作品的 collectionName（所有作品应该共享）
+  const firstArtwork = collectionArtworks[0];
+  if (!firstArtwork) {
+    throw new Error("套图中没有作品");
+  }
+  if (!firstArtwork.collectionId || firstArtwork.collectionId !== collectionId) {
+    throw new Error("作品没有 collectionId 或 collectionId 不匹配");
+  }
+  const collectionName = firstArtwork.collectionName || null;
+  
+  console.log("[updateCollectionOrder] 开始更新套图顺序:", {
+    collectionId,
+    collectionName,
+    artworkIdsCount: artworkIds.length,
+    artworkIds,
+  });
+  
+  // 批量更新所有作品的 collection_index（保留 collectionId 和 collectionName）
+  const updatePromises = artworkIds.map((artworkId, index) => {
+    const numericId = extractNumericId(artworkId);
+    return updateUserUpload(numericId, {
+      collectionId,
+      collectionName,
+      collectionIndex: index + 1,
+    });
+  });
+  
+  const results = await Promise.all(updatePromises);
+  console.log("[updateCollectionOrder] 更新完成，更新了", results.length, "个作品");
+  return { success: true };
 }
 
 // 请求重试配置
@@ -1094,11 +1522,35 @@ api.interceptors.response.use(
       // 使用指数退避策略，避免重试风暴
       // 对于429错误，使用更长的延迟时间
       const status = error?.response?.status;
-      const backoffDelay = status === 429 
-        ? RETRY_DELAY * Math.pow(2, retryCount) * 2  // 429错误使用更长的延迟
-        : RETRY_DELAY * Math.pow(2, retryCount);     // 指数退避
+      let backoffDelay: number;
       
-      await new Promise((resolve) => setTimeout(resolve, Math.min(backoffDelay, 10000))); // 最多等待10秒
+      if (status === 429) {
+        // 检查响应头中的 Retry-After（秒）
+        const retryAfter = error?.response?.headers?.['retry-after'] || 
+                          error?.response?.headers?.['Retry-After'];
+        if (retryAfter) {
+          // 如果服务器指定了重试时间，使用该时间（转换为毫秒）
+          const retryAfterSeconds = parseInt(String(retryAfter), 10);
+          if (!isNaN(retryAfterSeconds) && retryAfterSeconds > 0) {
+            backoffDelay = retryAfterSeconds * 1000;
+          } else {
+            // 如果 Retry-After 无效，使用指数退避
+            backoffDelay = RETRY_DELAY * Math.pow(2, retryCount) * 5; // 429错误使用更长的延迟（5倍）
+          }
+        } else {
+          // 没有 Retry-After 头，使用指数退避
+          backoffDelay = RETRY_DELAY * Math.pow(2, retryCount) * 5; // 429错误使用更长的延迟（5倍）
+        }
+        // 429错误最多等待30秒
+        backoffDelay = Math.min(backoffDelay, 30000);
+      } else {
+        // 其他错误使用标准指数退避
+        backoffDelay = RETRY_DELAY * Math.pow(2, retryCount);
+        // 其他错误最多等待10秒
+        backoffDelay = Math.min(backoffDelay, 10000);
+      }
+      
+      await new Promise((resolve) => setTimeout(resolve, backoffDelay));
       
       // 幂等性检查：只对幂等方法重试
       if (isIdempotentMethod(originalRequest.method)) {
@@ -1443,6 +1895,48 @@ export async function deleteTag(id: number): Promise<void> {
     throw createUnauthorizedError();
   }
   await api.delete(`/tags/manage/${id}/`);
+}
+
+// ==================== Mood API ====================
+
+export type MoodResponse = {
+  id: number;
+  name: string;
+  display_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Mood = {
+  id: number;
+  name: string;
+  displayOrder: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+function mapMood(data: MoodResponse): Mood {
+  return {
+    id: data.id,
+    name: data.name,
+    displayOrder: data.display_order,
+    isActive: data.is_active,
+    createdAt: data.created_at,
+    updatedAt: data.updated_at,
+  };
+}
+
+/**
+ * 获取所有创作状态
+ */
+export async function fetchMoods(): Promise<Mood[]> {
+  if (!hasAuthToken()) {
+    throw createUnauthorizedError();
+  }
+  const response = await api.get<MoodResponse[]>("/moods/");
+  return response.data.map(mapMood);
 }
 
 function mapTag(tag: TagResponse): Tag {

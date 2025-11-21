@@ -228,11 +228,14 @@ STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 
+# MEDIA_URL 和 MEDIA_ROOT 在启用TOS存储时会被覆盖
+# 如果使用TOS存储，MEDIA_ROOT不会被使用，所有文件都保存到TOS
 MEDIA_URL = "/media/"
-MEDIA_ROOT = BASE_DIR / "media"
+MEDIA_ROOT = BASE_DIR / "media"  # 仅在不使用TOS存储时使用
 
 # Object storage (TOS) configuration
-USE_TOS_STORAGE = os.getenv("DJANGO_USE_TOS_STORAGE", "false").lower() == "true"
+# 如果提供了TOS配置信息（ACCESS_KEY_ID, SECRET_ACCESS_KEY, ENDPOINT_URL, BUCKET），则自动启用TOS存储
+# 这样可以确保无论是本地开发环境还是生产环境，只要配置了TOS就会使用TOS存储
 TOS_ACCESS_KEY_ID = os.getenv("TOS_ACCESS_KEY_ID")
 TOS_SECRET_ACCESS_KEY = os.getenv("TOS_SECRET_ACCESS_KEY")
 TOS_REGION_NAME = os.getenv("TOS_REGION_NAME", "cn-beijing")
@@ -240,6 +243,12 @@ TOS_ENDPOINT_URL = os.getenv("TOS_ENDPOINT_URL")
 TOS_BUCKET = os.getenv("TOS_BUCKET")
 TOS_MEDIA_LOCATION = os.getenv("TOS_MEDIA_LOCATION", "uploads")
 TOS_CUSTOM_DOMAIN = os.getenv("TOS_CUSTOM_DOMAIN", "")
+
+# 自动启用TOS存储：如果设置了USE_TOS_STORAGE为true，或者提供了完整的TOS配置信息
+USE_TOS_STORAGE = (
+    os.getenv("DJANGO_USE_TOS_STORAGE", "false").lower() == "true" or
+    (bool(TOS_ACCESS_KEY_ID) and bool(TOS_SECRET_ACCESS_KEY) and bool(TOS_ENDPOINT_URL) and bool(TOS_BUCKET))
+)
 
 if USE_TOS_STORAGE:
     DEFAULT_FILE_STORAGE = "config.storage.TOSMediaStorage"
@@ -323,14 +332,18 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
-    # API限流配置：防止滥用
-    "DEFAULT_THROTTLE_CLASSES": [
+    # API限流配置：开发环境完全禁用，生产环境启用防止滥用
+    "DEFAULT_THROTTLE_CLASSES": [] if DEBUG else [
         "rest_framework.throttling.AnonRateThrottle",
         "rest_framework.throttling.UserRateThrottle",
+        "rest_framework.throttling.ScopedRateThrottle",  # 添加ScopedRateThrottle以支持自定义限流作用域
     ],
-    "DEFAULT_THROTTLE_RATES": {
+    # API限流配置：开发环境禁用，生产环境保持合理限制
+    "DEFAULT_THROTTLE_RATES": {} if DEBUG else {
         "anon": "100/hour",  # 匿名用户每小时100次请求
-        "user": "1000/hour",  # 认证用户每小时1000次请求
+        # 生产环境：10000次/小时（约166次/分钟）
+        "user": "10000/hour",
+        "uploads_get": "10000/hour",  # 上传列表GET请求
     },
 }
 

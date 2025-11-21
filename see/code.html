@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>EchoDraw - Calendar &amp; Timeline</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200;300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings:
+            'FILL' 0,
+            'wght' 300,
+            'GRAD' 0,
+            'opsz' 24
+        }
+    </style>
+<script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#98DBC6",
+                        "background-light": "#EFEAE7",
+                        "background-dark": "#221B1B",
+                        "card-dark": "#4A3F4A",
+                        "accent-light-blue": "#C5E1E2",
+                        "text-light": "#221B1B",
+                        "text-dark": "#FFFFFF",
+                        "text-muted-dark": "#C5E1E2"
+                    },
+                    fontFamily: {
+                        "display": ["Manrope", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "1rem",
+                        "xl": "1.5rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-display bg-background-light dark:bg-background-dark text-text-light dark:text-text-dark">
+<div class="relative flex h-auto min-h-screen w-full flex-col overflow-x-hidden">
+<!-- Top App Bar -->
+<div class="flex items-center p-4 pb-2 justify-between">
+<div class="flex size-12 shrink-0 items-center justify-start">
+<span class="material-symbols-outlined text-text-dark text-3xl">arrow_back_ios_new</span>
+</div>
+<h2 class="text-text-dark text-lg font-medium leading-tight tracking-wide flex-1 text-center">My Creation Journey</h2>
+<div class="flex w-12 items-center justify-end">
+<button class="flex max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-xl h-12 bg-transparent text-text-dark gap-2 text-base font-bold leading-normal tracking-[0.015em] min-w-0 p-0">
+<span class="material-symbols-outlined text-text-dark text-3xl">search</span>
+</button>
+</div>
+</div>
+<!-- Calendar Picker - Modified for Collapsed View -->
+<div class="flex flex-col gap-0.5 px-4 pt-4">
+<div class="flex items-center p-1 justify-between">
+<button>
+<span class="material-symbols-outlined text-text-dark flex size-10 items-center justify-center text-2xl">chevron_left</span>
+</button>
+<p class="text-text-dark text-base font-medium leading-tight flex-1 text-center tracking-wider">October 2024</p>
+<button>
+<span class="material-symbols-outlined text-text-dark flex size-10 items-center justify-center text-2xl">chevron_right</span>
+</button>
+</div>
+<!-- Collapsed Week View -->
+<div class="grid grid-cols-7">
+<div class="flex flex-col items-center justify-center h-16 w-full">
+<p class="text-text-muted-dark/70 text-xs font-light leading-normal tracking-wider mb-2">M</p>
+<button class="h-10 w-10 text-text-dark/80 text-sm font-light leading-normal relative">
+<div class="flex size-full items-center justify-center rounded-full">23</div>
+</button>
+</div>
+<div class="flex flex-col items-center justify-center h-16 w-full">
+<p class="text-text-muted-dark/70 text-xs font-light leading-normal tracking-wider mb-2">T</p>
+<button class="h-10 w-10 text-text-dark text-sm font-light leading-normal relative">
+<div class="flex size-full items-center justify-center rounded-full">24</div>
+<div class="absolute bottom-1 h-1 w-1 rounded-full bg-primary"></div>
+</button>
+</div>
+<div class="flex flex-col items-center justify-center h-16 w-full">
+<p class="text-text-muted-dark/70 text-xs font-light leading-normal tracking-wider mb-2">W</p>
+<button class="h-10 w-10 text-text-dark text-sm font-light leading-normal relative">
+<div class="flex size-full items-center justify-center rounded-full bg-primary text-background-dark font-medium">25</div>
+</button>
+</div>
+<div class="flex flex-col items-center justify-center h-16 w-full">
+<p class="text-text-muted-dark/70 text-xs font-light leading-normal tracking-wider mb-2">T</p>
+<button class="h-10 w-10 text-text-dark text-sm font-light leading-normal relative">
+<div class="flex size-full items-center justify-center rounded-full">26</div>
+<div class="absolute bottom-1 h-1 w-1 rounded-full bg-primary"></div>
+</button>
+</div>
+<div class="flex flex-col items-center justify-center h-16 w-full">
+<p class="text-text-muted-dark/70 text-xs font-light leading-normal tracking-wider mb-2">F</p>
+<button class="h-10 w-10 text-text-dark text-sm font-light leading-normal relative">
+<div class="flex size-full items-center justify-center rounded-full">27</div>
+</button>
+</div>
+<div class="flex flex-col items-center justify-center h-16 w-full">
+<p class="text-text-muted-dark/70 text-xs font-light leading-normal tracking-wider mb-2">S</p>
+<button class="h-10 w-10 text-text-dark text-sm font-light leading-normal relative">
+<div class="flex size-full items-center justify-center rounded-full">28</div>
+<div class="absolute bottom-1 h-1 w-1 rounded-full bg-primary"></div>
+</button>
+</div>
+<div class="flex flex-col items-center justify-center h-16 w-full">
+<p class="text-text-muted-dark/70 text-xs font-light leading-normal tracking-wider mb-2">S</p>
+<button class="h-10 w-10 text-text-dark text-sm font-light leading-normal relative">
+<div class="flex size-full items-center justify-center rounded-full">29</div>
+</button>
+</div>
+</div>
+<div class="flex justify-center mt-1">
+<button class="text-text-dark/80">
+<span class="material-symbols-outlined">expand_more</span>
+</button>
+</div>
+</div>
+<div class="flex-grow px-4 mt-6">
+<!-- Section Header -->
+<h3 class="text-text-dark text-lg font-medium leading-tight tracking-wide pb-4">Timeline for October 25</h3>
+<!-- Timeline -->
+<div class="grid grid-cols-[auto_1fr] gap-x-4">
+<!-- Timeline Entry 1 -->
+<div class="flex flex-col items-center gap-0">
+<p class="text-text-muted-dark text-sm font-light">09:30</p>
+<div class="w-[1px] bg-card-dark/50 h-6 grow mt-2"></div>
+</div>
+<div class="flex flex-1 flex-col pb-8 -mt-1">
+<div class="bg-card-dark/50 backdrop-blur-lg rounded-xl p-3 flex items-center gap-4">
+<img class="bg-center bg-no-repeat aspect-square bg-cover rounded-md size-14" data-alt="Abstract watercolor sketch with blue and green hues" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAE47gKc6RkBvb_DQpbBD_3nuC7k4hQQFhHQYARKvgsxMbBhXpJZd9ciJCvbrLKdAXL5FXeRCVNocLm-iDzGKCPmA9IiK16lSD0shDU0U0AY5QgXpUUcyR5YNJB3URrLvbrBCCkssSt5M4PxD6UIyvsOghnrQlJlrZukKTkcWYRJs_xAFy30aiXW4K9qwEfsPNB2VPkFUPYQ2kO8jX7IWwknOA032SP1T5k0luqWtOggKhIA9ZTfHksxLjnECQLZ1Xl-TSUgmPjWTaY"/>
+<div class="flex-1">
+<p class="text-text-dark text-base font-normal leading-normal">Morning Sketch</p>
+<p class="text-text-muted-dark text-sm font-light leading-normal">1h 15m - Calm</p>
+</div>
+</div>
+</div>
+<!-- Timeline Entry 2 -->
+<div class="flex flex-col items-center gap-0">
+<p class="text-text-muted-dark text-sm font-light">14:00</p>
+<div class="w-[1px] bg-card-dark/50 h-6 grow mt-2"></div>
+</div>
+<div class="flex flex-1 flex-col pb-8 -mt-1">
+<div class="bg-card-dark/50 backdrop-blur-lg rounded-xl p-3 flex items-center gap-4">
+<img class="bg-center bg-no-repeat aspect-square bg-cover rounded-md size-14" data-alt="Vibrant digital painting of a futuristic cityscape" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA0rHXAyRlxCA2TI7w0ysyfrAC_EI20JJFuhyonWPbUzZFrU1Rry-il5OP5u3SAGpuOIGEYezfO9S-GymvjUya0JCwBvCx-_gj1gniQD-pOF49RWVfIBnxnuEolKAFYXZOjlyfn6Yqdg42wSamP8IUTUtJHlSSjnBcmoOY3tSBSqnn46WjOPdL3agQ4fwOED8YE6jclK_A4BQp7hcHFUBCkxS2dUj6dCDHwEyfFLsUT0zedX-k8KZ_5__YETL4sun1d5XRb16ue7FX_"/>
+<div class="flex-1">
+<p class="text-text-dark text-base font-normal leading-normal">Digital Painting</p>
+<p class="text-text-muted-dark text-sm font-light leading-normal">2h 30m - Focused</p>
+</div>
+</div>
+</div>
+<!-- Timeline Entry 3 -->
+<div class="flex flex-col items-center gap-0 pb-3">
+<p class="text-text-muted-dark text-sm font-light">21:15</p>
+</div>
+<div class="flex flex-1 flex-col -mt-1">
+<div class="bg-card-dark/50 backdrop-blur-lg rounded-xl p-3 flex items-center gap-4">
+<img class="bg-center bg-no-repeat aspect-square bg-cover rounded-md size-14" data-alt="Simple character doodle in a sketchbook" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB8a4Mr_qMAwkgGdE69yh7TO6pxbKf-KWEhmq9OL5kspaBbecXo1ar9kiLGXXeyyi6jsY0GQMztfkn8ohekB91YhaWWfR1d3MHgdZVuohIYi1ke51DUxse-1SX97wbC138wm88nKQoql1NuZPVcX-41R5TGb_kaNnh6Ms0X9B7ee0yr0K4bqukOUMO2WNlirSRhX6dKMaojY5InynS2dHHSsaKJm15nDAMnkFGK6zUbJduGjnZeLYJjznkR8R_tHkACjlvzQ4Pnwi3v"/>
+<div class="flex-1">
+<p class="text-text-dark text-base font-normal leading-normal">Evening Doodle</p>
+<p class="text-text-muted-dark text-sm font-light leading-normal">45m - Relaxed</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Spacer for Bottom Nav -->
+<div class="h-28"></div>
+<!-- Bottom Navigation Bar -->
+<div class="fixed bottom-0 left-0 right-0">
+<div class="flex gap-2 border-t border-card-dark/30 bg-background-dark/80 backdrop-blur-xl px-4 pb-3 pt-2">
+<a class="flex flex-1 flex-col items-center justify-end gap-1 text-text-muted-dark/80" href="#">
+<span class="material-symbols-outlined flex h-8 items-center justify-center text-2xl">home</span>
+<p class="text-xs font-light tracking-wide">Home</p>
+</a>
+<a class="flex flex-1 flex-col items-center justify-end gap-1 rounded-full text-primary" href="#">
+<span class="material-symbols-outlined flex h-8 items-center justify-center text-2xl font-medium">calendar_month</span>
+<p class="text-xs font-medium tracking-wide">Calendar</p>
+</a>
+<a class="flex flex-1 flex-col items-center justify-end gap-1 text-text-muted-dark/80" href="#">
+<span class="material-symbols-outlined flex h-8 items-center justify-center text-2xl">add_circle</span>
+<p class="text-xs font-light tracking-wide">Create</p>
+</a>
+<a class="flex flex-1 flex-col items-center justify-end gap-1 text-text-muted-dark/80" href="#">
+<span class="material-symbols-outlined flex h-8 items-center justify-center text-2xl">flag</span>
+<p class="text-xs font-light tracking-wide">Goals</p>
+</a>
+<a class="flex flex-1 flex-col items-center justify-end gap-1 text-text-muted-dark/80" href="#">
+<span class="material-symbols-outlined flex h-8 items-center justify-center text-2xl">person</span>
+<p class="text-xs font-light tracking-wide">Profile</p>
+</a>
+</div>
+</div>
+</div>
+</body></html>

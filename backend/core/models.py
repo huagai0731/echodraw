@@ -9,6 +9,14 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 
+# 动态导入TOS存储，避免循环导入
+def get_default_storage():
+    """获取默认存储后端"""
+    if getattr(settings, 'USE_TOS_STORAGE', False):
+        from config.storage import TOSMediaStorage
+        return TOSMediaStorage()
+    return None
+
 
 def user_upload_path(instance, filename):
     """
@@ -244,6 +252,37 @@ class Tag(models.Model):
         return f"{self.user.email if self.user else 'Unknown'} - {self.name}"
 
 
+class Mood(models.Model):
+    """
+    创作状态模型：存储预设的16种创作状态。
+    所有状态都是预设的，用户不能创建自定义状态。
+    """
+    name = models.CharField(
+        max_length=64,
+        unique=True,
+        help_text="状态名称，如'灵感爆棚'、'画感全开'等。",
+    )
+    display_order = models.PositiveIntegerField(
+        default=100,
+        help_text="显示顺序，数值越小越靠前。",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="是否启用该状态。",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["is_active", "display_order"]),
+        ]
+        ordering = ["display_order", "name"]
+
+    def __str__(self):
+        return self.name
+
+
 class UserUpload(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -262,10 +301,19 @@ class UserUpload(models.Model):
         validators=[MinValueValidator(0), MaxValueValidator(100)],
         help_text="创作者自评分，范围 0-100。",
     )
+    mood = models.ForeignKey(
+        Mood,
+        on_delete=models.SET_NULL,
+        related_name="uploads",
+        null=True,
+        blank=True,
+        help_text="上传时选择的创作状态。",
+    )
+    # 保留旧的mood_label字段用于数据迁移，迁移完成后可删除
     mood_label = models.CharField(
         max_length=64,
         blank=True,
-        help_text="上传时选择的心情标签。",
+        help_text="[已废弃] 旧版状态存储，仅用于数据迁移。",
     )
     tags = models.ManyToManyField(
         Tag,
@@ -290,6 +338,26 @@ class UserUpload(models.Model):
         blank=True,
         null=True,
         help_text="用户上传的作品图片。",
+        storage=get_default_storage(),  # 使用TOS存储（如果启用）
+    )
+    # 套图相关字段
+    collection_id = models.CharField(
+        max_length=64,
+        blank=True,
+        null=True,
+        db_index=True,
+        help_text="套图ID，相同ID的作品属于同一个套图。",
+    )
+    collection_name = models.CharField(
+        max_length=120,
+        blank=True,
+        null=True,
+        help_text="套图名称，同一套图内的作品共享相同的名称。",
+    )
+    collection_index = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="在套图中的序号，从1开始。",
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -298,6 +366,7 @@ class UserUpload(models.Model):
         indexes = [
             models.Index(fields=["user", "-uploaded_at"]),
             models.Index(fields=["uploaded_at"]),
+            models.Index(fields=["collection_id", "collection_index"]),  # 套图索引优化
         ]
         ordering = ["-uploaded_at"]
 

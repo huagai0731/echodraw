@@ -49,7 +49,9 @@ function sanitizeStoredArtworks(payload: unknown): Artwork[] {
     const id = typeof record.id === "string" ? record.id : "";
     const imageSrc = typeof record.imageSrc === "string" ? record.imageSrc : "";
 
-    if (!id.startsWith("art-") || !imageSrc) {
+    // 修复：即使imageSrc为空字符串，也保留作品（图片无效时会显示占位符）
+    // 只检查id是否有效
+    if (!id.startsWith("art-")) {
       continue;
     }
 
@@ -68,21 +70,43 @@ function sanitizeStoredArtworks(payload: unknown): Artwork[] {
         ? Math.max(record.durationMinutes, 0)
         : parseDurationString(record.duration);
 
+    // 修复：确保date字段有默认值，避免验证失败
+    let dateValue = typeof record.date === "string" && record.date ? record.date : "";
+    if (!dateValue && uploadedDate) {
+      // 如果没有date但有uploadedDate，尝试从uploadedDate生成
+      try {
+        const date = new Date(uploadedDate);
+        if (!Number.isNaN(date.getTime())) {
+          const year = date.getFullYear();
+          const month = (date.getMonth() + 1).toString().padStart(2, "0");
+          const day = date.getDate().toString().padStart(2, "0");
+          dateValue = `${year}年${month}月${day}日`;
+        }
+      } catch {
+        // 忽略日期解析错误
+      }
+    }
+    if (!dateValue) {
+      // 如果还是没有date，使用当前日期作为默认值
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = (now.getMonth() + 1).toString().padStart(2, "0");
+      const day = now.getDate().toString().padStart(2, "0");
+      dateValue = `${year}年${month}月${day}日`;
+    }
+
     const sanitized: Artwork = {
       id,
-      title: typeof record.title === "string" && record.title ? record.title : "Untitled",
-      date: typeof record.date === "string" && record.date ? record.date : "",
+      title: typeof record.title === "string" ? record.title : "",
+      date: dateValue,
       tags: Array.isArray(record.tags)
         ? record.tags.filter(
             (tag): tag is string => typeof tag === "string" && tag.trim().length > 0,
           )
-        : [],
+        : ["新作"], // 如果没有标签，至少提供一个默认标签
       imageSrc,
-      alt: typeof record.alt === "string" && record.alt ? record.alt : "User uploaded artwork",
-      description:
-        typeof record.description === "string" && record.description
-          ? record.description
-          : "尚未添加简介。",
+      alt: typeof record.alt === "string" && record.alt ? record.alt : "作品预览",
+      description: typeof record.description === "string" ? record.description : "",
       duration:
         typeof record.duration === "string" && record.duration ? record.duration : "0m",
       mood: typeof record.mood === "string" && record.mood ? record.mood : "未知",
@@ -161,7 +185,7 @@ export function loadStoredArtworks(): Artwork[] {
   }
 }
 
-export function persistStoredArtworks(artworks: Artwork[]) {
+export function persistStoredArtworks(artworks: Artwork[], silent = false) {
   if (typeof window === "undefined") {
     return;
   }
@@ -176,7 +200,10 @@ export function persistStoredArtworks(artworks: Artwork[]) {
     }
 
     window.localStorage.setItem(USER_ARTWORK_STORAGE_KEY, serialized);
-    window.dispatchEvent(new CustomEvent(USER_ARTWORKS_CHANGED_EVENT));
+    // silent=true 时不触发事件，避免在 refreshUserArtworks 内部调用时造成循环
+    if (!silent) {
+      window.dispatchEvent(new CustomEvent(USER_ARTWORKS_CHANGED_EVENT));
+    }
   } catch (error) {
     console.warn("[Echo] Failed to persist artworks:", error);
   }

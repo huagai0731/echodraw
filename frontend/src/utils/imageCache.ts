@@ -1,5 +1,44 @@
+import localforage from "localforage";
+
 // 全局图片缓存，避免重复加载
 const imageCache = new Map<string, HTMLImageElement>();
+
+// 图片尺寸缓存（使用 localForage）
+const dimensionsStore = localforage.createInstance({
+  name: "gallery-image-dimensions",
+  storeName: "dimensions",
+});
+
+export type ImageDimensions = {
+  width: number;
+  height: number;
+};
+
+/**
+ * 获取缓存的图片尺寸
+ */
+export async function getCachedImageDimensions(artworkId: string): Promise<ImageDimensions | null> {
+  try {
+    const cached = await dimensionsStore.getItem<ImageDimensions>(artworkId);
+    if (cached && typeof cached.width === "number" && typeof cached.height === "number") {
+      return cached;
+    }
+  } catch (error) {
+    console.warn("[ImageCache] Failed to get cached dimensions", error);
+  }
+  return null;
+}
+
+/**
+ * 缓存图片尺寸
+ */
+export async function cacheImageDimensions(artworkId: string, dimensions: ImageDimensions): Promise<void> {
+  try {
+    await dimensionsStore.setItem(artworkId, dimensions);
+  } catch (error) {
+    console.warn("[ImageCache] Failed to cache dimensions", error);
+  }
+}
 
 /**
  * 获取缓存的图片，如果不存在或未加载完成，则加载并缓存
@@ -80,6 +119,7 @@ export async function getOrLoadImages(
 export function clearImageCache(): void {
   imageCache.clear();
 }
+
 
 
 

@@ -22,7 +22,8 @@ if (import.meta.env.DEV) {
 }
 
 createRoot(document.getElementById("root")!).render(
-  <StrictMode>
+  // 暂时禁用 StrictMode，避免开发环境双重渲染导致频繁请求
+  // <StrictMode>
     <App />
-  </StrictMode>,
+  // </StrictMode>,
 );

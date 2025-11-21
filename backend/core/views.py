@@ -95,6 +95,7 @@ from core.models import (
     LoginAttempt,
     LongTermGoal,
     LongTermPlanCopy,
+    Mood,
     Notification,
     ShortTermGoal,
     ShortTermGoalTaskCompletion,
@@ -118,6 +119,7 @@ from core.serializers import (
     NotificationPublicSerializer,
     ShortTermGoalSerializer,
     ShortTermTaskPresetPublicSerializer,
+    MoodSerializer,
     TagSerializer,
     UserTaskPresetPublicSerializer,
     UserTaskPresetSerializer,
@@ -1090,6 +1092,8 @@ class UserUploadListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     pagination_class = None  # 保持前端期望的数组响应，不受全局分页影响
+    # 开发模式下禁用限流，生产模式下使用自定义限流作用域
+    throttle_scope = None if settings.DEBUG else "uploads_get"
 
     def get_queryset(self):
         return (
@@ -1100,6 +1104,7 @@ class UserUploadListCreateView(generics.ListCreateAPIView):
                 "notes",
                 "uploaded_at",
                 "self_rating",
+                "mood",
                 "mood_label",
                 "tags",
                 "duration_minutes",
@@ -1112,7 +1117,84 @@ class UserUploadListCreateView(generics.ListCreateAPIView):
 
     @transaction.atomic
     def perform_create(self, serializer: UserUploadSerializer):
-        upload = serializer.save(user=self.request.user)
+        try:
+            upload = serializer.save(user=self.request.user)
+            # 记录上传成功信息，包括图片URL和存储位置
+            image_url = None
+            storage_backend = None
+            image_exists = False
+            image_name = None
+            
+            if upload.image:
+                image_name = upload.image.name
+                image_url = upload.image.url
+                # 检查存储后端类型
+                if hasattr(upload.image, 'storage'):
+                    storage_backend = type(upload.image.storage).__name__
+                    # 检查文件是否真的存在
+                    try:
+                        image_exists = upload.image.storage.exists(image_name)
+                    except Exception as check_error:
+                        logger.warning(f"Failed to check if image exists: {check_error}")
+                        image_exists = False
+                
+                # 验证文件是否真的保存到TOS（而不是本地）
+                if hasattr(upload.image.storage, 'bucket_name'):
+                    bucket_name = upload.image.storage.bucket_name
+                    logger.info(
+                        f"User upload created - checking TOS storage",
+                        extra={
+                            "user_id": self.request.user.id,
+                            "upload_id": upload.id,
+                            "image_name": image_name,
+                            "image_url": image_url,
+                            "bucket_name": bucket_name,
+                            "storage_backend": storage_backend,
+                            "image_exists": image_exists,
+                        }
+                    )
+                    if not image_exists:
+                        logger.error(
+                            f"User upload created but image file does not exist in TOS!",
+                            extra={
+                                "user_id": self.request.user.id,
+                                "upload_id": upload.id,
+                                "image_name": image_name,
+                                "bucket_name": bucket_name,
+                            }
+                        )
+                else:
+                    # 如果使用本地存储，记录警告
+                    logger.warning(
+                        f"User upload created but file may be saved locally instead of TOS",
+                        extra={
+                            "user_id": self.request.user.id,
+                            "upload_id": upload.id,
+                            "image_name": image_name,
+                            "image_url": image_url,
+                            "storage_backend": storage_backend,
+                            "image_exists": image_exists,
+                        }
+                    )
+            else:
+                logger.info(
+                    f"User upload created successfully (no image)",
+                    extra={
+                        "user_id": self.request.user.id,
+                        "upload_id": upload.id,
+                    }
+                )
+        except Exception as e:
+            # 记录上传失败的错误
+            logger.error(
+                f"Failed to create user upload",
+                extra={
+                    "user_id": self.request.user.id,
+                    "error": str(e),
+                },
+                exc_info=True
+            )
+            raise
 
         # 确保 uploaded_at 有时区信息，如果没有则使用当前时间
         uploaded_at = upload.uploaded_at
@@ -1162,7 +1244,7 @@ class UserUploadListCreateView(generics.ListCreateAPIView):
                 raise
 
 
-class UserUploadDetailView(generics.RetrieveDestroyAPIView):
+class UserUploadDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = UserUploadSerializer
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
@@ -1176,6 +1258,7 @@ class UserUploadDetailView(generics.RetrieveDestroyAPIView):
                 "notes",
                 "uploaded_at",
                 "self_rating",
+                "mood",
                 "mood_label",
                 "tags",
                 "duration_minutes",
@@ -2513,3 +2596,12 @@ def tags_list(request):
         "preset_tags": serializer.data,
         "custom_tags": custom_serializer.data,
     })
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def moods_list(request):
+    """获取所有可用的创作状态"""
+    moods = Mood.objects.filter(is_active=True).order_by("display_order", "name")
+    serializer = MoodSerializer(moods, many=True, context={"request": request})
+    return Response(serializer.data)

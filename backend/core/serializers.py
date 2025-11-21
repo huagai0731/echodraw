@@ -28,6 +28,7 @@ from core.models import (
     HolidayMessage,
     LongTermGoal,
     LongTermPlanCopy,
+    Mood,
     MonthlyReportTemplate,
     Notification,
     ShortTermGoal,
@@ -45,6 +46,21 @@ from core.models import (
     UserUpload,
     UserProfile,
 )
+class MoodSerializer(serializers.ModelSerializer):
+    """创作状态序列化器"""
+    class Meta:
+        model = Mood
+        fields = [
+            "id",
+            "name",
+            "display_order",
+            "is_active",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+
 class TagSerializer(serializers.ModelSerializer):
     """标签序列化器"""
     class Meta:
@@ -138,6 +154,13 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
 
 class UserUploadSerializer(serializers.ModelSerializer):
+    title = serializers.CharField(
+        max_length=120,
+        allow_blank=True,
+        required=False,
+        trim_whitespace=True,
+        help_text="作品标题，用于前端展示。",
+    )
     description = serializers.CharField(
         source="notes",
         allow_blank=True,
@@ -145,6 +168,15 @@ class UserUploadSerializer(serializers.ModelSerializer):
         trim_whitespace=True,
     )
     image = serializers.ImageField(required=False, allow_null=True, use_url=True)
+    # 接收mood ID（用于创建/更新）
+    mood_id = serializers.PrimaryKeyRelatedField(
+        queryset=Mood.objects.filter(is_active=True),
+        source="mood",
+        required=False,
+        allow_null=True,
+    )
+    # 返回mood信息（用于序列化输出）
+    mood_label = serializers.SerializerMethodField()
     # 接收标签ID列表（用于创建/更新）
     tag_ids = serializers.PrimaryKeyRelatedField(
         many=True,
@@ -153,7 +185,8 @@ class UserUploadSerializer(serializers.ModelSerializer):
         required=False,
         allow_empty=True,
     )
-    # 返回标签名称列表（用于序列化输出，保持向后兼容）
+    # 返回标签ID列表（用于序列化输出）
+    # 前端会根据ID转换为名称显示
     tags = serializers.SerializerMethodField()
 
     # 允许的图片MIME类型
@@ -249,19 +282,30 @@ class UserUploadSerializer(serializers.ModelSerializer):
             "description",
             "uploaded_at",
             "self_rating",
+            "mood_id",
             "mood_label",
             "tags",
             "tag_ids",
             "duration_minutes",
             "image",
+            "collection_id",
+            "collection_name",
+            "collection_index",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "uploaded_at", "created_at", "updated_at", "tags"]
+        read_only_fields = ["id", "uploaded_at", "created_at", "updated_at", "tags", "mood_label"]
     
+    def get_mood_label(self, obj):
+        """返回状态名称，兼容旧版API"""
+        if obj.mood:
+            return obj.mood.name
+        # 兼容旧数据：如果mood为空但mood_label有值，返回mood_label
+        return obj.mood_label or ""
+
     def get_tags(self, obj):
-        """返回标签名称列表，保持向后兼容"""
-        return list(obj.tags.values_list("name", flat=True))
+        """返回标签ID列表，前端会根据ID转换为名称显示"""
+        return list(obj.tags.values_list("id", flat=True))
 
     @staticmethod
     def _rename_with_format(original_name: str, fmt: str) -> str:
@@ -344,9 +388,25 @@ class UserUploadSerializer(serializers.ModelSerializer):
                     )
                 
                 # 验证确实是图片格式（PIL会尝试打开文件，如果不是图片会抛出异常）
-                # 纠正 EXIF 方向并统一到 RGB，避免部分模式保存失败
+                # 纠正 EXIF 方向，保留透明度通道（RGBA）或转换为RGB
                 try:
-                    img = ImageOps.exif_transpose(img).convert("RGB")
+                    img = ImageOps.exif_transpose(img)
+                    # 检查是否有透明通道
+                    # RGBA和LA模式直接有透明通道
+                    # P模式（调色板）需要检查是否有透明色
+                    has_transparency = False
+                    if img.mode in ('RGBA', 'LA'):
+                        has_transparency = True
+                    elif img.mode == 'P':
+                        # 调色板模式，检查是否有透明色
+                        has_transparency = img.info.get('transparency') is not None
+                    
+                    # 如果有透明通道，转换为RGBA；否则转换为RGB
+                    if has_transparency:
+                        if img.mode != 'RGBA':
+                            img = img.convert("RGBA")
+                    else:
+                        img = img.convert("RGB")
                 except Exception as convert_error:
                     logger.warning(f"图片格式转换失败: {type(convert_error).__name__}", exc_info=True)
                     raise serializers.ValidationError(GENERIC_ERROR_MESSAGE) from convert_error
@@ -369,7 +429,17 @@ class UserUploadSerializer(serializers.ModelSerializer):
                 try:
                     buffer = BytesIO()
                     # optimize=True 可能提高压缩率；webp 默认使用 4:2:0 色度抽样
-                    img.save(buffer, format=fmt, quality=quality, optimize=True)
+                    # 如果图片有透明通道（RGBA），保存时保留透明度
+                    save_kwargs = {
+                        'format': fmt,
+                        'quality': quality,
+                        'optimize': True
+                    }
+                    # WEBP格式支持透明度，如果图片是RGBA模式，会自动保留透明度
+                    if img.mode == 'RGBA' and fmt.upper() == 'WEBP':
+                        # WEBP格式会自动处理RGBA模式的透明度
+                        pass
+                    img.save(buffer, **save_kwargs)
                     data = buffer.getvalue()
                     
                     # 验证压缩后的数据大小（防止异常大的输出）
@@ -420,9 +490,13 @@ class UserUploadSerializer(serializers.ModelSerializer):
         
         # 处理标签关联（ManyToManyField需要在对象创建后设置）
         tags = validated_data.pop("tags", [])
+        logger.info(f"[UserUploadSerializer] create 方法中获取的 tags: {tags}, 类型: {type(tags)}, 长度: {len(tags) if tags else 0}")
         upload = super().create(validated_data)
         if tags:
+            logger.info(f"[UserUploadSerializer] 设置 tags 到 upload: {[t.id if hasattr(t, 'id') else t for t in tags]}")
             upload.tags.set(tags)
+        else:
+            logger.warning("[UserUploadSerializer] tags 为空，不会设置任何标签")
         return upload
 
     def update(self, instance: UserUpload, validated_data: dict[str, Any]) -> UserUpload:
@@ -489,17 +563,26 @@ class UserUploadSerializer(serializers.ModelSerializer):
 
     def to_internal_value(self, data):
         # 对于包含文件的 multipart/form-data，避免使用 copy() 因为文件对象不能被 pickle
-        # 直接修改 data 的字段，而不是先 copy
+        # 但如果 QueryDict 不可变，需要先使其可变
+        from django.http import QueryDict
+        
+        # 如果 data 是 QueryDict 且不可变，使其可变
+        if isinstance(data, QueryDict) and not data._mutable:
+            data._mutable = True
         
         # 处理 tags/tag_ids：支持旧版字符串数组和新版ID数组
         tags_value = data.get("tags") or data.get("tag_ids")
         if tags_value:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"[UserUploadSerializer] 收到 tag_ids: {tags_value}, 类型: {type(tags_value)}")
+            
             if isinstance(tags_value, str):
                 # 尝试解析JSON字符串
                 parsed = self._parse_tags(tags_value)
+                logger.info(f"[UserUploadSerializer] 解析后的 tags: {parsed}, 类型: {type(parsed)}")
                 if parsed is not None:
-                    # 如果是字符串数组（旧格式），需要转换为Tag对象
-                    # 这里先保存，在validate中处理
+                    # 确保是列表格式，供 validate_tag_ids 处理
                     if hasattr(data, "setlist"):
                         data.setlist("tag_ids", parsed)
                     elif hasattr(data, "__setitem__"):
@@ -540,7 +623,8 @@ class UserUploadSerializer(serializers.ModelSerializer):
         return super().to_internal_value(data)
 
     @staticmethod
-    def _parse_tags(value: str) -> list[str] | None:
+    def _parse_tags(value: str) -> list[int | str] | None:
+        """解析标签值，支持JSON数组（数字或字符串）和逗号分隔的字符串"""
         text = value.strip()
         if not text:
             return []
@@ -551,12 +635,19 @@ class UserUploadSerializer(serializers.ModelSerializer):
             parsed = [item.strip() for item in text.split(",") if item.strip()]
 
         if isinstance(parsed, list):
-            result: list[str] = []
+            result: list[int | str] = []
             for item in parsed:
-                if isinstance(item, str):
+                if isinstance(item, (int, float)):
+                    # 数字ID，直接返回
+                    result.append(int(item))
+                elif isinstance(item, str):
                     stripped = item.strip()
                     if stripped:
-                        result.append(stripped)
+                        # 如果是数字字符串，转换为int；否则保留为字符串（标签名称）
+                        if stripped.isdigit():
+                            result.append(int(stripped))
+                        else:
+                            result.append(stripped)
             return result
         return []
 
@@ -567,7 +658,9 @@ class UserUploadSerializer(serializers.ModelSerializer):
 
     def validate_tag_ids(self, value):
         """验证标签ID列表，如果是字符串数组则转换为Tag对象"""
+        logger.info(f"[UserUploadSerializer] validate_tag_ids 收到值: {value}, 类型: {type(value)}")
         if not value:
+            logger.info("[UserUploadSerializer] validate_tag_ids 返回空列表")
             return []
         
         request = self.context.get("request")
@@ -575,6 +668,7 @@ class UserUploadSerializer(serializers.ModelSerializer):
         
         tag_objects = []
         for item in value:
+            logger.info(f"[UserUploadSerializer] validate_tag_ids 处理项: {item}, 类型: {type(item)}")
             if isinstance(item, Tag):
                 # 已经是Tag对象
                 tag_objects.append(item)
@@ -583,7 +677,9 @@ class UserUploadSerializer(serializers.ModelSerializer):
                 try:
                     tag = Tag.objects.get(pk=int(item))
                     tag_objects.append(tag)
+                    logger.info(f"[UserUploadSerializer] validate_tag_ids 找到Tag: {tag.id} - {tag.name}")
                 except Tag.DoesNotExist:
+                    logger.error(f"[UserUploadSerializer] validate_tag_ids Tag ID {item} 不存在")
                     raise serializers.ValidationError(f"标签ID {item} 不存在。")
             elif isinstance(item, str):
                 # 是标签名称（旧格式兼容），需要查找或创建Tag
@@ -1128,7 +1224,7 @@ class LongTermGoalSerializer(serializers.ModelSerializer):
 
             checkpoint_payload = {
                 "index": index + 1,
-                "label": f"Checkpoint {index + 1:02d}",
+                "label": f"CheckPoint {index + 1:02d}",
                 "status": status,
                 "targetHours": round(threshold_minutes / 60, 2),
                 "thresholdMinutes": threshold_minutes,
@@ -1185,7 +1281,7 @@ class LongTermGoalSerializer(serializers.ModelSerializer):
             "uploadedDate": localized.date().isoformat(),
             "durationMinutes": upload.duration_minutes,
             "selfRating": upload.self_rating,
-            "moodLabel": upload.mood_label,
+            "moodLabel": upload.mood.name if upload.mood else (upload.mood_label or ""),
             "tags": list(upload.tags.values_list("name", flat=True)),
             "image": image_url,
         }

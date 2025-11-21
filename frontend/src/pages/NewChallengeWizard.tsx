@@ -86,8 +86,88 @@ const PLAN_TYPES: Array<{
   },
 ];
 
-// 注意：任务库数据完全由后端 API 提供，前端不再硬编码 fallback 数据
-// 如果后端 API 失败，会显示明确的错误提示，而不是使用过时的硬编码数据
+const FALLBACK_TASK_CATEGORIES: TaskCategory[] = [
+  { id: "sketch", name: "速写" },
+  { id: "color", name: "色彩" },
+  { id: "inspiration", name: "灵感" },
+  { id: "study", name: "学习" },
+  { id: MY_CATEGORY_ID, name: "我的" },
+];
+
+const FALLBACK_TASK_LIBRARY: TaskItem[] = [
+  {
+    id: "sketch-dynamic",
+    categoryId: "sketch",
+    title: "人物动态",
+    subtitle: "练习快速捕捉人体姿态",
+    metadata: {},
+    origin: "global",
+  },
+  {
+    id: "sketch-gesture",
+    categoryId: "sketch",
+    title: "姿势速写",
+    subtitle: "5 分钟快速姿势练习",
+    metadata: {},
+    origin: "global",
+  },
+  {
+    id: "sketch-comp",
+    categoryId: "sketch",
+    title: "构图重构",
+    subtitle: "重绘经典作品的构图框架",
+    metadata: {},
+    origin: "global",
+  },
+  {
+    id: "color-complementary",
+    categoryId: "color",
+    title: "互补色研究",
+    subtitle: "高饱和度颜色搭配实验",
+    metadata: {},
+    origin: "global",
+  },
+  {
+    id: "color-light",
+    categoryId: "color",
+    title: "光影配色",
+    subtitle: "模拟不同光源下的色温变化",
+    metadata: {},
+    origin: "global",
+  },
+  {
+    id: "inspiration-board",
+    categoryId: "inspiration",
+    title: "灵感墙整理",
+    subtitle: "收集 5 个钢笔画参考并点评",
+    metadata: {},
+    origin: "global",
+  },
+  {
+    id: "inspiration-writing",
+    categoryId: "inspiration",
+    title: "创作意图记录",
+    subtitle: "写下明日创作的 3 个关键词",
+    metadata: {},
+    origin: "global",
+  },
+  {
+    id: "study-perspective",
+    categoryId: "study",
+    title: "场景透视",
+    subtitle: "一点与两点透视法练习",
+    metadata: {},
+    origin: "global",
+  },
+  {
+    id: "study-anatomy",
+    categoryId: "study",
+    title: "解剖结构",
+    subtitle: "分析肩颈肌群的结构关系",
+    metadata: {},
+    origin: "global",
+  },
+];
 
 const STEPS: StepKey[] = ["duration", "type", "tasks", "confirm"];
 const DEFAULT_PLAN_NAME = "我的短期挑战";
@@ -97,16 +177,16 @@ function NewChallengeWizard({ onClose, onSaved }: NewChallengeWizardProps) {
   const [durationIndex, setDurationIndex] = useState(0);
   const [planType, setPlanType] = useState<PlanType>("different");
   const [planName, setPlanName] = useState(DEFAULT_PLAN_NAME);
-  const [taskCategories, setTaskCategories] = useState<TaskCategory[]>([]);
+  const [taskCategories, setTaskCategories] = useState<TaskCategory[]>(FALLBACK_TASK_CATEGORIES);
   const [customPresetState, setCustomPresetState] = useState<CustomPresetState>({
     creating: false,
     deletingId: null,
     error: null,
   });
-  const [taskLibrary, setTaskLibrary] = useState<TaskItem[]>([]);
-  const [loadingError, setLoadingError] = useState<string | null>(null);
-  const [isLoadingPresets, setIsLoadingPresets] = useState(true);
-  const [selectedCategory, setSelectedCategory] = useState<string>("");
+  const [taskLibrary, setTaskLibrary] = useState<TaskItem[]>(FALLBACK_TASK_LIBRARY);
+  const [selectedCategory, setSelectedCategory] = useState<string>(
+    FALLBACK_TASK_CATEGORIES[0]?.id ?? "",
+  );
   const [selectedDay, setSelectedDay] = useState(0);
   const [selectedTasks, setSelectedTasks] = useState<Record<number, SelectedTask[]>>({});
   const [hasCustomizedTasks, setHasCustomizedTasks] = useState(false);
@@ -141,10 +221,9 @@ function NewChallengeWizard({ onClose, onSaved }: NewChallengeWizardProps) {
     };
   }, []);
 
-  const loadPresets = useCallback(async () => {
-    setIsLoadingPresets(true);
-    setLoadingError(null);
-    
+  useEffect(() => {
+    let mounted = true;
+
     const mapPresetToTaskItem = (preset: ShortTermTaskPreset): TaskItem => ({
       id: preset.code,
       categoryId: preset.category || MY_CATEGORY_ID,
@@ -167,7 +246,10 @@ function NewChallengeWizard({ onClose, onSaved }: NewChallengeWizardProps) {
         }))
         .filter((category) => category.id && category.name);
 
-      // 不再使用 fallback，如果后端数据为空，返回空数组
+      if (normalizedProvided.length === 0 && tasks.length === 0) {
+        return FALLBACK_TASK_CATEGORIES;
+      }
+
       const categoryMap = new Map<string, string>();
       normalizedProvided.forEach((category) => {
         categoryMap.set(category.id, category.name);
@@ -182,11 +264,8 @@ function NewChallengeWizard({ onClose, onSaved }: NewChallengeWizardProps) {
         }
       });
 
-      // 确保"我的"分类存在（如果用户有自定义任务）
-      if (tasks.some((task) => task.categoryId === MY_CATEGORY_ID)) {
-        if (!categoryMap.has(MY_CATEGORY_ID)) {
-          categoryMap.set(MY_CATEGORY_ID, MY_CATEGORY_ID);
-        }
+      if (!categoryMap.has(MY_CATEGORY_ID)) {
+        categoryMap.set(MY_CATEGORY_ID, MY_CATEGORY_ID);
       }
 
       return Array.from(categoryMap.entries()).map(([id, name]) => ({
@@ -194,50 +273,35 @@ function NewChallengeWizard({ onClose, onSaved }: NewChallengeWizardProps) {
         name,
       }));
     };
-    
-    try {
-      const bundle = await fetchShortTermTaskPresets();
-      
-      // 如果后端返回的数据为空，显示警告但不使用 fallback
-      if (!bundle.tasks || bundle.tasks.length === 0) {
-        setLoadingError("后端未配置任务预设，请先在后台管理中配置任务预设。");
-        setTaskLibrary([]);
-        setTaskCategories([]);
-        setIsLoadingPresets(false);
-        return;
-      }
-      
-      const tasks = bundle.tasks.map(mapPresetToTaskItem);
-      const categories = ensureCategories(bundle, tasks);
-      setTaskLibrary(tasks);
-      setTaskCategories(categories);
-      
-      // 设置默认选中的分类
-      setSelectedCategory((prev) => {
-        if (categories.length > 0 && !prev) {
-          return categories[0].id;
-        }
-        return prev;
-      });
-    } catch (error) {
-      console.error("[Echo] Failed to load short-term task presets from backend:", error);
-      
-      // 显示明确的错误提示，而不是使用过时的硬编码数据
-      const errorMessage =
-        error instanceof Error
-          ? `加载任务预设失败：${error.message}`
-          : "加载任务预设失败，请检查网络连接或稍后重试。";
-      setLoadingError(errorMessage);
-      setTaskLibrary([]);
-      setTaskCategories([]);
-    } finally {
-      setIsLoadingPresets(false);
-    }
-  }, []);
 
-  useEffect(() => {
+    const loadPresets = async () => {
+      try {
+        const bundle = await fetchShortTermTaskPresets();
+        if (!mounted) {
+          return;
+        }
+        const tasks = bundle.tasks.length
+          ? bundle.tasks.map(mapPresetToTaskItem)
+          : FALLBACK_TASK_LIBRARY;
+        const categories = ensureCategories(bundle, tasks);
+        setTaskLibrary(tasks);
+        setTaskCategories(categories);
+      } catch (error) {
+        console.warn("[Echo] Failed to load short-term task presets from backend:", error);
+        if (!mounted) {
+          return;
+        }
+        setTaskLibrary(FALLBACK_TASK_LIBRARY);
+        setTaskCategories(FALLBACK_TASK_CATEGORIES);
+      }
+    };
+
     void loadPresets();
-  }, [loadPresets]);
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (taskCategories.length === 0) {
@@ -670,50 +734,28 @@ function NewChallengeWizard({ onClose, onSaved }: NewChallengeWizardProps) {
           )}
 
           {step === "tasks" && (
-            <>
-              {isLoadingPresets ? (
-                <div className="wizard-loading">
-                  <p>正在加载任务预设...</p>
-                </div>
-              ) : loadingError ? (
-                <div className="wizard-error wizard-error--block">
-                  <p>{loadingError}</p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLoadingError(null);
-                      void loadPresets();
-                    }}
-                    className="wizard-error__retry"
-                  >
-                    重试
-                  </button>
-                </div>
-              ) : (
-                <TasksStep
-                  planType={planType}
-                  planName={planName}
-                  onChangePlanName={setPlanName}
-                  dayLabels={dayLabels}
-                  selectedDay={selectedDay}
-                  onSelectDay={setSelectedDay}
-                  categories={taskCategories}
-                  selectedCategory={selectedCategory}
-                  onSelectCategory={setSelectedCategory}
-                  availableTasks={availableTasks}
-                  selectedTasks={tasksForCurrentDay}
-                  onAddTask={handleAddTask}
-                  onRemoveTask={handleRemoveTask}
-                  onDecrementTask={handleDecrementTask}
-                  onUpdateTask={handleUpdateTask}
-                  customPresetState={customPresetState}
-                  onCreateCustomPreset={handleCreateCustomPreset}
-                  onDeleteCustomPreset={handleDeleteCustomPreset}
-                  onResetCustomPresetError={resetCustomPresetError}
-                  showDaySelector={planType !== "same"}
-                />
-              )}
-            </>
+            <TasksStep
+              planType={planType}
+              planName={planName}
+              onChangePlanName={setPlanName}
+              dayLabels={dayLabels}
+              selectedDay={selectedDay}
+              onSelectDay={setSelectedDay}
+              categories={taskCategories}
+              selectedCategory={selectedCategory}
+              onSelectCategory={setSelectedCategory}
+              availableTasks={availableTasks}
+              selectedTasks={tasksForCurrentDay}
+              onAddTask={handleAddTask}
+              onRemoveTask={handleRemoveTask}
+              onDecrementTask={handleDecrementTask}
+              onUpdateTask={handleUpdateTask}
+              customPresetState={customPresetState}
+              onCreateCustomPreset={handleCreateCustomPreset}
+              onDeleteCustomPreset={handleDeleteCustomPreset}
+              onResetCustomPresetError={resetCustomPresetError}
+              showDaySelector={planType !== "same"}
+            />
           )}
 
           {step === "confirm" && (

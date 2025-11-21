@@ -4,7 +4,6 @@ import MaterialIcon from "@/components/MaterialIcon";
 import TopNav from "@/components/TopNav";
 import type { Artwork } from "@/types/artwork";
 import FourArtworkTemplateDesigner from "@/pages/reports/FourArtworkTemplateDesigner";
-import SingleArtworkTemplateDesigner from "@/pages/reports/SingleArtworkTemplateDesigner";
 import FullMonthlyReport from "@/pages/reports/FullMonthlyReport";
 import Calendar28DayTemplateDesigner from "@/pages/reports/28DayCalendarTemplateDesigner";
 import WeeklyCalendarTemplateDesigner from "@/pages/reports/WeeklyCalendarTemplateDesigner";
@@ -98,7 +97,6 @@ const TEMPLATE_GROUPS: TemplateGroup[] = [
     id: "visual-export",
     title: "图片导出",
     items: [
-      { id: "single-artwork", icon: "image", label: "单图导出", action: "single" },
       { id: "quad-artwork", icon: "grid_view", label: "四图导出", action: "quad" },
     ],
   },
@@ -131,7 +129,6 @@ type ReportsProps = {
 function Reports({ artworks = [], onOpenTestResult }: ReportsProps) {
   const [activeTab, setActiveTab] = useState<TabKey>("reports");
   const [activeFilter, setActiveFilter] = useState<FilterKey>("周报");
-  const [singleTemplateOpen, setSingleTemplateOpen] = useState(false);
   const [quadTemplateOpen, setQuadTemplateOpen] = useState(false);
   const [fullMonthlyReportOpen, setFullMonthlyReportOpen] = useState(false);
   const [calendar28DayOpen, setCalendar28DayOpen] = useState(false);
@@ -139,13 +136,9 @@ function Reports({ artworks = [], onOpenTestResult }: ReportsProps) {
   const [testResults, setTestResults] = useState<UserTestResult[]>([]);
   const [testResultsLoading, setTestResultsLoading] = useState(false);
   const isTemplatesTab = activeTab === "templates";
-  const isTemplateExperience = isTemplatesTab || singleTemplateOpen || quadTemplateOpen || weeklyCalendarOpen;
-  const showTemplateBack = singleTemplateOpen || quadTemplateOpen || weeklyCalendarOpen;
+  const isTemplateExperience = isTemplatesTab || quadTemplateOpen || weeklyCalendarOpen;
+  const showTemplateBack = quadTemplateOpen || weeklyCalendarOpen;
   const handleTemplateBack = useCallback(() => {
-    if (singleTemplateOpen) {
-      setSingleTemplateOpen(false);
-      return;
-    }
     if (quadTemplateOpen) {
       setQuadTemplateOpen(false);
       return;
@@ -153,13 +146,9 @@ function Reports({ artworks = [], onOpenTestResult }: ReportsProps) {
     if (weeklyCalendarOpen) {
       setWeeklyCalendarOpen(false);
     }
-  }, [quadTemplateOpen, singleTemplateOpen, weeklyCalendarOpen]);
+  }, [quadTemplateOpen, weeklyCalendarOpen]);
   const handleTemplateAction = useCallback(
     (action: TemplateAction) => {
-      if (action === "single") {
-        setSingleTemplateOpen(true);
-        return;
-      }
       if (action === "quad") {
         setQuadTemplateOpen(true);
         return;
@@ -387,11 +376,6 @@ function Reports({ artworks = [], onOpenTestResult }: ReportsProps) {
         )}
       </main>
 
-      <SingleArtworkTemplateDesigner
-        open={singleTemplateOpen}
-        artworks={artworks}
-        onClose={() => setSingleTemplateOpen(false)}
-      />
       <FourArtworkTemplateDesigner
         open={quadTemplateOpen}
         artworks={artworks}

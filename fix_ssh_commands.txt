@@ -47,3 +47,4 @@ firewall-cmd --list-ports 2>/dev/null || echo "未使用firewalld"
 # echo 'root:Test123456' | chpasswd && echo "密码已重置为 Test123456"
 
 
+

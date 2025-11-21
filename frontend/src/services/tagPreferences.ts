@@ -204,20 +204,30 @@ export function saveTagPreferences(email: string | null, preferences: TagPrefere
 
 export async function buildTagOptionsAsync(preferences: TagPreferences): Promise<TagOption[]> {
   // 从后端获取标签
-  const { customTags } = await loadTagsFromAPI();
+  const { presetTags, customTags } = await loadTagsFromAPI();
   
   const hiddenPresetSet = new Set(preferences.hiddenPresetTagIds);
   const hiddenCustomSet = new Set(preferences.hiddenCustomTagIds);
 
-  // 构建预设标签选项（使用PRESET_TAGS作为源，但名称从后端获取）
-  const presetOptions: TagOption[] = PRESET_TAGS.map((preset) => {
-    return {
-      id: preset.id, // 使用PRESET_TAGS的ID（字符串）
-      name: preset.name,
-      isCustom: false,
-      defaultActive: preset.defaultActive && !hiddenPresetSet.has(preset.id),
-    };
-  }).filter((item) => !hiddenPresetSet.has(item.id));
+  // 构建预设标签选项（使用后端返回的数字ID，而不是PRESET_TAGS的字符串ID）
+  // 通过名称匹配PRESET_TAGS和后端返回的预设标签
+  const presetOptions: TagOption[] = presetTags
+    .filter((tag) => {
+      // 通过名称匹配找到对应的PRESET_TAGS项
+      const preset = PRESET_TAGS.find((p) => p.name === tag.name);
+      if (!preset) return false;
+      // 检查是否被隐藏（使用PRESET_TAGS的字符串ID检查）
+      return !hiddenPresetSet.has(preset.id);
+    })
+    .map((tag) => {
+      const preset = PRESET_TAGS.find((p) => p.name === tag.name);
+      return {
+        id: tag.id, // 使用后端返回的数字ID
+        name: tag.name,
+        isCustom: false,
+        defaultActive: preset ? preset.defaultActive && !hiddenPresetSet.has(preset.id) : false,
+      };
+    });
 
   // 构建自定义标签选项（从后端获取）
   const customOptions: TagOption[] = customTags

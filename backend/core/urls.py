@@ -229,6 +229,8 @@ urlpatterns = [
     path("tags/", views.tags_list, name="tags-list"),
     path("tags/manage/", views.TagListCreateView.as_view(), name="tags-manage"),
     path("tags/manage/<int:pk>/", views.TagDetailView.as_view(), name="tags-manage-detail"),
+    # 创作状态 API
+    path("moods/", views.moods_list, name="moods-list"),
     path("", include(router.urls)),
 ]
 
