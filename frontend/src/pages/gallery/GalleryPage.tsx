@@ -32,7 +32,7 @@ export const INITIAL_ARTWORKS: Artwork[] = [];
 
 type GalleryPageProps = {
   artworks: Artwork[];
-  onOpenUpload?: () => void;
+  onOpenUpload?: (origin?: { x: number; y: number; size: number }) => void;
   onDeleteArtwork?: (artwork: Artwork) => void;
   onEditArtwork?: (artwork: Artwork) => void;
   onUpdateArtwork?: (artwork: Artwork) => void;
@@ -53,6 +53,7 @@ export function GalleryPage({
   onUpdateCollectionThumbnail,
   onUpdateCollectionName,
 }: GalleryPageProps) {
+  const fabRef = useRef<HTMLButtonElement>(null);
   const [showInfo, setShowInfo] = useState(true);
   const [filterOpen, setFilterOpen] = useState(false);
   const [selectedArtwork, setSelectedArtwork] = useState<Artwork | null>(null);
@@ -429,7 +430,22 @@ export function GalleryPage({
           />
         )}
 
-        <button type="button" className="gallery-screen__fab" onClick={() => onOpenUpload?.()}>
+        <button
+          ref={fabRef}
+          type="button"
+          className="gallery-screen__fab"
+          onClick={() => {
+            if (fabRef.current && onOpenUpload) {
+              const rect = fabRef.current.getBoundingClientRect();
+              const x = rect.left + rect.width / 2;
+              const y = rect.top + rect.height / 2;
+              const size = Math.max(rect.width, rect.height);
+              onOpenUpload({ x, y, size });
+            } else {
+              onOpenUpload?.();
+            }
+          }}
+        >
           <MaterialIcon name="add" className="gallery-screen__fab-icon" />
         </button>
       </main>

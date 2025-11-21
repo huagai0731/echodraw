@@ -7,6 +7,7 @@ import AchievementsPage from "@/admin/pages/Achievements";
 import AchievementGroupsPage from "@/admin/pages/AchievementGroups";
 import HomeContentPage from "@/admin/pages/HomeContent";
 import MonthlyReportTemplatesPage from "@/admin/pages/MonthlyReportTemplates";
+import MonthlyReportViewerPage from "@/admin/pages/MonthlyReportViewer";
 import NotificationsPage from "@/admin/pages/Notifications";
 import TestAccountsPage from "@/admin/pages/TestAccounts";
 import TestAccountDetailPage from "@/admin/pages/TestAccountDetail";
@@ -25,6 +26,7 @@ function App() {
           <Route path="home-content" element={<HomeContentPage />} />
           <Route path="notifications" element={<NotificationsPage />} />
           <Route path="monthly-report-templates" element={<MonthlyReportTemplatesPage />} />
+          <Route path="monthly-report-viewer" element={<MonthlyReportViewerPage />} />
           <Route path="achievement-groups" element={<AchievementGroupsPage />} />
           <Route path="achievements" element={<AchievementsPage />} />
           <Route path="task-presets" element={<ShortTermTaskPresetsPage />} />

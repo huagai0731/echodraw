@@ -12,6 +12,7 @@ from core.models import (
     HighFiveClick,
     HighFiveCounter,
     HolidayMessage,
+    MonthlyReport,
     MonthlyReportTemplate,
     UserProfile,
     TestAccountProfile,
@@ -721,3 +722,37 @@ class HighFiveClickAdmin(admin.ModelAdmin):
     search_fields = ("user__email", "session_key")
     readonly_fields = ("created_at",)
     ordering = ("-created_at",)
+
+
+@admin.register(MonthlyReport)
+class MonthlyReportAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "year", "month", "total_uploads", "total_hours", "created_at")
+    list_filter = ("year", "month", "created_at")
+    search_fields = ("user__email",)
+    readonly_fields = ("created_at", "updated_at")
+    ordering = ("-year", "-month", "-created_at")
+    fieldsets = (
+        ("基本信息", {
+            "fields": ("user", "year", "month")
+        }),
+        ("统计数据", {
+            "fields": (
+                "total_uploads",
+                "total_hours",
+                "avg_hours_per_upload",
+                "avg_rating",
+                "most_upload_day_date",
+                "most_upload_day_count",
+                "current_streak",
+                "longest_streak",
+            )
+        }),
+        ("分布数据", {
+            "fields": ("time_distribution", "weekly_distribution", "tag_stats", "heatmap_calendar"),
+            "classes": ("collapse",),
+        }),
+        ("其他", {
+            "fields": ("upload_ids", "report_texts", "created_at", "updated_at"),
+            "classes": ("collapse",),
+        }),
+    )

@@ -1,11 +1,14 @@
 import { useState } from "react";
+import { isAxiosError } from "axios";
 
 import TopNav from "@/components/TopNav";
+import { createPointsOrder, completePointsOrder } from "@/services/api";
 
 import "./PointsRecharge.css";
 
 type PointsRechargeProps = {
   onBack: () => void;
+  onRechargeSuccess?: () => void; // 充值成功后的回调，用于刷新点数
 };
 
 type PricingOption = {
@@ -24,19 +27,19 @@ type PaymentMethod = {
 const PRICING_OPTIONS: PricingOption[] = [
   {
     id: "1",
-    points: 1,
+    points: 100,
     price: 1,
     description: "A small boost.",
   },
   {
     id: "5",
-    points: 5,
+    points: 500,
     price: 5,
     description: "Unlock your potential.",
   },
   {
     id: "20",
-    points: 20,
+    points: 2000,
     price: 20,
     description: "For deep creative investment.",
   },
@@ -55,19 +58,66 @@ const PAYMENT_METHODS: PaymentMethod[] = [
   },
 ];
 
-function PointsRecharge({ onBack }: PointsRechargeProps) {
+function PointsRecharge({ onBack, onRechargeSuccess }: PointsRechargeProps) {
   const [selectedPricing, setSelectedPricing] = useState<string>("5");
   const [selectedPayment, setSelectedPayment] = useState<string>("wechat");
+  const [processing, setProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const selectedPricingOption = PRICING_OPTIONS.find((option) => option.id === selectedPricing);
 
-  const handlePay = () => {
-    if (selectedPricingOption) {
-      // TODO: 实现支付逻辑
-      console.log("支付", selectedPricingOption.price, "元，使用", selectedPayment);
-      if (typeof window !== "undefined" && typeof window.alert === "function") {
-        window.alert(`支付功能即将上线，敬请期待。\n\n选择：${selectedPricingOption.points}点 - ¥${selectedPricingOption.price}\n支付方式：${PAYMENT_METHODS.find((m) => m.id === selectedPayment)?.name}`);
+  const handlePay = async () => {
+    if (!selectedPricingOption) {
+      return;
+    }
+
+    try {
+      setProcessing(true);
+      setError(null);
+
+      // 1. 创建订单
+      const order = await createPointsOrder({
+        points: selectedPricingOption.points,
+        amount: selectedPricingOption.price,
+        payment_method: selectedPayment as "wechat" | "alipay",
+      });
+
+      // 2. 模拟支付流程（实际项目中这里应该调用真实的支付接口）
+      // 这里我们直接完成订单，实际项目中应该等待支付回调
+      await new Promise((resolve) => setTimeout(resolve, 1000)); // 模拟支付延迟
+
+      // 3. 完成订单（增加点数）
+      const result = await completePointsOrder(order.order_id, {
+        payment_transaction_id: `MOCK_${order.order_number}`, // 模拟交易号
+      });
+
+      // 4. 充值成功，触发事件通知其他组件刷新点数
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("points-updated", { detail: { balance: result.balance_after } }));
       }
+      if (onRechargeSuccess) {
+        onRechargeSuccess();
+      }
+
+      // 5. 显示成功消息
+      if (typeof window !== "undefined" && typeof window.alert === "function") {
+        window.alert(
+          `充值成功！\n\n获得点数：${result.points_added}点\n当前余额：${result.balance_after}点`
+        );
+      }
+
+      // 6. 返回上一页
+      onBack();
+    } catch (err) {
+      console.error("[PointsRecharge] Failed to process payment:", err);
+      if (isAxiosError(err)) {
+        const detail = err.response?.data?.detail;
+        setError(typeof detail === "string" ? detail : "充值失败，请稍后重试");
+      } else {
+        setError("充值失败，请稍后重试");
+      }
+    } finally {
+      setProcessing(false);
     }
   };
 
@@ -129,6 +179,12 @@ function PointsRecharge({ onBack }: PointsRechargeProps) {
           </div>
         </div>
 
+        {error && (
+          <div style={{ color: "#ff6b6b", padding: "1rem", textAlign: "center" }}>
+            {error}
+          </div>
+        )}
+
         <div className="points-recharge__spacer-grow" />
 
         <div className="points-recharge__footer">
@@ -136,10 +192,10 @@ function PointsRecharge({ onBack }: PointsRechargeProps) {
             type="button"
             className="points-recharge__pay-button"
             onClick={handlePay}
-            disabled={!selectedPricingOption}
+            disabled={!selectedPricingOption || processing}
           >
             <span className="points-recharge__pay-button-text">
-              立即支付 ¥{selectedPricingOption?.price || 0}
+              {processing ? "处理中..." : `立即支付 ¥${selectedPricingOption?.price || 0}`}
             </span>
           </button>
         </div>

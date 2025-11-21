@@ -5,7 +5,10 @@ from datetime import datetime
 from django.db.models import Prefetch, Q
 from django.utils.dateparse import parse_date
 from django.utils.timezone import make_aware
-from rest_framework import generics, viewsets
+from rest_framework import generics, viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from django.contrib.auth import get_user_model
 
 from core.models import (
     Achievement,
@@ -56,6 +59,10 @@ from core.serializers import (
     UploadConditionalMessageSerializer,
     UserTestResultSerializer,
 )
+from core.achievement_evaluator import get_evaluator
+from core.views import _get_user_achievement_stats
+
+User = get_user_model()
 
 
 class DailyHistoryMessageAdminViewSet(viewsets.ModelViewSet):
@@ -165,6 +172,63 @@ class AchievementAdminViewSet(viewsets.ModelViewSet):
                 return queryset.filter(group__isnull=False)
 
         return queryset
+
+    @action(detail=True, methods=["post"], url_path="simulate-evaluation")
+    def simulate_evaluation(self, request, pk=None):
+        """
+        模拟评估：在 admin 可模拟某用户数据查看该成就是否会解锁。
+        
+        Request body:
+            {
+                "user_id": int (可选，默认使用当前用户)
+            }
+        
+        Returns:
+            {
+                "matched": bool,
+                "reasons": [str],
+                "metric_values": {str: any},
+                "user_stats": {str: any}
+            }
+        """
+        achievement = self.get_object()
+        user_id = request.data.get("user_id")
+        
+        if user_id:
+            try:
+                target_user = User.objects.get(id=int(user_id))
+            except (ValueError, User.DoesNotExist):
+                return Response(
+                    {"error": "无效的用户 ID"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            target_user = request.user
+        
+        # 获取用户统计数据
+        user_stats = _get_user_achievement_stats(target_user)
+        
+        # 评估成就
+        evaluator = get_evaluator()
+        eval_result = evaluator.evaluate(
+            target_user,
+            achievement,
+            user_stats=user_stats,
+            log_evaluation=True,
+        )
+        
+        return Response({
+            "matched": eval_result.matched,
+            "reasons": eval_result.reasons,
+            "metric_values": eval_result.metric_values,
+            "user_stats": user_stats,
+            "achievement": {
+                "id": achievement.id,
+                "slug": achievement.slug,
+                "name": achievement.name,
+                "condition": achievement.condition,
+            },
+        })
 
 
 class ShortTermTaskPresetAdminViewSet(viewsets.ModelViewSet):
@@ -375,4 +439,3 @@ class NotificationAdminViewSet(viewsets.ModelViewSet):
     serializer_class = NotificationSerializer
     permission_classes = [IsStaffUser]
     pagination_class = None
-

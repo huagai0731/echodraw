@@ -169,6 +169,10 @@ class UserProfile(models.Model):
         blank=True,
         help_text="用户注册编号，从1开始递增。",
     )
+    points = models.PositiveIntegerField(
+        default=150,
+        help_text="用户点数余额，默认150点。",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -400,6 +404,11 @@ class LongTermGoal(models.Model):
         default=timezone.now,
         help_text="计划开始时间，用于统计进度。",
     )
+    metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="附加元数据，用于存储checkpoint的自定义数据（showcase和completionNote）。",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -424,6 +433,17 @@ class ShortTermGoal(models.Model):
         (PLAN_TYPE_DIFFERENT, "Different Task Daily"),
     ]
 
+    STATUS_DRAFT = "draft"  # 暂存
+    STATUS_SAVED = "saved"  # 已保存未进行
+    STATUS_ACTIVE = "active"  # 进行中
+    STATUS_COMPLETED = "completed"  # 已完成
+    STATUS_CHOICES = [
+        (STATUS_DRAFT, "暂存"),
+        (STATUS_SAVED, "已保存未进行"),
+        (STATUS_ACTIVE, "进行中"),
+        (STATUS_COMPLETED, "已完成"),
+    ]
+
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -445,6 +465,12 @@ class ShortTermGoal(models.Model):
         blank=True,
         help_text="任务安排列表，元素包含 day_index 与任务条目。",
     )
+    status = models.CharField(
+        max_length=16,
+        choices=STATUS_CHOICES,
+        default=STATUS_DRAFT,
+        help_text="目标状态：暂存、已保存未进行、进行中、已完成。",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -453,6 +479,7 @@ class ShortTermGoal(models.Model):
         indexes = [
             models.Index(fields=["user", "-created_at"]),
             models.Index(fields=["user", "plan_type"]),
+            models.Index(fields=["user", "status"]),
         ]
 
     def __str__(self):
@@ -934,6 +961,119 @@ class Achievement(models.Model):
 
     def __str__(self) -> str:
         return self.name
+
+
+class AchievementCondition(models.Model):
+    """
+    成就条件子项：将条件表达式拆分为可解析的子项，便于索引与查询。
+    
+    一个成就可以有多个条件子项（例如：total_uploads >= 10 AND current_streak >= 7），
+    但当前实现主要支持单一条件，此表用于未来扩展和查询优化。
+    """
+    achievement = models.ForeignKey(
+        Achievement,
+        on_delete=models.CASCADE,
+        related_name="condition_items",
+        help_text="关联的成就。",
+    )
+    metric = models.CharField(
+        max_length=64,
+        db_index=True,
+        help_text="指标名称，如 total_uploads, current_streak 等。",
+    )
+    operator = models.CharField(
+        max_length=8,
+        help_text="操作符：>=, >, <=, <, ==, !=。",
+    )
+    threshold = models.FloatField(
+        help_text="阈值。",
+    )
+    display_order = models.PositiveIntegerField(
+        default=100,
+        help_text="显示顺序，用于多条件组合。",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["achievement", "display_order", "id"]
+        indexes = [
+            models.Index(fields=["achievement", "metric"]),
+            models.Index(fields=["metric", "operator", "threshold"]),
+        ]
+        verbose_name = "成就条件子项"
+        verbose_name_plural = "成就条件子项"
+
+    def __str__(self) -> str:
+        return f"{self.achievement.name} - {self.metric} {self.operator} {self.threshold}"
+
+
+class UserAchievement(models.Model):
+    """
+    用户成就解锁记录，记录用户何时解锁了某个成就。
+    
+    用于持久化存储成就解锁日期，避免每次检查时都显示为"今天"解锁。
+    """
+    PROVENANCE_AUTO = "auto"  # 自动解锁（条件满足时）
+    PROVENANCE_MANUAL = "manual"  # 手动解锁（管理员操作）
+    PROVENANCE_INFERRED = "inferred"  # 历史推断（批量回填）
+    PROVENANCE_LEGACY = "legacy"  # 历史数据（迁移前）
+    
+    PROVENANCE_CHOICES = [
+        (PROVENANCE_AUTO, "自动解锁"),
+        (PROVENANCE_MANUAL, "手动解锁"),
+        (PROVENANCE_INFERRED, "历史推断"),
+        (PROVENANCE_LEGACY, "历史数据"),
+    ]
+    
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="user_achievements",
+        help_text="解锁成就的用户。",
+    )
+    achievement = models.ForeignKey(
+        Achievement,
+        on_delete=models.CASCADE,
+        related_name="user_achievements",
+        help_text="被解锁的成就。",
+    )
+    unlocked_at = models.DateTimeField(
+        default=timezone.now,
+        help_text="成就解锁时间（首次满足条件的时间）。",
+    )
+    provenance = models.CharField(
+        max_length=32,
+        choices=PROVENANCE_CHOICES,
+        default=PROVENANCE_AUTO,
+        help_text="解锁来源：自动/手动/推断/历史。",
+    )
+    meta = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="解锁时的元数据快照，例如触发的指标值、条件详情等。",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-unlocked_at"]
+        indexes = [
+            models.Index(fields=["user", "achievement"]),
+            models.Index(fields=["user", "-unlocked_at"]),
+            models.Index(fields=["provenance"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "achievement"],
+                name="core_userachievement_unique_user_achievement",
+            )
+        ]
+        verbose_name = "用户成就解锁记录"
+        verbose_name_plural = "用户成就解锁记录"
+
+    def __str__(self) -> str:
+        return f"{self.user.email} - {self.achievement.name}"
 
 
 class TestAccountProfile(models.Model):
@@ -2052,3 +2192,271 @@ class LoginAttempt(models.Model):
     def __str__(self) -> str:
         status = "成功" if self.success else "失败"
         return f"{self.email} @ {self.ip_address} - {status} - {self.created_at}"
+
+
+class PointsOrder(models.Model):
+    """
+    点数充值订单：记录用户的充值订单信息。
+    """
+    ORDER_STATUS_PENDING = "pending"  # 待支付
+    ORDER_STATUS_PAID = "paid"  # 已支付
+    ORDER_STATUS_FAILED = "failed"  # 支付失败
+    ORDER_STATUS_CANCELLED = "cancelled"  # 已取消
+    
+    ORDER_STATUS_CHOICES = [
+        (ORDER_STATUS_PENDING, "待支付"),
+        (ORDER_STATUS_PAID, "已支付"),
+        (ORDER_STATUS_FAILED, "支付失败"),
+        (ORDER_STATUS_CANCELLED, "已取消"),
+    ]
+    
+    PAYMENT_METHOD_WECHAT = "wechat"
+    PAYMENT_METHOD_ALIPAY = "alipay"
+    
+    PAYMENT_METHOD_CHOICES = [
+        (PAYMENT_METHOD_WECHAT, "微信支付"),
+        (PAYMENT_METHOD_ALIPAY, "支付宝"),
+    ]
+    
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="points_orders",
+        help_text="下单用户。",
+    )
+    order_number = models.CharField(
+        max_length=64,
+        unique=True,
+        db_index=True,
+        help_text="订单号，唯一标识。",
+    )
+    points = models.PositiveIntegerField(
+        help_text="充值点数。",
+    )
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text="订单金额（元）。",
+    )
+    payment_method = models.CharField(
+        max_length=16,
+        choices=PAYMENT_METHOD_CHOICES,
+        help_text="支付方式。",
+    )
+    status = models.CharField(
+        max_length=16,
+        choices=ORDER_STATUS_CHOICES,
+        default=ORDER_STATUS_PENDING,
+        help_text="订单状态。",
+    )
+    payment_transaction_id = models.CharField(
+        max_length=128,
+        blank=True,
+        null=True,
+        help_text="第三方支付交易号。",
+    )
+    paid_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="支付完成时间。",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "-created_at"]),
+            models.Index(fields=["order_number"]),
+            models.Index(fields=["status", "-created_at"]),
+        ]
+        verbose_name = "点数充值订单"
+        verbose_name_plural = "点数充值订单"
+    
+    def __str__(self) -> str:
+        return f"{self.user.email} - {self.order_number} - {self.points}点 - ¥{self.amount}"
+
+
+class PointsTransaction(models.Model):
+    """
+    点数交易记录：记录所有点数变动（充值、消费等）。
+    """
+    TRANSACTION_TYPE_RECHARGE = "recharge"  # 充值
+    TRANSACTION_TYPE_CONSUME = "consume"  # 消费
+    TRANSACTION_TYPE_REFUND = "refund"  # 退款
+    
+    TRANSACTION_TYPE_CHOICES = [
+        (TRANSACTION_TYPE_RECHARGE, "充值"),
+        (TRANSACTION_TYPE_CONSUME, "消费"),
+        (TRANSACTION_TYPE_REFUND, "退款"),
+    ]
+    
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="points_transactions",
+        help_text="交易用户。",
+    )
+    transaction_type = models.CharField(
+        max_length=16,
+        choices=TRANSACTION_TYPE_CHOICES,
+        help_text="交易类型。",
+    )
+    points = models.IntegerField(
+        help_text="变动点数（正数为增加，负数为减少）。",
+    )
+    balance_after = models.PositiveIntegerField(
+        help_text="交易后余额。",
+    )
+    order = models.ForeignKey(
+        PointsOrder,
+        on_delete=models.SET_NULL,
+        related_name="transactions",
+        null=True,
+        blank=True,
+        help_text="关联的订单（如果是充值交易）。",
+    )
+    description = models.CharField(
+        max_length=256,
+        blank=True,
+        help_text="交易描述。",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "-created_at"]),
+            models.Index(fields=["transaction_type", "-created_at"]),
+            models.Index(fields=["order"]),
+        ]
+        verbose_name = "点数交易记录"
+        verbose_name_plural = "点数交易记录"
+    
+    def __str__(self) -> str:
+        return f"{self.user.email} - {self.get_transaction_type_display()} - {self.points}点"
+
+
+class MonthlyReport(models.Model):
+    """
+    固定月报：存储每月1号生成的固定月报数据。
+    月报生成后不再变化，即使后续有新的上传数据。
+    """
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="monthly_reports",
+        help_text="用户",
+    )
+    year = models.PositiveIntegerField(help_text="年份")
+    month = models.PositiveIntegerField(help_text="月份（1-12）")
+    
+    # 基础统计数据
+    total_uploads = models.PositiveIntegerField(default=0, help_text="总上传数")
+    total_hours = models.FloatField(default=0.0, help_text="总时长（小时）")
+    avg_hours_per_upload = models.FloatField(default=0.0, help_text="平均单张时长（小时）")
+    avg_rating = models.FloatField(default=0.0, help_text="平均自评分")
+    
+    # 最多上传日期
+    most_upload_day_date = models.DateField(null=True, blank=True, help_text="最多上传日期")
+    most_upload_day_count = models.PositiveIntegerField(default=0, help_text="最多上传日期数量")
+    
+    # 连续打卡
+    current_streak = models.PositiveIntegerField(default=0, help_text="当前连续打卡天数")
+    longest_streak = models.PositiveIntegerField(default=0, help_text="最长连续打卡天数")
+    
+    # 时段分布（24小时，JSON格式）
+    time_distribution = models.JSONField(
+        default=list,
+        help_text="时段分布，格式：[{hour: 0-23, count: number, percentage: number}, ...]",
+    )
+    
+    # 周内分布（7天，JSON格式）
+    weekly_distribution = models.JSONField(
+        default=list,
+        help_text="周内分布，格式：[{weekday: 0-6, count: number, minutes: number}, ...]",
+    )
+    
+    # 标签统计（JSON格式）
+    tag_stats = models.JSONField(
+        default=list,
+        help_text="标签统计，格式：[{tag: string, count: number, percentage: number, avgDurationMinutes: number, avgRating: number}, ...]",
+    )
+    
+    # 日历热力图数据（JSON格式）
+    heatmap_calendar = models.JSONField(
+        default=list,
+        help_text="日历热力图，格式：[{day: 1-31, count: number, weekday: 0-6, opacity: 0-1}, ...]",
+    )
+    
+    # 本月上传记录ID列表（用于展示）
+    upload_ids = models.JSONField(
+        default=list,
+        help_text="本月上传记录ID列表",
+    )
+    
+    # 月报文案（JSON格式，存储各部分的匹配模板和渲染后的文案）
+    report_texts = models.JSONField(
+        default=dict,
+        help_text="月报文案，格式：{section: rendered_text, ...}",
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = [["user", "year", "month"]]
+        ordering = ["-year", "-month"]
+        indexes = [
+            models.Index(fields=["user", "-year", "-month"]),
+            models.Index(fields=["year", "month"]),
+        ]
+        verbose_name = "固定月报"
+        verbose_name_plural = "固定月报"
+    
+    def __str__(self) -> str:
+        return f"{self.user.email} - {self.year}年{self.month}月月报"
+
+
+class UserStats(models.Model):
+    """
+    用户统计物化表：定期聚合用户统计数据，避免实时计算。
+    
+    注意：此模型需要定期更新（通过管理命令或 Celery 任务）。
+    """
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="stats",
+        help_text="用户",
+    )
+    total_uploads = models.PositiveIntegerField(
+        default=0,
+        help_text="总上传数",
+    )
+    total_checkins = models.PositiveIntegerField(
+        default=0,
+        help_text="总打卡次数",
+    )
+    current_streak = models.PositiveIntegerField(
+        default=0,
+        help_text="当前连续打卡天数",
+    )
+    checked_today = models.BooleanField(
+        default=False,
+        help_text="今天是否打卡",
+    )
+    last_updated = models.DateTimeField(
+        auto_now=True,
+        help_text="最后更新时间",
+    )
+
+    class Meta:
+        verbose_name = "用户统计"
+        verbose_name_plural = "用户统计"
+        indexes = [
+            models.Index(fields=["last_updated"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user.email} - {self.total_uploads} 上传, {self.total_checkins} 打卡"

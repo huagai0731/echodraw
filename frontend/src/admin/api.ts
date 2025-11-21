@@ -681,6 +681,55 @@ export async function listUserTestResults(testId?: number, userId?: number) {
   return response.data;
 }
 
+export type AdminUser = {
+  id: number;
+  email: string;
+  first_name: string | null;
+  last_name: string | null;
+  date_joined: string | null;
+};
+
+export type AdminMonthlyReportData = {
+  exists: boolean;
+  year: number;
+  month: number;
+  user?: {
+    id: number;
+    email: string;
+  };
+  stats?: {
+    totalUploads: number;
+    totalHours: number;
+    avgHoursPerUpload: number;
+    avgRating: number;
+    mostUploadDay: { date: string; count: number } | null;
+    currentStreak: number;
+    longestStreak: number;
+  };
+  timeDistribution?: Array<{ hour: number; count: number; percentage: number }>;
+  weeklyDistribution?: Array<{ weekday: number; count: number; minutes: number }>;
+  tagStats?: Array<{ tag: string; count: number; percentage: number; avgDurationMinutes: number; avgRating: number }>;
+  heatmapCalendar?: Array<{ day: number; count: number; weekday: number; opacity: number }>;
+  uploadIds?: number[];
+  reportTexts?: Record<string, string>;
+};
+
+export async function listAdminUsers(): Promise<AdminUser[]> {
+  const response = await api.get<AdminUser[]>("/admin/users/");
+  return response.data;
+}
+
+export async function getAdminUserMonthlyReport(
+  userId: number,
+  year: number,
+  month: number
+): Promise<AdminMonthlyReportData> {
+  const response = await api.get<AdminMonthlyReportData>("/admin/reports/monthly/", {
+    params: { user_id: userId, year, month },
+  });
+  return response.data;
+}
+
 export async function getUserTestResult(id: number) {
   const response = await api.get<AdminUserTestResult>(`/admin/tests/results/${id}/`);
   return response.data;

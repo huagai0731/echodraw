@@ -3,7 +3,7 @@ import { isAxiosError } from "axios";
 
 import MaterialIcon from "@/components/MaterialIcon";
 import TopNav from "@/components/TopNav";
-import { fetchUserTests } from "@/services/api";
+import { fetchUserTests, fetchUserPoints } from "@/services/api";
 
 import testCardImage1 from "@/assets/test-card-1.jpg";
 import testCardImage2 from "@/assets/test-card-2.jpg";
@@ -47,19 +47,23 @@ const FALLBACK_TEST_ITEMS: TestItem[] = [
   },
 ];
 
-const TOTAL_POINTS = 150;
-
 function TestList({ onBack, onSelectTest, onOpenPointsRecharge }: TestListProps) {
   const [tests, setTests] = useState<TestItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [points, setPoints] = useState<number>(150); // 默认值，实际从后端获取
 
   useEffect(() => {
-    const loadTests = async () => {
+    const loadData = async () => {
       try {
         setLoading(true);
         setError(null);
-        const backendTests = await fetchUserTests();
+        
+        // 并行加载测试列表和点数
+        const [backendTests, userPoints] = await Promise.all([
+          fetchUserTests().catch(() => []),
+          fetchUserPoints().catch(() => 150), // 如果获取失败，使用默认值
+        ]);
         
         // 将后台测试转换为TestItem格式，第一个使用后台测试
         const testItems: TestItem[] = [];
@@ -82,9 +86,10 @@ function TestList({ onBack, onSelectTest, onOpenPointsRecharge }: TestListProps)
         testItems.push(...FALLBACK_TEST_ITEMS);
         
         setTests(testItems);
+        setPoints(userPoints);
         setError(null);
       } catch (err) {
-        console.warn("[TestList] Failed to load tests:", err);
+        console.warn("[TestList] Failed to load data:", err);
         if (isAxiosError(err)) {
           const status = err.response?.status;
           if (status === 401 || status === 403) {
@@ -102,7 +107,24 @@ function TestList({ onBack, onSelectTest, onOpenPointsRecharge }: TestListProps)
       }
     };
 
-    loadTests();
+    loadData();
+  }, []);
+
+  // 监听点数更新事件
+  useEffect(() => {
+    const handlePointsUpdated = () => {
+      // 重新获取点数
+      fetchUserPoints()
+        .then(setPoints)
+        .catch((err) => {
+          console.warn("[TestList] Failed to refresh points:", err);
+        });
+    };
+
+    window.addEventListener("points-updated", handlePointsUpdated);
+    return () => {
+      window.removeEventListener("points-updated", handlePointsUpdated);
+    };
   }, []);
 
   const handleTestClick = (test: TestItem) => {
@@ -142,7 +164,7 @@ function TestList({ onBack, onSelectTest, onOpenPointsRecharge }: TestListProps)
             aria-label="积分充值"
           >
             <MaterialIcon name="auto_awesome" className="test-list__points-icon" />
-            <span className="test-list__points-value">{TOTAL_POINTS}</span>
+            <span className="test-list__points-value">{points}</span>
           </button>
         }
       />

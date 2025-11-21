@@ -406,6 +406,8 @@
 .achievement-modal__artwork-frame {
   position: relative;
   margin: 0 auto;
+  width: fit-content;
+  max-width: 100%;
   border-radius: 1.2rem;
   padding: 0.5rem;
   background: rgba(152, 219, 198, 0.16);
@@ -414,11 +416,14 @@
 
 .achievement-modal__artwork-image {
   width: min(160px, 100%);
+  min-width: 160px;
   aspect-ratio: 1 / 1;
   border-radius: 0.9rem;
   background-size: cover;
-  background-position: center;
+  background-position: center center;
   background-repeat: no-repeat;
+  display: block;
+  margin: 0;
 }
 
 .achievement-modal__actions {

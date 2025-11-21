@@ -562,6 +562,7 @@ type ShortTermGoalResponse = {
   duration_days: number;
   plan_type: "same" | "different";
   schedule: ShortTermGoalDayResponse[];
+  status: "draft" | "saved" | "active" | "completed";
   created_at: string;
   updated_at: string;
 };
@@ -634,6 +635,7 @@ export type ShortTermGoal = {
   durationDays: number;
   planType: "same" | "different";
   schedule: ShortTermGoalDay[];
+  status: "draft" | "saved" | "active" | "completed";
   createdAt: string;
   updatedAt: string;
 };
@@ -652,6 +654,7 @@ function mapShortTermGoal(goal: ShortTermGoalResponse): ShortTermGoal {
     title: goal.title,
     durationDays: goal.duration_days,
     planType: goal.plan_type,
+    status: goal.status,
     schedule: goal.schedule.map((day) => ({
       dayIndex: day.day_index,
       tasks: day.tasks.map(mapShortTermGoalTask),
@@ -813,6 +816,28 @@ export async function deleteLongTermGoal() {
   await api.delete("/goals/long-term/");
 }
 
+export type UpdateCheckpointInput = {
+  checkpointIndex: number;
+  uploadId?: number | null;
+  completionNote?: string | null;
+};
+
+export async function updateCheckpoint(
+  input: UpdateCheckpointInput,
+): Promise<LongTermGoal> {
+  const payload: Record<string, unknown> = {
+    checkpoint_index: input.checkpointIndex,
+  };
+  if (input.uploadId !== undefined) {
+    payload.upload_id = input.uploadId;
+  }
+  if (input.completionNote !== undefined) {
+    payload.completion_note = input.completionNote;
+  }
+  const response = await api.patch<LongTermGoalResponse>("/goals/long-term/checkpoint/", payload);
+  return mapLongTermGoal(response.data);
+}
+
 type LongTermCopyGuideResponse = {
   id: number;
   min_hours: number;
@@ -950,6 +975,40 @@ export async function createShortTermGoal(input: CreateShortTermGoalInput) {
   };
 
   const response = await api.post<ShortTermGoalResponse>("/goals/short-term/", payload);
+  return mapShortTermGoal(response.data);
+}
+
+export async function updateShortTermGoal(
+  id: number,
+  input: Partial<CreateShortTermGoalInput>
+) {
+  const payload: Record<string, unknown> = {};
+  if (input.title !== undefined) {
+    payload.title = input.title;
+  }
+  if (input.durationDays !== undefined) {
+    payload.duration_days = input.durationDays;
+  }
+  if (input.planType !== undefined) {
+    payload.plan_type = input.planType;
+  }
+  if (input.schedule !== undefined) {
+    payload.schedule = input.schedule.map((day) => ({
+      day_index: day.dayIndex,
+      tasks: day.tasks.map((task) => ({
+        task_id: task.taskId,
+        title: task.title,
+        subtitle: task.subtitle,
+      })),
+    }));
+  }
+
+  const response = await api.patch<ShortTermGoalResponse>(`/goals/short-term/${id}/`, payload);
+  return mapShortTermGoal(response.data);
+}
+
+export async function startShortTermGoal(id: number) {
+  const response = await api.post<ShortTermGoalResponse>(`/goals/short-term/${id}/start/`);
   return mapShortTermGoal(response.data);
 }
 
@@ -1949,6 +2008,119 @@ function mapTag(tag: TagResponse): Tag {
     createdAt: tag.created_at,
     updatedAt: tag.updated_at,
   };
+}
+
+// ==================== Points API ====================
+
+export type UserPointsResponse = {
+  points: number;
+};
+
+/**
+ * 获取用户点数余额
+ */
+export async function fetchUserPoints(): Promise<number> {
+  if (!hasAuthToken()) {
+    throw createUnauthorizedError();
+  }
+  const response = await api.get<UserPointsResponse>("/points/");
+  return response.data.points;
+}
+
+export type PointsOrderResponse = {
+  order_id: number;
+  order_number: string;
+  points: number;
+  amount: string;
+  payment_method: string;
+  status: string;
+  created_at: string;
+};
+
+export type CreatePointsOrderRequest = {
+  points: number;
+  amount: number;
+  payment_method: "wechat" | "alipay";
+};
+
+/**
+ * 创建点数充值订单
+ */
+export async function createPointsOrder(
+  request: CreatePointsOrderRequest
+): Promise<PointsOrderResponse> {
+  if (!hasAuthToken()) {
+    throw createUnauthorizedError();
+  }
+  const response = await api.post<PointsOrderResponse>("/points/orders/", {
+    points: request.points,
+    amount: request.amount,
+    payment_method: request.payment_method,
+  });
+  return response.data;
+}
+
+export type CompletePointsOrderRequest = {
+  payment_transaction_id?: string;
+};
+
+export type CompletePointsOrderResponse = {
+  order_id: number;
+  order_number: string;
+  points_added: number;
+  balance_before: number;
+  balance_after: number;
+  paid_at: string;
+};
+
+/**
+ * 完成点数充值订单（支付成功后调用）
+ */
+export async function completePointsOrder(
+  orderId: number,
+  request?: CompletePointsOrderRequest
+): Promise<CompletePointsOrderResponse> {
+  if (!hasAuthToken()) {
+    throw createUnauthorizedError();
+  }
+  const response = await api.post<CompletePointsOrderResponse>(
+    `/points/orders/${orderId}/complete/`,
+    request || {}
+  );
+  return response.data;
+}
+
+export type PointsTransactionResponse = {
+  id: number;
+  transaction_type: "recharge" | "consume" | "refund";
+  points: number;
+  balance_after: number;
+  description: string;
+  created_at: string;
+};
+
+export type PointsTransactionsResponse = {
+  count: number;
+  results: PointsTransactionResponse[];
+};
+
+/**
+ * 获取用户点数交易记录
+ */
+export async function fetchPointsTransactions(
+  page: number = 1,
+  pageSize: number = 20
+): Promise<PointsTransactionsResponse> {
+  if (!hasAuthToken()) {
+    throw createUnauthorizedError();
+  }
+  const response = await api.get<PointsTransactionsResponse>("/points/transactions/", {
+    params: {
+      page,
+      page_size: pageSize,
+    },
+  });
+  return response.data;
 }
 
 export default api;

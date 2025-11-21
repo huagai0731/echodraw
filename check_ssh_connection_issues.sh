@@ -36,3 +36,4 @@ getenforce 2>/dev/null || echo "SELinux未安装或未启用"
 
 
 
+

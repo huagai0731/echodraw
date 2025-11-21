@@ -1,4 +1,4 @@
-import type { Dispatch, SetStateAction } from "react";
+import { useEffect, useRef, useState, type Dispatch, SetStateAction } from "react";
 import clsx from "clsx";
 
 import MaterialIcon from "@/components/MaterialIcon";
@@ -25,6 +25,34 @@ function GalleryFilterModal({
   onReset,
   onApply,
 }: GalleryFilterModalProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const mountedRef = useRef(false);
+
+  // 控制动画触发
+  useEffect(() => {
+    if (open) {
+      // 组件首次渲染或重新打开
+      if (!mountedRef.current) {
+        // 首次渲染：延迟添加open类，确保浏览器能捕获状态变化
+        mountedRef.current = true;
+        // 双重 requestAnimationFrame 确保浏览器能看到状态变化
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            setIsOpen(true);
+          });
+        });
+      } else {
+        // 已经渲染过，直接设置
+        setIsOpen(true);
+      }
+    } else {
+      // 关闭时，先触发动画
+      setIsOpen(false);
+      // 可以在这里清理 mountedRef，但保留以便下次打开时能正确触发动画
+    }
+  }, [open]);
   const handleToggleTag = (tag: string) => {
     onChange((prev) => {
       const exists = prev.tags.includes(tag);
@@ -43,9 +71,12 @@ function GalleryFilterModal({
   };
 
   return (
-    <div className={clsx("gallery-filter", open && "gallery-filter--open")}>
+    <div 
+      ref={containerRef}
+      className={clsx("gallery-filter", isOpen && "gallery-filter--open")}
+    >
       <button type="button" className="gallery-filter__backdrop" onClick={onClose} />
-      <div className="gallery-filter__sheet">
+      <div ref={sheetRef} className="gallery-filter__sheet">
         <header className="gallery-filter__header">
           <h2>筛选标签</h2>
           <button type="button" className="gallery-filter__icon-button" onClick={onClose}>

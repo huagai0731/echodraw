@@ -41,7 +41,7 @@ const DIGIT_HEIGHT = {
   medium: 64,
 } as const;
 const MIN_TOTAL_HOURS = 50;
-const MAX_TOTAL_HOURS = 5000;
+const MAX_TOTAL_HOURS = 9999;
 const MAX_CHECKPOINTS = 90;
 
 function LongTermGoalSetup({
@@ -80,6 +80,10 @@ function LongTermGoalSetup({
     () => toDigits(perCheckpointHours, 3),
     [perCheckpointHours],
   );
+  const minCheckpoints = useMemo(() => {
+    const MAX_HOURS_PER_CHECKPOINT = 999;
+    return Math.ceil(totalHours / MAX_HOURS_PER_CHECKPOINT);
+  }, [totalHours]);
   const activeCopyGuide = useMemo(() => {
     if (!copyGuides.length) {
       return null;
@@ -232,9 +236,17 @@ function LongTermGoalSetup({
           </h1>
           <span className="long-term-setup__header-placeholder" />
         </header>
-        <p className="long-term-setup__subtitle">
-          {resolvedMode === "edit-meta" ? "更新计划名称与简介" : "为长期创作定下方向"}
-        </p>
+        {resolvedMode === "edit-meta" ? (
+          <p className="long-term-setup__subtitle">更新计划名称与简介</p>
+        ) : (
+          <div className="long-term-setup__subtitle-text">
+            <p>长期计划存在的目的，是希望你在漫长的创作旅途里，保留方向感。</p>
+            <p>不是为了追求速度，不是为了堆量，只是帮你把零散的时刻串成完整的一条线。</p>
+            <p>只要慢慢上传、慢慢记录，最终会看到一条和时间一起延伸的轨迹。</p>
+            <p>一万小时定律看起来太遥不可及，那么就选择任何你喜欢的数字，或者对你有意义的数字作为总时长。</p>
+            <p>让我们从这里开始吧。</p>
+          </div>
+        )}
 
         <main className="long-term-setup__main">
           <section className="long-term-setup__section">
@@ -244,14 +256,14 @@ function LongTermGoalSetup({
               type="text"
               value={title}
               onChange={(event) => setTitle(event.target.value.slice(0, 160))}
-              placeholder="例如：40 小时风景写生计划"
+              placeholder={`为自己的计划新建画布吧，任何你想要的名字，毕竟只有你会看见，抑或只是${totalHours}小时计划`}
               maxLength={160}
             />
             <textarea
               className="long-term-setup__textarea"
               value={description}
               onChange={(event) => setDescription(event.target.value.slice(0, 600))}
-              placeholder="描述你的创作愿景、预期成果或每个阶段的重点。"
+              placeholder="给接下来一段时间的自己一个指北。可以是激励自己的话，或是自己的梦想，抑或只是提醒自己永远不要放弃画画。当然，你也可以在这里留下空白。"
               rows={3}
               maxLength={600}
             />
@@ -273,7 +285,7 @@ function LongTermGoalSetup({
                   ))}
                   <span className="long-term-setup__unit">小时</span>
                 </div>
-                <p className="long-term-setup__hint">数值范围：50 - 5000 小时</p>
+                <p className="long-term-setup__hint">数值范围：50 - 9999 小时</p>
                 {copyLoading ? (
                   <p className="long-term-setup__hint">正在加载建议文案...</p>
                 ) : activeCopyGuide ? (
@@ -297,6 +309,11 @@ function LongTermGoalSetup({
                   </div>
                   <p>个检查点</p>
                 </div>
+                {minCheckpoints > 1 && (
+                  <p className="long-term-setup__hint" style={{ marginTop: "-0.5rem", textAlign: "center" }}>
+                    每个检查点最多 999 小时，当前总时长最少需要 {minCheckpoints} 个检查点
+                  </p>
+                )}
 
                 <div className="long-term-setup__card-row">
                   <p>每个检查点</p>
@@ -536,8 +553,16 @@ function clampCheckpointCount(value: number, totalHours: number) {
     return 1;
   }
   const normalizedTotal = Number.isFinite(totalHours) ? Math.max(1, Math.round(totalHours)) : MAX_CHECKPOINTS;
+  
+  // 每个检查点最多999小时，计算最小检查点数量
+  const MAX_HOURS_PER_CHECKPOINT = 999;
+  const minCheckpoints = Math.ceil(normalizedTotal / MAX_HOURS_PER_CHECKPOINT);
+  
+  // 检查点数量不能超过总时长，也不能超过最大检查点数量
   const maxAllowed = Math.min(MAX_CHECKPOINTS, normalizedTotal);
-  return Math.min(Math.max(Math.round(value), 1), maxAllowed);
+  
+  // 确保检查点数量在最小值和最大值之间
+  return Math.min(Math.max(Math.round(value), minCheckpoints), maxAllowed);
 }
 
 export default LongTermGoalSetup;

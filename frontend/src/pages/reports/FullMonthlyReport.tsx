@@ -12,6 +12,7 @@ type FullMonthlyReportProps = {
   open: boolean;
   onClose: () => void;
   targetMonth?: string; // YYYY-MM 格式，默认为当前月
+  adminUserId?: number; // 后台管理员查看指定用户的月报时使用
 };
 
 type ReportScreen = {
@@ -519,12 +520,27 @@ function formatDurationShort(minutes: number): string {
   return `${hours}h ${mins}m`;
 }
 
-function FullMonthlyReport({ open, onClose, targetMonth }: FullMonthlyReportProps) {
+type FixedMonthlyReport = {
+  exists: boolean;
+  year: number;
+  month: number;
+  stats?: MonthlyStats;
+  timeDistribution?: TimeDistribution[];
+  weeklyDistribution?: WeeklyDistribution[];
+  tagStats?: TagStat[];
+  heatmapCalendar?: CalendarDay[];
+  uploadIds?: number[];
+  reportTexts?: Record<string, string>;
+  createdAt?: string;
+};
+
+function FullMonthlyReport({ open, onClose, targetMonth, adminUserId }: FullMonthlyReportProps) {
   const totalScreens = REPORT_SCREENS.length;
   const [activeIndex, setActiveIndex] = useState(0);
   const [uploads, setUploads] = useState<UserUploadRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [monthlySummaryTemplate, setMonthlySummaryTemplate] = useState<React.ReactNode | null>(null);
+  const [fixedReport, setFixedReport] = useState<FixedMonthlyReport | null>(null);
 
   // 确定目标月份
   const effectiveTargetMonth = useMemo(() => {
@@ -613,42 +629,130 @@ function FullMonthlyReport({ open, onClose, targetMonth }: FullMonthlyReportProp
 
   // 加载上传数据和模板
   useEffect(() => {
-    if (!open) return;
+    if (!open || !effectiveTargetMonth) return;
 
     let cancelled = false;
     setLoading(true);
 
-    Promise.all([
-      fetchUserUploads(),
-      api.get<AdminMonthlyReportTemplate[]>("/admin/reports/monthly-templates/", {
-        params: { section: "monthly_summary" },
-      }).then((res) => res.data).catch(() => []),
-    ])
-      .then(([uploadData, templates]) => {
+    const [year, month] = effectiveTargetMonth.split("-").map(Number);
+
+    // 首先尝试获取固定月报
+    api
+      .get<FixedMonthlyReport>(
+        adminUserId ? `/admin/reports/monthly/` : `/reports/monthly/`,
+        {
+          params: adminUserId
+            ? { user_id: adminUserId, year, month }
+            : { year, month },
+        }
+      )
+      .then((res) => {
         if (!cancelled) {
-          setUploads(uploadData);
-          // 计算统计数据并匹配模板
-          if (effectiveTargetMonth) {
-            const calculatedStats = calculateMonthlyStats(uploadData, effectiveTargetMonth);
-            const matchedTemplate = matchTemplate(templates, calculatedStats, "monthly_summary");
-            if (matchedTemplate) {
-              setMonthlySummaryTemplate(renderTemplateText(matchedTemplate.text_template, calculatedStats));
+          const reportData = res.data;
+          setFixedReport(reportData);
+
+          if (reportData.exists && reportData.stats) {
+            // 使用固定月报数据
+            // 设置月报文案
+            if (reportData.reportTexts?.monthly_summary) {
+              // 渲染模板文案（添加高亮）
+              const text = reportData.reportTexts.monthly_summary;
+              const parts: React.ReactNode[] = [];
+              const regex = /(\d+(?:\.\d+)?)/g;
+              let lastIndex = 0;
+              let match;
+              
+              while ((match = regex.exec(text)) !== null) {
+                if (match.index > lastIndex) {
+                  parts.push(text.substring(lastIndex, match.index));
+                }
+                parts.push(<span key={match.index} className="highlight">{match[0]}</span>);
+                lastIndex = match.index + match[0].length;
+              }
+              
+              if (lastIndex < text.length) {
+                parts.push(text.substring(lastIndex));
+              }
+              
+              setMonthlySummaryTemplate(parts.length > 0 ? <>{parts}</> : text);
             } else {
               setMonthlySummaryTemplate(null);
             }
+            setLoading(false);
+          } else {
+            // 如果没有固定月报，实时计算
+            Promise.all([
+              adminUserId
+                ? api.get(`/admin/users/uploads/`, { params: { user_id: adminUserId } }).then((res) => res.data)
+                : fetchUserUploads(),
+              api.get<AdminMonthlyReportTemplate[]>("/admin/reports/monthly-templates/", {
+                params: { section: "monthly_summary" },
+              }).then((res) => res.data).catch(() => []),
+            ])
+              .then(([uploadData, templates]) => {
+                if (!cancelled) {
+                  setUploads(uploadData);
+                  // 计算统计数据并匹配模板
+                  const calculatedStats = calculateMonthlyStats(uploadData, effectiveTargetMonth);
+                  const matchedTemplate = matchTemplate(templates, calculatedStats, "monthly_summary");
+                  if (matchedTemplate) {
+                    setMonthlySummaryTemplate(renderTemplateText(matchedTemplate.text_template, calculatedStats));
+                  } else {
+                    setMonthlySummaryTemplate(null);
+                  }
+                }
+              })
+              .catch((error) => {
+                if (!cancelled) {
+                  console.warn("Failed to fetch data", error);
+                  setUploads([]);
+                  setMonthlySummaryTemplate(null);
+                }
+              })
+              .finally(() => {
+                if (!cancelled) {
+                  setLoading(false);
+                }
+              });
           }
         }
       })
       .catch((error) => {
         if (!cancelled) {
-          console.warn("Failed to fetch data", error);
-          setUploads([]);
-          setMonthlySummaryTemplate(null);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
+          console.warn("Failed to fetch fixed report, falling back to real-time calculation", error);
+          // 回退到实时计算
+          Promise.all([
+            adminUserId
+              ? api.get(`/admin/users/uploads/`, { params: { user_id: adminUserId } }).then((res) => res.data)
+              : fetchUserUploads(),
+            api.get<AdminMonthlyReportTemplate[]>("/admin/reports/monthly-templates/", {
+              params: { section: "monthly_summary" },
+            }).then((res) => res.data).catch(() => []),
+          ])
+            .then(([uploadData, templates]) => {
+              if (!cancelled) {
+                setUploads(uploadData);
+                const calculatedStats = calculateMonthlyStats(uploadData, effectiveTargetMonth);
+                const matchedTemplate = matchTemplate(templates, calculatedStats, "monthly_summary");
+                if (matchedTemplate) {
+                  setMonthlySummaryTemplate(renderTemplateText(matchedTemplate.text_template, calculatedStats));
+                } else {
+                  setMonthlySummaryTemplate(null);
+                }
+              }
+            })
+            .catch((err) => {
+              if (!cancelled) {
+                console.warn("Failed to fetch data", err);
+                setUploads([]);
+                setMonthlySummaryTemplate(null);
+              }
+            })
+            .finally(() => {
+              if (!cancelled) {
+                setLoading(false);
+              }
+            });
         }
       });
 
@@ -657,47 +761,78 @@ function FullMonthlyReport({ open, onClose, targetMonth }: FullMonthlyReportProp
     };
   }, [open, effectiveTargetMonth, matchTemplate, renderTemplateText]);
 
-  // 计算统计数据
+  // 计算统计数据（优先使用固定月报，否则实时计算）
   const stats = useMemo(() => {
     if (!effectiveTargetMonth) {
       return null;
     }
+    if (fixedReport?.exists && fixedReport.stats) {
+      return fixedReport.stats;
+    }
     return calculateMonthlyStats(uploads, effectiveTargetMonth);
-  }, [uploads, effectiveTargetMonth]);
+  }, [fixedReport, uploads, effectiveTargetMonth]);
 
   const timeDistribution = useMemo(() => {
     if (!effectiveTargetMonth) {
       return [];
     }
+    if (fixedReport?.exists && fixedReport.timeDistribution) {
+      return fixedReport.timeDistribution;
+    }
     return calculateTimeDistribution(uploads, effectiveTargetMonth);
-  }, [uploads, effectiveTargetMonth]);
+  }, [fixedReport, uploads, effectiveTargetMonth]);
 
   const weeklyDistribution = useMemo(() => {
     if (!effectiveTargetMonth) {
       return [];
     }
+    if (fixedReport?.exists && fixedReport.weeklyDistribution) {
+      return fixedReport.weeklyDistribution;
+    }
     return calculateWeeklyDistribution(uploads, effectiveTargetMonth);
-  }, [uploads, effectiveTargetMonth]);
+  }, [fixedReport, uploads, effectiveTargetMonth]);
 
   const tagStats = useMemo(() => {
     if (!effectiveTargetMonth) {
       return [];
     }
+    if (fixedReport?.exists && fixedReport.tagStats) {
+      return fixedReport.tagStats;
+    }
     return calculateTagStats(uploads, effectiveTargetMonth);
-  }, [uploads, effectiveTargetMonth]);
+  }, [fixedReport, uploads, effectiveTargetMonth]);
 
   const heatmapCalendar = useMemo(() => {
     if (!effectiveTargetMonth) {
       return [];
     }
+    if (fixedReport?.exists && fixedReport.heatmapCalendar) {
+      return fixedReport.heatmapCalendar;
+    }
     return calculateHeatmapCalendar(uploads, effectiveTargetMonth);
-  }, [uploads, effectiveTargetMonth]);
+  }, [fixedReport, uploads, effectiveTargetMonth]);
 
   // 获取本月的上传记录
   const monthlyUploads = useMemo(() => {
     if (!effectiveTargetMonth) {
       return [];
     }
+    
+    // 如果使用固定月报且有uploadIds，优先使用固定月报的ID列表
+    if (fixedReport?.exists && fixedReport.uploadIds && fixedReport.uploadIds.length > 0) {
+      // 根据ID过滤上传记录
+      const uploadIdSet = new Set(fixedReport.uploadIds);
+      return uploads
+        .filter((upload) => uploadIdSet.has(upload.id))
+        .sort((a, b) => {
+          const dateA = formatISODateInShanghai(a.uploaded_at);
+          const dateB = formatISODateInShanghai(b.uploaded_at);
+          if (!dateA || !dateB) return 0;
+          return dateA.localeCompare(dateB);
+        });
+    }
+    
+    // 否则实时计算
     const [year, month] = effectiveTargetMonth.split("-").map(Number);
     const startDate = new Date(year, month - 1, 1);
     const endDate = new Date(year, month, 0, 23, 59, 59);
@@ -721,7 +856,7 @@ function FullMonthlyReport({ open, onClose, targetMonth }: FullMonthlyReportProp
         if (!dateA || !dateB) return 0;
         return dateA.localeCompare(dateB);
       });
-  }, [uploads, effectiveTargetMonth]);
+  }, [fixedReport, uploads, effectiveTargetMonth]);
 
   // 节点回顾：第一张和最后一张作品
   const firstUpload = useMemo(() => monthlyUploads[0] || null, [monthlyUploads]);

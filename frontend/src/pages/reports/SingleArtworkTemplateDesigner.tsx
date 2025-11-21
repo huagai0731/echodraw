@@ -6,6 +6,7 @@ import type { Artwork } from "@/types/artwork";
 import { fetchProfilePreferences } from "@/services/api";
 import { getActiveUserEmail } from "@/services/authStorage";
 import { getOrLoadImage } from "@/utils/imageCache";
+import { loadTagPreferencesAsync, buildTagOptionsAsync } from "@/services/tagPreferences";
 
 import "./SingleArtworkTemplateDesigner.css";
 
@@ -36,22 +37,11 @@ const CANVAS_WIDTH = 1080;
 const CANVAS_HEIGHT = 1760;
 const DEFAULT_USERNAME = "@EchoUser";
 const MAX_TAG_COUNT = 6;
-const MIN_IMAGE_HEIGHT_RATIO = 0.6;
-const MAX_IMAGE_HEIGHT_RATIO = 1.35;
+const MIN_IMAGE_HEIGHT_RATIO = 0.3; // 放宽最小比例，支持更长的图片
+const MAX_IMAGE_HEIGHT_RATIO = 3.0; // 放宽最大比例，支持竖版长图
 // 移除未使用的页脚高度比例常量以通过构建
 
-const PRESET_SHADOW_COLORS = [
-  "#221b1b",
-  "#4a3f4a",
-  "#98dbc6",
-  "#c5e1e2",
-  "#efeae7",
-  "#0c0a09",
-  "#bfb8af",
-  "#6b7280",
-  "#1f2937",
-  "#ffffff",
-];
+// 阴影颜色现在通过 HSL 参数动态生成，不再需要预设颜色
 
 const PRESET_ACCENT_COLORS = [
   "#98dbc6", // 薄荷绿（现有）
@@ -59,6 +49,7 @@ const PRESET_ACCENT_COLORS = [
   "#f5a3c7", // 粉色
   "#7db3ff", // 蓝色
   "#ffd66b", // 黄色
+  "#ffffff", // 白色
 ];
 
 type CanvasLayout = {
@@ -88,13 +79,16 @@ function SingleArtworkTemplateDesigner({ open, artworks, onClose }: SingleArtwor
   const [showUsername, setShowUsername] = useState(true);
   const [showDate, setShowDate] = useState(true);
   const [showDuration, setShowDuration] = useState(true);
-  const [shadowBaseHex, setShadowBaseHex] = useState<string>("#4a3f4a");
+  const [shadowHue, setShadowHue] = useState<number>(15); // 色相 (0-360)，默认15度（红褐色）
+  const [shadowLightness, setShadowLightness] = useState<number>(10); // 亮度 (0-100)，默认10%（深色）
   const [shadowOpacity, setShadowOpacity] = useState<number>(85);
-  const [shadowSaturation, setShadowSaturation] = useState<number>(70);
+  const [shadowSaturation, setShadowSaturation] = useState<number>(20);
   const [textOpacityPercent, setTextOpacityPercent] = useState<number>(92);
   const [canvasLayout, setCanvasLayout] = useState<CanvasLayout>(DEFAULT_CANVAS_LAYOUT);
   const [accentHex, setAccentHex] = useState<string>("#98dbc6");
   const [textTone, setTextTone] = useState<"light" | "dark">("light");
+  const [tagOptions, setTagOptions] = useState<Array<{ id: string | number; name: string }>>([]);
+  const [addSuffix, setAddSuffix] = useState<boolean>(false);
 
   const hasArtworks = artworks.length > 0;
 
@@ -180,6 +174,28 @@ function SingleArtworkTemplateDesigner({ open, artworks, onClose }: SingleArtwor
     return current ?? artworks[0] ?? null;
   }, [artworks, hasArtworks, selectedId]);
 
+  // 加载标签选项以转换标签ID为名称
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    let cancelled = false;
+    loadTagPreferencesAsync()
+      .then((preferences) => buildTagOptionsAsync(preferences))
+      .then((options) => {
+        if (!cancelled) {
+          setTagOptions(options);
+        }
+      })
+      .catch((error) => {
+        console.warn("[SingleArtworkTemplateDesigner] Failed to load tag options:", error);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  // 将标签ID转换为标签名称
   const availableTags = useMemo(() => {
     if (!selectedArtwork) {
       return [];
@@ -187,11 +203,25 @@ function SingleArtworkTemplateDesigner({ open, artworks, onClose }: SingleArtwor
     return Array.from(
       new Set(
         (selectedArtwork.tags ?? [])
-          .map((tag) => tag.trim())
-          .filter((tag) => tag.length > 0),
+          .map((tag) => {
+            // 如果标签已经是字符串且不是纯数字，直接返回
+            if (typeof tag === "string" && !/^\d+$/.test(tag)) {
+              return tag;
+            }
+            // 尝试将标签转换为数字ID
+            const tagId = typeof tag === "number" ? tag : Number.parseInt(tag, 10);
+            if (Number.isFinite(tagId) && tagId > 0) {
+              // 查找标签选项
+              const option = tagOptions.find((opt) => opt.id === tagId);
+              return option ? option.name : tag;
+            }
+            return tag;
+          })
+          .filter((tag) => tag && String(tag).trim().length > 0)
+          .map((tag) => String(tag).trim()),
       ),
     );
-  }, [selectedArtwork]);
+  }, [selectedArtwork, tagOptions]);
 
   useEffect(() => {
     if (!selectedArtwork) {
@@ -204,15 +234,29 @@ function SingleArtworkTemplateDesigner({ open, artworks, onClose }: SingleArtwor
     setTitle(selectedArtwork.title?.trim() || "自定义标题名");
     setSubtitle(selectedArtwork.description?.trim() || "自定义文案");
 
+    // 将标签ID转换为标签名称
     const defaults = Array.from(
       new Set(
         (selectedArtwork.tags ?? [])
-          .map((tag) => tag.trim())
+          .map((tag) => {
+            // 如果标签已经是字符串且不是纯数字，直接返回
+            if (typeof tag === "string" && !/^\d+$/.test(tag)) {
+              return tag.trim();
+            }
+            // 尝试将标签转换为数字ID
+            const tagId = typeof tag === "number" ? tag : Number.parseInt(tag, 10);
+            if (Number.isFinite(tagId) && tagId > 0) {
+              // 查找标签选项
+              const option = tagOptions.find((opt) => opt.id === tagId);
+              return option ? option.name : String(tag).trim();
+            }
+            return String(tag).trim();
+          })
           .filter((tag) => tag.length > 0),
       ),
     ).slice(0, MAX_TAG_COUNT);
     setSelectedTags(defaults);
-  }, [selectedArtwork?.id]);
+  }, [selectedArtwork?.id, tagOptions]);
 
   useEffect(() => {
     if (!open || !selectedArtwork) {
@@ -230,10 +274,10 @@ function SingleArtworkTemplateDesigner({ open, artworks, onClose }: SingleArtwor
             : CANVAS_WIDTH / DEFAULT_CANVAS_LAYOUT.imageHeight;
         const safeRatio = Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
         const desiredImageHeight = CANVAS_WIDTH / safeRatio;
-        const imageHeight = clamp(
-          desiredImageHeight,
+        // 对于长图片，使用实际高度，不再限制最大高度，确保图片完整显示
+        const imageHeight = Math.max(
           CANVAS_WIDTH * MIN_IMAGE_HEIGHT_RATIO,
-          CANVAS_WIDTH * MAX_IMAGE_HEIGHT_RATIO,
+          desiredImageHeight, // 不再限制最大高度，让长图完整显示
         );
         const footerHeight = 0; // 移除底部大块面板
         setCanvasLayout({
@@ -263,13 +307,24 @@ function SingleArtworkTemplateDesigner({ open, artworks, onClose }: SingleArtwor
     ).slice(0, MAX_TAG_COUNT);
 
     const accentColor = accentHex;
-    const effectiveShadow = adjustHexSaturation(shadowBaseHex, clamp01(shadowSaturation / 100));
+    
+    // 使用 HSL 生成阴影颜色：色相、饱和度、亮度
+    const shadowHueClamped = shadowHue % 360;
+    const shadowSaturationClamped = clamp01(shadowSaturation / 100);
+    const shadowLightnessClamped = clamp01(shadowLightness / 100);
+    const shadowRgb = hslToRgb({
+      h: shadowHueClamped,
+      s: shadowSaturationClamped,
+      l: shadowLightnessClamped,
+    });
+    const shadowColorHex = rgbToHex(shadowRgb);
+    const shadowColor = shadowColorHex;
+    
     const overlayOpacity = clamp01(shadowOpacity / 100);
     // 由用户选择字色（浅色或深灰），不使用自动判断
     const textBase = textTone === "light" ? "#f7f2ec" : "#161514";
     const textOpacity = clamp01(textOpacityPercent / 100);
     const textColor = textBase;
-    const shadowColor = effectiveShadow;
 
     const meta = composeMetaLabels(selectedArtwork, {
       showDate,
@@ -278,6 +333,14 @@ function SingleArtworkTemplateDesigner({ open, artworks, onClose }: SingleArtwor
     const dateLabel = showDate ? meta.dateLabel : "";
     const durationLabel = showDuration ? meta.durationLabel : "";
 
+    // 处理用户名显示：如果勾选了添加后缀，显示"用户名@EchoDraw"
+    let displayUsername = showUsername ? normalizeUsername(username) : "";
+    if (displayUsername && addSuffix) {
+      // 移除原有的@符号（如果有），然后添加@EchoDraw
+      const baseName = displayUsername.startsWith("@") ? displayUsername.slice(1) : displayUsername;
+      displayUsername = `${baseName}@EchoDraw`;
+    }
+
     return {
       title: showTitle ? title.trim() || "自定义标题名" : "",
       subtitle: showSubtitle ? subtitle.trim() : "",
@@ -285,7 +348,7 @@ function SingleArtworkTemplateDesigner({ open, artworks, onClose }: SingleArtwor
       timestampLabel: meta.timestampLabel,
       dateLabel,
       durationLabel,
-      username: showUsername ? normalizeUsername(username) : "",
+      username: displayUsername,
       accentColor,
       textColor,
       textOpacity,
@@ -295,7 +358,8 @@ function SingleArtworkTemplateDesigner({ open, artworks, onClose }: SingleArtwor
   }, [
     selectedArtwork,
     selectedTags,
-    shadowBaseHex,
+    shadowHue,
+    shadowLightness,
     shadowOpacity,
     shadowSaturation,
     showDate,
@@ -309,6 +373,7 @@ function SingleArtworkTemplateDesigner({ open, artworks, onClose }: SingleArtwor
     textOpacityPercent,
     accentHex,
     textTone,
+    addSuffix,
   ]);
 
   const timestampLabel = templateData?.timestampLabel ?? "日期未知";
@@ -449,27 +514,73 @@ function SingleArtworkTemplateDesigner({ open, artworks, onClose }: SingleArtwor
                   <div className="single-template-designer__group-header" style={{ marginBottom: 6 }}>
                     <h3>阴影区设置</h3>
                   </div>
-                  <div className="single-template-designer__swatches" style={{ display: "flex", gap: 8, flexWrap: "wrap", padding: "4px 0" }}>
-                    {PRESET_SHADOW_COLORS.map((hex) => {
-                      const active = shadowBaseHex.toLowerCase() === hex.toLowerCase();
-                      return (
-                        <button
-                          key={hex}
-                          type="button"
-                          aria-label={`选择颜色 ${hex}`}
-                          onClick={() => setShadowBaseHex(hex)}
-                          style={{
-                            width: 22,
-                            height: 22,
-                            borderRadius: "50%",
-                            border: active ? "2px solid #98dbc6" : "1px solid rgba(255,255,255,0.25)",
-                            background: hex,
-                            boxShadow: active ? "0 0 0 2px rgba(152,219,198,0.35)" : "none",
-                          }}
-                        />
-                      );
-                    })}
+                  {/* 色相滑块 */}
+                  <div className="single-template-designer__tuning" style={{ marginTop: 6 }}>
+                    <div><p>色相</p></div>
+                    <div className="single-template-designer__slider">
+                      <input
+                        type="range"
+                        min={0}
+                        max={360}
+                        value={shadowHue}
+                        onChange={(e) => setShadowHue(Number(e.target.value))}
+                        style={{
+                          backgroundImage: `linear-gradient(90deg, 
+                            hsl(0, ${shadowSaturation}%, ${shadowLightness}%),
+                            hsl(60, ${shadowSaturation}%, ${shadowLightness}%),
+                            hsl(120, ${shadowSaturation}%, ${shadowLightness}%),
+                            hsl(180, ${shadowSaturation}%, ${shadowLightness}%),
+                            hsl(240, ${shadowSaturation}%, ${shadowLightness}%),
+                            hsl(300, ${shadowSaturation}%, ${shadowLightness}%),
+                            hsl(360, ${shadowSaturation}%, ${shadowLightness}%)
+                          )`,
+                        }}
+                      />
+                      <span className="single-template-designer__slider-dot" />
+                    </div>
                   </div>
+                  {/* 亮度滑块 */}
+                  <div className="single-template-designer__tuning" style={{ marginTop: 6 }}>
+                    <div><p>亮度</p></div>
+                    <div className="single-template-designer__slider">
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        value={shadowLightness}
+                        onChange={(e) => setShadowLightness(Number(e.target.value))}
+                        style={{
+                          backgroundImage: `linear-gradient(90deg, 
+                            hsl(${shadowHue}, ${shadowSaturation}%, 0%),
+                            hsl(${shadowHue}, ${shadowSaturation}%, 50%),
+                            hsl(${shadowHue}, ${shadowSaturation}%, 100%)
+                          )`,
+                        }}
+                      />
+                      <span className="single-template-designer__slider-dot" />
+                    </div>
+                  </div>
+                  {/* 饱和度滑块 */}
+                  <div className="single-template-designer__tuning" style={{ marginTop: 6 }}>
+                    <div><p>饱和度</p></div>
+                    <div className="single-template-designer__slider">
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        value={shadowSaturation}
+                        onChange={(e) => setShadowSaturation(Number(e.target.value))}
+                        style={{
+                          backgroundImage: `linear-gradient(90deg, 
+                            hsl(${shadowHue}, 0%, ${shadowLightness}%),
+                            hsl(${shadowHue}, 100%, ${shadowLightness}%)
+                          )`,
+                        }}
+                      />
+                      <span className="single-template-designer__slider-dot" />
+                    </div>
+                  </div>
+                  {/* 透明度滑块 */}
                   <div className="single-template-designer__tuning" style={{ marginTop: 6 }}>
                     <div><p>透明度</p></div>
                     <div className="single-template-designer__slider">
@@ -480,20 +591,6 @@ function SingleArtworkTemplateDesigner({ open, artworks, onClose }: SingleArtwor
                         value={shadowOpacity}
                         onChange={(e) => setShadowOpacity(Number(e.target.value))}
                         style={{ backgroundImage: `linear-gradient(90deg, rgba(0,0,0,0.05), rgba(0,0,0,0.9))` }}
-                      />
-                      <span className="single-template-designer__slider-dot" />
-                    </div>
-                  </div>
-                  <div className="single-template-designer__tuning" style={{ marginTop: 6 }}>
-                    <div><p>饱和度</p></div>
-                    <div className="single-template-designer__slider">
-                      <input
-                        type="range"
-                        min={0}
-                        max={100}
-                        value={shadowSaturation}
-                        onChange={(e) => setShadowSaturation(Number(e.target.value))}
-                        style={{ backgroundImage: `linear-gradient(90deg, ${desaturateHex(shadowBaseHex, 0.0)}, ${desaturateHex(shadowBaseHex, 1.0)})` }}
                       />
                       <span className="single-template-designer__slider-dot" />
                     </div>
@@ -522,43 +619,6 @@ function SingleArtworkTemplateDesigner({ open, artworks, onClose }: SingleArtwor
                       })}
                     </div>
                   </div>
-                  <div className="single-template-designer__tuning" style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 12 }}>
-                    <div><p>文字色彩</p></div>
-                    <div style={{ display: "inline-flex", gap: 6, background: "rgba(255,255,255,0.04)", borderRadius: 999, padding: 3, border: "1px solid rgba(255,255,255,0.08)" }}>
-                      <button
-                        type="button"
-                        aria-pressed={textTone === "light"}
-                        onClick={() => setTextTone("light")}
-                        style={{
-                          minWidth: 64,
-                          padding: "6px 10px",
-                          borderRadius: 999,
-                          border: textTone === "light" ? "1px solid rgba(152,219,198,0.6)" : "1px solid transparent",
-                          background: textTone === "light" ? "rgba(152,219,198,0.16)" : "transparent",
-                          color: textTone === "light" ? "#98dbc6" : "rgba(255,255,255,0.75)",
-                          cursor: "pointer",
-                        }}
-                      >
-                        浅色
-                      </button>
-                      <button
-                        type="button"
-                        aria-pressed={textTone === "dark"}
-                        onClick={() => setTextTone("dark")}
-                        style={{
-                          minWidth: 64,
-                          padding: "6px 10px",
-                          borderRadius: 999,
-                          border: textTone === "dark" ? "1px solid rgba(152,219,198,0.6)" : "1px solid transparent",
-                          background: textTone === "dark" ? "rgba(152,219,198,0.16)" : "transparent",
-                          color: textTone === "dark" ? "#98dbc6" : "rgba(255,255,255,0.75)",
-                          cursor: "pointer",
-                        }}
-                      >
-                        深灰
-                      </button>
-                    </div>
-                  </div>
                   <div className="single-template-designer__tuning" style={{ marginTop: 6 }}>
                     <div><p>文字透明度</p></div>
                     <div className="single-template-designer__slider">
@@ -577,38 +637,9 @@ function SingleArtworkTemplateDesigner({ open, artworks, onClose }: SingleArtwor
               </section>
             ) : null}
 
-            {/* 恢复原有的信息编辑区域（作品选择、标题、简介、署名、标签等） */}
+            {/* 恢复原有的信息编辑区域（标题、简介、署名、标签等） */}
             {hasArtworks ? (
               <section>
-                <div className="single-template-designer__group single-template-designer__group--hero">
-                  <div className="single-template-designer__group-header">
-                    <h2>作品选择</h2>
-                    <p>挑选你的代表作，预览真机效果。</p>
-                  </div>
-                  <button
-                    type="button"
-                    className="single-template-designer__selection"
-                    onClick={() => setPickerOpen(true)}
-                  >
-                    {selectedArtwork ? (
-                      <>
-                        <img src={selectedArtwork.imageSrc} alt={selectedArtwork.alt} loading="lazy" />
-                        <div>
-                          <p>当前作品</p>
-                          <h4>{selectedArtwork.title || "未命名"}</h4>
-                          <small>{selectedArtwork.mood || "未知心情"}</small>
-                        </div>
-                        <MaterialIcon name="chevron_right" />
-                      </>
-                    ) : (
-                      <div>
-                        <p>当前作品</p>
-                        <h4>尚未选择</h4>
-                        <small>点击打开作品库</small>
-                      </div>
-                    )}
-                  </button>
-                </div>
 
                 <div className="single-template-designer__group">
                   <div className="single-template-designer__field-row single-template-designer__field-row--inline">
@@ -656,14 +687,34 @@ function SingleArtworkTemplateDesigner({ open, artworks, onClose }: SingleArtwor
                     </label>
                     {renderToggle(showUsername, () => setShowUsername((prev) => !prev), "署名")}
                   </div>
-                  <div className="single-template-designer__field-row single-template-designer__field-row--meta single-template-designer__field-row--inline">
+                  <div className="single-template-designer__field-row single-template-designer__field-row--inline" style={{ marginTop: 8 }}>
                     <div>
-                      <p>日期与时长</p>
-                      <span>{timestampLabel}</span>
+                      <span>增加后缀</span>
                     </div>
-                    <div className="single-template-designer__meta-toggles">
-                      {renderToggle(showDate, () => setShowDate((prev) => !prev), "日期")}
-                      {renderToggle(showDuration, () => setShowDuration((prev) => !prev), "时长")}
+                    {renderToggle(addSuffix, () => setAddSuffix((prev) => !prev), "增加后缀")}
+                  </div>
+                  <div className="single-template-designer__field-row single-template-designer__field-row--meta" style={{ marginTop: 12 }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <div>
+                          <p>日期</p>
+                          <span>{selectedArtwork ? (() => {
+                            const meta = composeMetaLabels(selectedArtwork, { showDate: true, showDuration: false });
+                            return meta.dateLabel || "未设置";
+                          })() : "未设置"}</span>
+                        </div>
+                        {renderToggle(showDate, () => setShowDate((prev) => !prev), "日期")}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <div>
+                          <p>时长</p>
+                          <span>{selectedArtwork ? (() => {
+                            const meta = composeMetaLabels(selectedArtwork, { showDate: false, showDuration: true });
+                            return meta.durationLabel || "未设置";
+                          })() : "未设置"}</span>
+                        </div>
+                        {renderToggle(showDuration, () => setShowDuration((prev) => !prev), "时长")}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1166,7 +1217,7 @@ function drawGradientFooter(
   const usernameLine = (data.username || "").trim();
   if (usernameLine) {
     context.textAlign = "right";
-    context.font = `500 ${Math.round(rect.width * 0.028)}px "Manrope", "Segoe UI", sans-serif`;
+    context.font = `500 ${Math.round(rect.width * 0.022)}px "Manrope", "Segoe UI", sans-serif`; // 缩小字号从0.028到0.022
     context.fillStyle = withAlpha(data.textColor, data.textOpacity);
     context.fillText(usernameLine, contentX + contentWidth, usernameY);
   }

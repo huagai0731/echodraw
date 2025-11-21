@@ -6,6 +6,7 @@ import NewChallengeWizard from "@/pages/NewChallengeWizard";
 import LongTermGoalSetup from "@/pages/LongTermGoalSetup";
 import LongTermGoalDetails from "@/pages/LongTermGoalDetails";
 import ShortTermGoalDetails from "@/pages/ShortTermGoalDetails";
+import ShortTermGoalSavedDetails from "@/pages/ShortTermGoalSavedDetails";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import TopNav from "@/components/TopNav";
 import {
@@ -13,8 +14,10 @@ import {
   fetchGoalsCalendar,
   fetchLongTermGoal,
   hasAuthToken,
+  updateCheckpoint,
   type GoalsCalendarDay,
   type LongTermGoal,
+  type LongTermGoalCheckpoint,
   type ShortTermGoal,
 } from "@/services/api";
 import {
@@ -339,6 +342,18 @@ function pickCoverGradient(index: number): string {
 }
 
 function formatShortTermGoalSubtitle(goal: ShortTermGoal): string {
+  // 根据状态显示不同的副标题
+  if (goal.status === "draft") {
+    return "暂存中 · 点数不足";
+  }
+  if (goal.status === "saved") {
+    return "已保存 · 未启动";
+  }
+  if (goal.status === "completed") {
+    return "已完成";
+  }
+
+  // 进行中状态，显示原有逻辑
   const summaryPrefix =
     goal.planType === "same" ? "每日重复任务" : "每日不同任务";
   const sortedSchedule = [...goal.schedule].sort((a, b) => a.dayIndex - b.dayIndex);
@@ -558,6 +573,7 @@ function saveCachedCalendar(year: number, month: number, days: GoalsCalendarDay[
 function Goals() {
   const [range, setRange] = useState<RangeKey>("weekly");
   const [showWizard, setShowWizard] = useState(false);
+  const [editingGoal, setEditingGoal] = useState<ShortTermGoal | null>(null);
   const [showLongTermSetup, setShowLongTermSetup] = useState(false);
   const [showLongTermMetaEdit, setShowLongTermMetaEdit] = useState(false);
   // 初始化长期目标：先从缓存加载，避免闪烁
@@ -617,6 +633,7 @@ function Goals() {
     error: shortTermError,
     addGoal,
     removeGoal,
+    updateGoal,
   } = useShortTermGoals();
 
   const {
@@ -1080,13 +1097,20 @@ function Goals() {
 
   const handleWizardClose = useCallback(() => {
     setShowWizard(false);
+    setEditingGoal(null);
   }, []);
 
   const handleGoalSaved = useCallback(
     (goal: ShortTermGoal) => {
-      addGoal(goal);
+      // 如果是编辑模式，更新目标；否则添加新目标
+      if (editingGoal && goal.id === editingGoal.id) {
+        updateGoal(goal);
+        setEditingGoal(null);
+      } else {
+        addGoal(goal);
+      }
     },
-    [addGoal]
+    [addGoal, updateGoal, editingGoal]
   );
 
   const handleLongTermSaved = useCallback(
@@ -1122,6 +1146,46 @@ function Goals() {
       }
     }
   }, []);
+
+  const handleSelectShowcase = useCallback(
+    async (checkpoint: LongTermGoalCheckpoint, artworkId?: number) => {
+      if (!longTermGoal) return;
+      try {
+        const updatedGoal = await updateCheckpoint({
+          checkpointIndex: checkpoint.index,
+          uploadId: artworkId ?? null,
+        });
+        setLongTermGoal(updatedGoal);
+        if (activeLongTermGoal) {
+          setActiveLongTermGoal(updatedGoal);
+        }
+        saveCachedLongTermGoal(updatedGoal);
+      } catch (error) {
+        console.error("Failed to update checkpoint showcase", error);
+      }
+    },
+    [longTermGoal, activeLongTermGoal],
+  );
+
+  const handleAddMessage = useCallback(
+    async (checkpoint: LongTermGoalCheckpoint, message: string) => {
+      if (!longTermGoal) return;
+      try {
+        const updatedGoal = await updateCheckpoint({
+          checkpointIndex: checkpoint.index,
+          completionNote: message || null,
+        });
+        setLongTermGoal(updatedGoal);
+        if (activeLongTermGoal) {
+          setActiveLongTermGoal(updatedGoal);
+        }
+        saveCachedLongTermGoal(updatedGoal);
+      } catch (error) {
+        console.error("Failed to update checkpoint message", error);
+      }
+    },
+    [longTermGoal, activeLongTermGoal],
+  );
 
   const handleGoalComplete = useCallback(
     async (dateKey: string) => {
@@ -1187,7 +1251,13 @@ function Goals() {
 
   const handleGoalOpen = useCallback(
     async (goal: ShortTermGoal) => {
-      // 打开详情页面时刷新打卡记录，确保显示最新状态
+      // 根据状态打开不同的详情页面
+      if (goal.status === "saved" || goal.status === "draft") {
+        // 已保存未进行或暂存状态，打开保存详情页面
+        setActiveGoalDetail(goal);
+        return;
+      }
+      // 进行中或已完成状态，打开原有详情页面
       const dateRange = getGoalDateRange(goal);
       if (dateRange) {
         await refreshCheckInDates(dateRange);
@@ -1295,12 +1365,38 @@ function Goals() {
             setShowLongTermMetaEdit(true);
           }}
           onExport={handleLongTermExport}
+          onSelectShowcase={handleSelectShowcase}
+          onAddMessage={handleAddMessage}
         />
       </ErrorBoundary>
     );
   }
 
   if (activeGoalDetail) {
+    // 根据状态显示不同的详情页面
+    if (activeGoalDetail.status === "saved" || activeGoalDetail.status === "draft") {
+      return (
+        <ShortTermGoalSavedDetails
+          goal={activeGoalDetail}
+          onClose={handleGoalClose}
+          onStart={(updatedGoal) => {
+            // 启动成功后更新目标列表并关闭详情页
+            updateGoal(updatedGoal);
+            handleGoalClose();
+          }}
+          onEdit={(goal) => {
+            // 打开编辑模式
+            setActiveGoalDetail(null);
+            setShowWizard(true);
+            setEditingGoal(goal);
+          }}
+          onUpdated={(updatedGoal) => {
+            // 更新目标列表（启动后状态变为active）
+            updateGoal(updatedGoal);
+          }}
+        />
+      );
+    }
     return (
       <ShortTermGoalDetails
         goal={activeGoalDetail}
@@ -1324,7 +1420,14 @@ function Goals() {
   }
 
   if (showWizard) {
-    return <NewChallengeWizard onClose={handleWizardClose} onSaved={handleGoalSaved} />;
+    return (
+      <NewChallengeWizard
+        onClose={handleWizardClose}
+        onSaved={handleGoalSaved}
+        initialGoal={editingGoal}
+        mode={editingGoal ? "edit" : "create"}
+      />
+    );
   }
 
   return (
@@ -1465,26 +1568,44 @@ function Goals() {
                 </div>
               </button>
             ) : (
-              shortTermGoals.map((goal, index) => (
-                <button
-                  type="button"
-                  className="goals-carousel__item goals-carousel__item--button"
-                  key={goal.id}
-                  onClick={() => handleGoalOpen(goal)}
-                >
-                  <div
-                    className="goals-carousel__cover goals-carousel__cover--fallback"
-                    style={{ backgroundImage: pickCoverGradient(index) }}
-                    aria-hidden="true"
-                  />
-                  <div className="goals-carousel__body">
-                    <p className="goals-carousel__title">{goal.title}</p>
-                    <p className="goals-carousel__subtitle">
-                      {formatShortTermGoalSubtitle(goal)}
-                    </p>
-                  </div>
-                </button>
-              ))
+              shortTermGoals.map((goal, index) => {
+                const statusClass = `goals-carousel__item--${goal.status}`;
+                return (
+                  <button
+                    type="button"
+                    className={`goals-carousel__item goals-carousel__item--button ${statusClass}`}
+                    key={goal.id}
+                    onClick={() => handleGoalOpen(goal)}
+                  >
+                    <div
+                      className="goals-carousel__cover goals-carousel__cover--fallback"
+                      style={{ backgroundImage: pickCoverGradient(index) }}
+                      aria-hidden="true"
+                    />
+                    <div className="goals-carousel__body">
+                      <p className="goals-carousel__title">{goal.title}</p>
+                      <p className="goals-carousel__subtitle">
+                        {formatShortTermGoalSubtitle(goal)}
+                      </p>
+                      {goal.status === "draft" && (
+                        <span className="goals-carousel__status-badge goals-carousel__status-badge--draft">
+                          暂存
+                        </span>
+                      )}
+                      {goal.status === "saved" && (
+                        <span className="goals-carousel__status-badge goals-carousel__status-badge--saved">
+                          未启动
+                        </span>
+                      )}
+                      {goal.status === "completed" && (
+                        <span className="goals-carousel__status-badge goals-carousel__status-badge--completed">
+                          已完成
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })
             )}
           </div>
         </section>

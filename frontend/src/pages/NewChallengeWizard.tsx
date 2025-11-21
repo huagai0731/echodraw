@@ -14,6 +14,7 @@ import { isAxiosError } from "axios";
 import MaterialIcon from "@/components/MaterialIcon";
 import {
   createShortTermGoal,
+  updateShortTermGoal,
   createUserTaskPreset,
   deleteUserTaskPreset,
   fetchShortTermTaskPresets,
@@ -31,6 +32,8 @@ type StepKey = "duration" | "type" | "tasks" | "confirm";
 type NewChallengeWizardProps = {
   onClose: () => void;
   onSaved: (goal: ShortTermGoal) => void;
+  initialGoal?: ShortTermGoal | null;
+  mode?: "create" | "edit";
 };
 
 type PlanType = "same" | "different";
@@ -69,6 +72,11 @@ const MY_CATEGORY_ID = "我的";
 
 const DURATIONS = [7, 14, 21, 28];
 
+// 计算容错天数（周期天数 + 2）
+function getToleranceDays(cycleDays: number): number {
+  return cycleDays + 2;
+}
+
 const PLAN_TYPES: Array<{
   id: PlanType;
   title: string;
@@ -77,21 +85,21 @@ const PLAN_TYPES: Array<{
   {
     id: "same",
     title: "每日相同任务",
-    subtitle: "适用于想要周期提升特定目标",
+    subtitle: "适合想培养固定习惯或者有明确练习目的的小画师，比如每天画同一种练习，让能力更稳定。",
   },
   {
     id: "different",
     title: "每日设置不同任务",
-    subtitle: "适用于想要尝试更多新事物的画师",
+    subtitle: "适合想探索更多内容的小画师，无论是针对性训练，还是试着突破自己没画过的方向。",
   },
 ];
 
 const FALLBACK_TASK_CATEGORIES: TaskCategory[] = [
+  { id: MY_CATEGORY_ID, name: "我的" },
   { id: "sketch", name: "速写" },
   { id: "color", name: "色彩" },
   { id: "inspiration", name: "灵感" },
   { id: "study", name: "学习" },
-  { id: MY_CATEGORY_ID, name: "我的" },
 ];
 
 const FALLBACK_TASK_LIBRARY: TaskItem[] = [
@@ -172,10 +180,10 @@ const FALLBACK_TASK_LIBRARY: TaskItem[] = [
 const STEPS: StepKey[] = ["duration", "type", "tasks", "confirm"];
 const DEFAULT_PLAN_NAME = "我的短期挑战";
 
-function NewChallengeWizard({ onClose, onSaved }: NewChallengeWizardProps) {
+function NewChallengeWizard({ onClose, onSaved, initialGoal, mode = "create" }: NewChallengeWizardProps) {
   const [stepIndex, setStepIndex] = useState(0);
   const [durationIndex, setDurationIndex] = useState(0);
-  const [planType, setPlanType] = useState<PlanType>("different");
+  const [planType, setPlanType] = useState<PlanType>("same");
   const [planName, setPlanName] = useState(DEFAULT_PLAN_NAME);
   const [taskCategories, setTaskCategories] = useState<TaskCategory[]>(FALLBACK_TASK_CATEGORIES);
   const [customPresetState, setCustomPresetState] = useState<CustomPresetState>({
@@ -184,6 +192,7 @@ function NewChallengeWizard({ onClose, onSaved }: NewChallengeWizardProps) {
     error: null,
   });
   const [taskLibrary, setTaskLibrary] = useState<TaskItem[]>(FALLBACK_TASK_LIBRARY);
+  const [userPresets, setUserPresets] = useState<UserTaskPreset[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>(
     FALLBACK_TASK_CATEGORIES[0]?.id ?? "",
   );
@@ -192,7 +201,12 @@ function NewChallengeWizard({ onClose, onSaved }: NewChallengeWizardProps) {
   const [hasCustomizedTasks, setHasCustomizedTasks] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [showMissingTasksAlert, setShowMissingTasksAlert] = useState(false);
+  const [missingTaskDays, setMissingTaskDays] = useState<number[]>([]);
+  const [showDraftAlert, setShowDraftAlert] = useState(false);
+  const [draftedGoalId, setDraftedGoalId] = useState<number | null>(null);
   const taskInstanceCounter = useRef(0);
+  const goalIdRef = useRef<number | null>(initialGoal?.id ?? null);
 
   const createSelectedTask = useCallback(
     (task: TaskItem, overrides?: Partial<Pick<SelectedTask, "title" | "subtitle">>) => {
@@ -268,10 +282,17 @@ function NewChallengeWizard({ onClose, onSaved }: NewChallengeWizardProps) {
         categoryMap.set(MY_CATEGORY_ID, MY_CATEGORY_ID);
       }
 
-      return Array.from(categoryMap.entries()).map(([id, name]) => ({
+      const result = Array.from(categoryMap.entries()).map(([id, name]) => ({
         id,
         name,
       }));
+      // 确保"我的"在第一位
+      const myIndex = result.findIndex((cat) => cat.id === MY_CATEGORY_ID);
+      if (myIndex > 0) {
+        const myCategory = result.splice(myIndex, 1)[0];
+        result.unshift(myCategory);
+      }
+      return result;
     };
 
     const loadPresets = async () => {
@@ -280,11 +301,22 @@ function NewChallengeWizard({ onClose, onSaved }: NewChallengeWizardProps) {
         if (!mounted) {
           return;
         }
-        const tasks = bundle.tasks.length
+        // 处理全局任务
+        const globalTasks = bundle.tasks.length
           ? bundle.tasks.map(mapPresetToTaskItem)
           : FALLBACK_TASK_LIBRARY;
-        const categories = ensureCategories(bundle, tasks);
-        setTaskLibrary(tasks);
+        
+        // 处理用户自定义任务
+        const userTasks = bundle.userPresets.map(mapUserPresetToTaskItem);
+        
+        // 保存用户预设列表
+        setUserPresets(bundle.userPresets);
+        
+        // 合并所有任务
+        const allTasks = [...globalTasks, ...userTasks];
+        
+        const categories = ensureCategories(bundle, allTasks);
+        setTaskLibrary(allTasks);
         setTaskCategories(categories);
       } catch (error) {
         console.warn("[Echo] Failed to load short-term task presets from backend:", error);
@@ -315,8 +347,36 @@ function NewChallengeWizard({ onClose, onSaved }: NewChallengeWizardProps) {
     );
   }, [taskCategories]);
 
+  // 初始化编辑模式的数据
   useEffect(() => {
-    if (hasCustomizedTasks || taskLibrary.length === 0) {
+    if (mode === "edit" && initialGoal) {
+      setPlanName(initialGoal.title);
+      setPlanType(initialGoal.planType);
+      const durationIdx = DURATIONS.indexOf(initialGoal.durationDays);
+      if (durationIdx >= 0) {
+        setDurationIndex(durationIdx);
+      }
+      
+      // 转换schedule为selectedTasks格式
+      const tasksMap: Record<number, SelectedTask[]> = {};
+      initialGoal.schedule.forEach((day) => {
+        const dayTasks = day.tasks.map((task) => createSelectedTask({
+          id: task.taskId,
+          categoryId: "custom",
+          title: task.title,
+          subtitle: task.subtitle,
+          metadata: {},
+          origin: "custom",
+        }));
+        tasksMap[day.dayIndex] = dayTasks;
+      });
+      setSelectedTasks(tasksMap);
+      setHasCustomizedTasks(true);
+    }
+  }, [mode, initialGoal, createSelectedTask]);
+
+  useEffect(() => {
+    if (hasCustomizedTasks || taskLibrary.length === 0 || (mode === "edit" && initialGoal)) {
       return;
     }
 
@@ -332,7 +392,7 @@ function NewChallengeWizard({ onClose, onSaved }: NewChallengeWizardProps) {
         0: defaults,
       };
     });
-  }, [createSelectedTask, hasCustomizedTasks, taskLibrary]);
+  }, [createSelectedTask, hasCustomizedTasks, taskLibrary, mode, initialGoal]);
 
   const step = STEPS[stepIndex];
   const duration = DURATIONS[durationIndex];
@@ -385,10 +445,26 @@ function NewChallengeWizard({ onClose, onSaved }: NewChallengeWizardProps) {
   }, [step]);
 
   const dayLabels = useMemo(() => {
-    return Array.from({ length: duration }).map((_, index) => `Day${index + 1}`);
+    return Array.from({ length: duration }).map((_, index) => {
+      const dayNumber = index + 1;
+      // 第1、8、15、22天显示为 "Day1"、"Day8" 等，其他只显示数字
+      if (dayNumber === 1 || dayNumber === 8 || dayNumber === 15 || dayNumber === 22) {
+        return `Day${dayNumber}`;
+      }
+      return String(dayNumber);
+    });
   }, [duration]);
 
+  // 格式化未设置任务的天数标签
+  const formatMissingDays = useCallback((days: number[]): string => {
+    return days.map((dayNumber) => `Day${dayNumber}`).join("、");
+  }, []);
+
   const availableTasks = useMemo(() => {
+    if (selectedCategory === MY_CATEGORY_ID) {
+      // "我的"栏目只显示用户自定义的任务
+      return taskLibrary.filter((task) => task.origin === "custom");
+    }
     const filtered = taskLibrary.filter((task) => task.categoryId === selectedCategory);
     if (filtered.length > 0) {
       return filtered;
@@ -530,6 +606,17 @@ function NewChallengeWizard({ onClose, onSaved }: NewChallengeWizardProps) {
           description,
           metadata: {},
         });
+        // 更新用户预设列表
+        setUserPresets((prev) => {
+          const existingIndex = prev.findIndex((p) => p.id === preset.id);
+          if (existingIndex !== -1) {
+            const next = [...prev];
+            next[existingIndex] = preset;
+            return next;
+          }
+          return [...prev, preset];
+        });
+        // 更新任务库
         const taskItem = mapUserPresetToTaskItem(preset);
         setTaskLibrary((prev) => {
           const existingIndex = prev.findIndex((item) => item.id === taskItem.id);
@@ -565,6 +652,9 @@ function NewChallengeWizard({ onClose, onSaved }: NewChallengeWizardProps) {
       let removedTaskId: string | null = null;
       try {
         await deleteUserTaskPreset(presetId);
+        // 从用户预设列表中移除
+        setUserPresets((prev) => prev.filter((p) => p.id !== presetId));
+        // 从任务库中移除
         setTaskLibrary((prev) => {
           const next: TaskItem[] = [];
           prev.forEach((item) => {
@@ -622,22 +712,41 @@ function NewChallengeWizard({ onClose, onSaved }: NewChallengeWizardProps) {
     const schedule = buildSchedule();
 
     try {
-      const goal = await createShortTermGoal({
-        title: normalizedTitle,
-        durationDays: duration,
-        planType,
-        schedule,
-      });
+      let goal: ShortTermGoal;
+      if (mode === "edit" && goalIdRef.current) {
+        // 编辑模式：更新现有目标
+        goal = await updateShortTermGoal(goalIdRef.current, {
+          title: normalizedTitle,
+          durationDays: duration,
+          planType,
+          schedule,
+        });
+      } else {
+        // 创建模式：创建新目标
+        goal = await createShortTermGoal({
+          title: normalizedTitle,
+          durationDays: duration,
+          planType,
+          schedule,
+        });
+      }
       onSaved(goal);
       onClose();
     } catch (error) {
       let message = "保存挑战失败，请稍后再试。";
+      let goalId: number | null = null;
+      let isDraft = false;
+      
       if (error && typeof error === "object") {
         const maybeResponse = (error as { response?: { data?: unknown } }).response;
         if (maybeResponse && typeof maybeResponse === "object") {
           const data = (maybeResponse as { data?: unknown }).data;
           if (data && typeof data === "object") {
-            const detail = (data as Record<string, unknown>).detail;
+            const dataObj = data as Record<string, unknown>;
+            const detail = dataObj.detail;
+            const status = dataObj.status;
+            const goal_id = dataObj.goal_id;
+            
             if (typeof detail === "string" && detail.trim()) {
               message = detail;
             } else if (Array.isArray(detail) && detail.length > 0) {
@@ -646,13 +755,28 @@ function NewChallengeWizard({ onClose, onSaved }: NewChallengeWizardProps) {
                 message = first;
               }
             }
+            
+            // 检查是否是点数不足导致的暂存
+            if (status === "draft" && typeof goal_id === "number") {
+              isDraft = true;
+              goalId = goal_id;
+            }
           }
         }
       }
-      if (message === "保存挑战失败，请稍后再试。" && error instanceof Error && error.message) {
-        message = error.message;
+      
+      if (isDraft && goalId !== null) {
+        // 显示暂存弹窗
+        setDraftedGoalId(goalId);
+        setShowDraftAlert(true);
+        // 不设置错误消息，因为会显示弹窗
+        setSaveError(null);
+      } else {
+        if (message === "保存挑战失败，请稍后再试。" && error instanceof Error && error.message) {
+          message = error.message;
+        }
+        setSaveError(message);
       }
-      setSaveError(message);
     } finally {
       setIsSaving(false);
     }
@@ -662,6 +786,24 @@ function NewChallengeWizard({ onClose, onSaved }: NewChallengeWizardProps) {
     if (isSaving) {
       return;
     }
+    
+    // 如果是"每日设置不同任务"模式，且在任务设置步骤，检查是否有未设置任务的天数
+    if (step === "tasks" && planType === "different") {
+      const missingDays: number[] = [];
+      for (let index = 0; index < duration; index += 1) {
+        const tasksForDay = selectedTasks[index] ?? [];
+        if (tasksForDay.length === 0) {
+          missingDays.push(index + 1);
+        }
+      }
+      
+      if (missingDays.length > 0) {
+        setMissingTaskDays(missingDays);
+        setShowMissingTasksAlert(true);
+        return;
+      }
+    }
+    
     if (stepIndex === STEPS.length - 1) {
       void handleSave();
       return;
@@ -695,7 +837,7 @@ function NewChallengeWizard({ onClose, onSaved }: NewChallengeWizardProps) {
             <MaterialIcon name="arrow_back" />
           </button>
           <div className="wizard-header__title">
-            <h1>建立你的新挑战</h1>
+            <h1>{mode === "edit" ? "编辑挑战" : "建立你的新挑战"}</h1>
             <p>{stepLabel}</p>
           </div>
           <button type="button" className="wizard-header__button" onClick={onClose}>
@@ -746,6 +888,7 @@ function NewChallengeWizard({ onClose, onSaved }: NewChallengeWizardProps) {
               onSelectCategory={setSelectedCategory}
               availableTasks={availableTasks}
               selectedTasks={tasksForCurrentDay}
+              allSelectedTasks={selectedTasks}
               onAddTask={handleAddTask}
               onRemoveTask={handleRemoveTask}
               onDecrementTask={handleDecrementTask}
@@ -770,6 +913,48 @@ function NewChallengeWizard({ onClose, onSaved }: NewChallengeWizardProps) {
         </section>
 
         {saveError ? <p className="wizard-error">{saveError}</p> : null}
+
+        {showMissingTasksAlert && (
+          <div className="wizard-alert-overlay" onClick={() => setShowMissingTasksAlert(false)}>
+            <div className="wizard-alert" onClick={(e) => e.stopPropagation()}>
+              <h3>还有天数未设置任务</h3>
+              <p>
+                {formatMissingDays(missingTaskDays)}没有设置任务。
+              </p>
+              <p>如果您是想设置为休息日的话，也请新增一个"休息"任务填充噢。</p>
+              <button
+                type="button"
+                className="wizard-alert__button"
+                onClick={() => setShowMissingTasksAlert(false)}
+              >
+                知道了
+              </button>
+            </div>
+          </div>
+        )}
+
+        {showDraftAlert && (
+          <div className="wizard-alert-overlay" onClick={() => {
+            setShowDraftAlert(false);
+            onClose();
+          }}>
+            <div className="wizard-alert" onClick={(e) => e.stopPropagation()}>
+              <h3>点数不足</h3>
+              <p>您的点数不足，无法启动该目标。</p>
+              <p>目标已暂存，可在点数充足后启动。</p>
+              <button
+                type="button"
+                className="wizard-alert__button"
+                onClick={() => {
+                  setShowDraftAlert(false);
+                  onClose();
+                }}
+              >
+                知道了
+              </button>
+            </div>
+          </div>
+        )}
 
         <footer className="wizard-footer">
           <button type="button" className="wizard-footer__secondary" onClick={handlePrev}>
@@ -964,6 +1149,14 @@ function DurationStep({ duration, durationIndex, onChange }: DurationStepProps) 
           />
         ))}
       </div>
+      <div className="wizard-duration__hint">
+        <p>目标制定完成后，你可以择日再启动。</p>
+        <p>
+          目标启动后，需要你在{getToleranceDays(duration)}天内完成{duration}次打卡。
+        </p>
+        <p>之所以设置期限，是为了让一个小目标能顺利走完，而不会被无限拖延到失去意义。</p>
+        <p>但不论成功与否，这次目标的记录和总结都会保留。画了就是成功，不论多少。</p>
+      </div>
     </div>
   );
 }
@@ -1010,6 +1203,7 @@ type TasksStepProps = {
   onSelectCategory: (id: string) => void;
   availableTasks: TaskItem[];
   selectedTasks: SelectedTask[];
+  allSelectedTasks: Record<number, SelectedTask[]>;
   onAddTask: (task: TaskItem) => void;
   onRemoveTask: (instanceId: string) => void;
   onDecrementTask: (sourceId: string) => void;
@@ -1033,6 +1227,7 @@ function TasksStep({
   onSelectCategory,
   availableTasks,
   selectedTasks,
+  allSelectedTasks,
   onAddTask,
   onRemoveTask,
   onDecrementTask,
@@ -1124,7 +1319,10 @@ function TasksStep({
   return (
     <div className="wizard-panel">
       <div className="wizard-plan-name">
-        <label htmlFor="plan-name">挑战名称</label>
+        <div className="wizard-plan-name__header">
+          <label htmlFor="plan-name">挑战名称</label>
+          <MaterialIcon name="edit" className="wizard-plan-name__edit-icon" />
+        </div>
         <input
           id="plan-name"
           value={planName}
@@ -1136,20 +1334,26 @@ function TasksStep({
       {showDaySelector && (
         <div className="wizard-days">
           <div className="wizard-days__scroller">
-            {dayLabels.map((label, index) => (
-              <button
-                type="button"
-                key={label}
-                className={
-                  index === selectedDay
-                    ? "wizard-days__button wizard-days__button--active"
-                    : "wizard-days__button"
-                }
-                onClick={() => onSelectDay(index)}
-              >
-                {label}
-              </button>
-            ))}
+            {dayLabels.map((label, index) => {
+              const hasTasks = (allSelectedTasks[index] ?? []).length > 0;
+              return (
+                <button
+                  type="button"
+                  key={label}
+                  className={
+                    index === selectedDay
+                      ? "wizard-days__button wizard-days__button--active"
+                      : "wizard-days__button"
+                  }
+                  onClick={() => onSelectDay(index)}
+                >
+                  {!hasTasks && (
+                    <span className="wizard-days__indicator" aria-label="未设置任务" />
+                  )}
+                  {label}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -1258,6 +1462,11 @@ function TasksStep({
           </aside>
 
           <div className="wizard-library__tasks">
+            {!isMineCategory && (
+              <p className="wizard-library__hint">
+                -预设只是为了给您提供思路，您可以添加进任务然后进行修改-
+              </p>
+            )}
             {isMineCategory ? (
               <article className="wizard-custom">
                 <header>
@@ -1387,60 +1596,84 @@ type ConfirmStepProps = {
 
 function ConfirmStep({ duration, planName, planType, tasks, dayLabels }: ConfirmStepProps) {
   const summaryList = useMemo(() => {
-    return dayLabels.map((label, index) => {
-      const dayTasks = planType === "same" ? tasks[0] ?? [] : tasks[index] ?? [];
+    if (planType === "same") {
+      // 每日相同任务：只显示一次任务列表
+      const dayTasks = tasks[0] ?? [];
+      return [
+        {
+          label: "每日任务",
+          tasks: dayTasks,
+        },
+      ];
+    }
+    // 每日不同任务：显示每一天的任务，所有天数都显示为 "Day x" 格式
+    return Array.from({ length: duration }).map((_, index) => {
+      const dayTasks = tasks[index] ?? [];
+      const dayNumber = index + 1;
       return {
-        label,
+        label: `Day${dayNumber}`,
         tasks: dayTasks,
       };
     });
-  }, [dayLabels, planType, tasks]);
+  }, [duration, planType, tasks]);
 
   return (
-    <div className="wizard-panel">
-      <div className="wizard-confirm">
-        <header>
-          <h2>{planName || "未命名挑战"}</h2>
-          <p>
-            {duration} 天 · {planType === "same" ? "每日重复任务" : "每日不同安排"}
-          </p>
-        </header>
+    <>
+      <div className="wizard-panel">
+        <div className="wizard-confirm">
+          <header>
+            <h2>{planName || "未命名挑战"}</h2>
+            <p>
+              {duration} 天 · {planType === "same" ? "每日重复任务" : "每日不同安排"}
+            </p>
+          </header>
 
-        <div className="wizard-confirm__list">
-          {summaryList.map((item, index) => (
-            <Fragment key={item.label}>
-              <article className="wizard-confirm__item">
-                <div className="wizard-confirm__badge">{index + 1}</div>
-                <div>
-                  <h3>{item.label}</h3>
-                  {item.tasks.length > 0 ? (
-                    <ul>
-                      {item.tasks.map((task) => (
-                        <li key={task.instanceId}>{task.title}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="wizard-confirm__placeholder">尚未安排任务</p>
+          <div className="wizard-confirm__list">
+            {summaryList.map((item, index) => (
+              <Fragment key={item.label}>
+                <article className="wizard-confirm__item">
+                  {planType === "different" && (
+                    <div className="wizard-confirm__badge">{item.label}</div>
                   )}
-                </div>
-              </article>
-              {index < summaryList.length - 1 ? <hr /> : null}
-            </Fragment>
-          ))}
+                  <div>
+                    {planType === "same" ? (
+                      <>
+                        <h3>{item.label}</h3>
+                        {item.tasks.length > 0 ? (
+                          <ul>
+                            {item.tasks.map((task) => (
+                              <li key={task.instanceId}>{task.title}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="wizard-confirm__placeholder">尚未安排任务</p>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        {item.tasks.length > 0 ? (
+                          <ul>
+                            {item.tasks.map((task) => (
+                              <li key={task.instanceId}>{task.title}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="wizard-confirm__placeholder">尚未安排任务</p>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </article>
+                {index < summaryList.length - 1 ? <hr /> : null}
+              </Fragment>
+            ))}
+          </div>
         </div>
-
-        <footer className="wizard-confirm__footer">
-          <div>
-            <span>预计投入</span>
-            <strong>{duration * 45} 分钟</strong>
-          </div>
-          <div>
-            <span>仪式感提醒</span>
-            <strong>每日 20:00</strong>
-          </div>
-        </footer>
       </div>
-    </div>
+      <p className="wizard-confirm__hint">
+        - 功不唐捐。{duration}天后回头看，你会是不同的自己 -
+      </p>
+    </>
   );
 }
 

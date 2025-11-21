@@ -400,3 +400,21 @@ if not EMAIL_HOST_PASSWORD:
     )
 DEFAULT_FROM_EMAIL = os.getenv("SMTP_FROM_EMAIL", EMAIL_HOST_USER)
 EMAIL_TIMEOUT = int(os.getenv("SMTP_TIMEOUT", "15"))
+
+# Celery配置
+CELERY_ENABLED = os.getenv("CELERY_ENABLED", "false").lower() == "true"
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
+CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/0")
+CELERY_TIMEZONE = "Asia/Shanghai"
+CELERY_ENABLE_UTC = True
+
+# Celery Beat定时任务配置
+from celery.schedules import crontab
+
+CELERY_BEAT_SCHEDULE = {
+    "generate-monthly-reports": {
+        "task": "core.tasks.generate_monthly_reports_task",
+        "schedule": crontab(hour=2, minute=0, day_of_month=1),  # 每月1号凌晨2点执行
+        "options": {"expires": 3600},  # 任务过期时间1小时
+    },
+}

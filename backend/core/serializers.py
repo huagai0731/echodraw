@@ -740,6 +740,7 @@ class ShortTermGoalSerializer(serializers.ModelSerializer):
             "duration_days",
             "plan_type",
             "schedule",
+            "status",
             "created_at",
             "updated_at",
         ]
@@ -842,7 +843,54 @@ class ShortTermGoalSerializer(serializers.ModelSerializer):
         user = getattr(request, "user", None)
         if not user or not user.is_authenticated:
             raise serializers.ValidationError("无法识别当前用户。")
-        return ShortTermGoal.objects.create(user=user, **validated_data)
+        
+        # 检查点数是否足够（创建短期目标需要50点）
+        from core.models import UserProfile
+        from django.db import transaction
+        REQUIRED_POINTS = 50
+        
+        profile, _ = UserProfile.objects.get_or_create(user=user)
+        
+        # 先创建目标，默认状态为暂存
+        validated_data["status"] = ShortTermGoal.STATUS_DRAFT
+        goal = ShortTermGoal.objects.create(user=user, **validated_data)
+        
+        # 如果点数不足，保持暂存状态并抛出错误
+        if profile.points < REQUIRED_POINTS:
+            # 使用自定义异常来包含goal_id，这样前端可以知道目标已创建
+            from rest_framework.exceptions import APIException
+            class InsufficientPointsError(APIException):
+                status_code = 402  # Payment Required
+                default_detail = f"点数不足，需要{REQUIRED_POINTS}点，当前余额{profile.points}点。目标已暂存，可在点数充足后启动。"
+                default_code = "insufficient_points"
+            
+            error = InsufficientPointsError()
+            error.detail = {
+                "detail": error.default_detail,
+                "goal_id": goal.id,
+                "status": "draft",
+            }
+            raise error
+        
+        # 点数足够，扣除点数并更新状态为已保存未进行
+        with transaction.atomic():
+            profile.points -= REQUIRED_POINTS
+            profile.save(update_fields=["points"])
+            
+            # 记录点数交易
+            from core.models import PointsTransaction
+            PointsTransaction.objects.create(
+                user=user,
+                points=-REQUIRED_POINTS,
+                transaction_type=PointsTransaction.TRANSACTION_TYPE_CONSUME,
+                balance_after=profile.points,
+                description=f"创建短期目标：{validated_data.get('title', '未命名')}",
+            )
+            
+            goal.status = ShortTermGoal.STATUS_SAVED
+            goal.save(update_fields=["status"])
+        
+        return goal
 
     def update(self, instance: ShortTermGoal, validated_data: dict[str, Any]) -> ShortTermGoal:
         for field, value in validated_data.items():
@@ -1142,7 +1190,7 @@ class LongTermGoalSerializer(serializers.ModelSerializer):
             cumulative += minutes
             entries.append({"upload": upload, "cumulative": cumulative})
 
-        checkpoints = self._build_checkpoints(obj, entries)
+        checkpoints = self._build_checkpoints(obj, entries, uploads)
 
         stats = {
             "uploads": uploads,
@@ -1194,6 +1242,7 @@ class LongTermGoalSerializer(serializers.ModelSerializer):
         self,
         obj: LongTermGoal,
         entries: list[dict[str, object]],
+        uploads: list[UserUpload],
     ) -> list[dict[str, object]]:
         checkpoints: list[dict[str, object]] = []
         # 确保类型正确（防止从数据库读取时是字符串）
@@ -1204,33 +1253,88 @@ class LongTermGoalSerializer(serializers.ModelSerializer):
 
         for index in range(checkpoint_count):
             threshold_minutes = per_checkpoint_minutes * (index + 1)
-            entry = next((item for item in entries if item["cumulative"] >= threshold_minutes), None)
-
-            if entry:
-                status = "completed"
-                reached_minutes = entry["cumulative"]
-                upload = entry["upload"]
-                reached_at = timezone.localtime(upload.uploaded_at)
-                upload_payload = self._serialize_upload(upload)
+            
+            # 从metadata中读取checkpoint的自定义数据
+            checkpoint_index = index + 1
+            checkpoint_key = f"checkpoint_{checkpoint_index}"
+            checkpoint_metadata = {}
+            try:
+                if hasattr(obj, "metadata") and obj.metadata is not None:
+                    if isinstance(obj.metadata, dict):
+                        checkpoint_metadata = obj.metadata.get(checkpoint_key, {})
+            except (AttributeError, TypeError):
+                checkpoint_metadata = {}
+            
+            # 如果metadata中指定了upload_id，优先使用指定的upload
+            custom_upload_id = checkpoint_metadata.get("upload_id") if isinstance(checkpoint_metadata, dict) else None
+            if custom_upload_id and uploads:
+                try:
+                    custom_upload = next((u for u in uploads if u.id == custom_upload_id), None)
+                    if custom_upload:
+                        status = "completed"
+                        reached_minutes = None  # 使用自定义upload时，不设置reached_minutes
+                        reached_at = timezone.localtime(custom_upload.uploaded_at)
+                        upload_payload = self._serialize_upload(custom_upload)
+                    else:
+                        # 如果指定的upload不存在，回退到原来的逻辑
+                        entry = next((item for item in entries if item["cumulative"] >= threshold_minutes), None)
+                        if entry:
+                            status = "completed"
+                            reached_minutes = entry["cumulative"]
+                            upload = entry["upload"]
+                            reached_at = timezone.localtime(upload.uploaded_at)
+                            upload_payload = self._serialize_upload(upload)
+                        else:
+                            status = "upcoming"
+                            reached_minutes = None
+                            reached_at = None
+                            upload_payload = None
+                except (StopIteration, AttributeError):
+                    # 如果出错，回退到原来的逻辑
+                    entry = next((item for item in entries if item["cumulative"] >= threshold_minutes), None)
+                    if entry:
+                        status = "completed"
+                        reached_minutes = entry["cumulative"]
+                        upload = entry["upload"]
+                        reached_at = timezone.localtime(upload.uploaded_at)
+                        upload_payload = self._serialize_upload(upload)
+                    else:
+                        status = "upcoming"
+                        reached_minutes = None
+                        reached_at = None
+                        upload_payload = None
             else:
-                status = "upcoming"
-                reached_minutes = None
-                reached_at = None
-                upload_payload = None
+                # 没有自定义upload，使用原来的逻辑
+                entry = next((item for item in entries if item["cumulative"] >= threshold_minutes), None)
+                if entry:
+                    status = "completed"
+                    reached_minutes = entry["cumulative"]
+                    upload = entry["upload"]
+                    reached_at = timezone.localtime(upload.uploaded_at)
+                    upload_payload = self._serialize_upload(upload)
+                else:
+                    status = "upcoming"
+                    reached_minutes = None
+                    reached_at = None
+                    upload_payload = None
 
             if status == "upcoming" and first_open_index is None:
                 status = "current"
                 first_open_index = index
+            
+            # 从metadata中读取completionNote
+            completion_note = checkpoint_metadata.get("completion_note") if isinstance(checkpoint_metadata, dict) else None
 
             checkpoint_payload = {
-                "index": index + 1,
-                "label": f"CheckPoint {index + 1:02d}",
+                "index": checkpoint_index,
+                "label": f"CheckPoint {checkpoint_index:02d}",
                 "status": status,
                 "targetHours": round(threshold_minutes / 60, 2),
                 "thresholdMinutes": threshold_minutes,
                 "reachedMinutes": reached_minutes,
                 "reachedAt": reached_at.isoformat() if reached_at else None,
                 "upload": upload_payload,
+                "completionNote": completion_note,
             }
             checkpoints.append(checkpoint_payload)
 

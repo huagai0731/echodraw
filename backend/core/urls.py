@@ -149,6 +149,11 @@ urlpatterns = [
         views.profile_achievements,
         name="profile-achievements",
     ),
+    path(
+        "achievements/evaluate-or-unlock/",
+        views.evaluate_or_unlock_achievement,
+        name="achievements-evaluate-or-unlock",
+    ),
     path("uploads/", views.UserUploadListCreateView.as_view(), name="user-uploads"),
     path("uploads/<int:pk>/", views.UserUploadDetailView.as_view(), name="user-upload-detail"),
     path("uploads/<int:pk>/image/", views.UserUploadImageView.as_view(), name="user-upload-image"),
@@ -169,6 +174,11 @@ urlpatterns = [
         "goals/short-term/<int:pk>/",
         views.ShortTermGoalDetailView.as_view(),
         name="goals-short-term-detail",
+    ),
+    path(
+        "goals/short-term/<int:goal_id>/start/",
+        views.start_short_term_goal,
+        name="goals-short-term-start",
     ),
     path(
         "goals/short-term/<int:goal_id>/task-completions/",
@@ -194,6 +204,11 @@ urlpatterns = [
         "goals/long-term/",
         views.LongTermGoalView.as_view(),
         name="goals-long-term",
+    ),
+    path(
+        "goals/long-term/checkpoint/",
+        views.update_checkpoint,
+        name="goals-long-term-checkpoint",
     ),
     path(
         "goals/long-term-copy/",
@@ -225,12 +240,23 @@ urlpatterns = [
     path("tests/<int:test_id>/", views.user_test_detail, name="user-test-detail"),
     path("tests/submit/", views.user_test_submit, name="user-test-submit"),
     path("tests/results/<int:result_id>/", views.user_test_result, name="user-test-result"),
+    # 点数系统 API
+    path("points/", views.user_points, name="user-points"),
+    path("points/orders/", views.create_points_order, name="create-points-order"),
+    path("points/orders/<int:order_id>/complete/", views.complete_points_order, name="complete-points-order"),
+    path("points/transactions/", views.points_transactions, name="points-transactions"),
     # 标签管理 API
     path("tags/", views.tags_list, name="tags-list"),
     path("tags/manage/", views.TagListCreateView.as_view(), name="tags-manage"),
     path("tags/manage/<int:pk>/", views.TagDetailView.as_view(), name="tags-manage-detail"),
     # 创作状态 API
     path("moods/", views.moods_list, name="moods-list"),
+    # 月报 API
+    path("reports/monthly/", views.monthly_report, name="monthly-report"),
+    # 后台管理 API
+    path("admin/users/", views.admin_users_list, name="admin-users-list"),
+    path("admin/users/uploads/", views.admin_user_uploads, name="admin-user-uploads"),
+    path("admin/reports/monthly/", views.admin_user_monthly_report, name="admin-user-monthly-report"),
     path("", include(router.urls)),
 ]
 

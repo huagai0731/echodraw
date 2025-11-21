@@ -3,6 +3,7 @@ import clsx from "clsx";
 
 import MaterialIcon from "@/components/MaterialIcon";
 import type { AchievementGroupDefinition, AchievementLevelDefinition } from "@/pages/achievementsData";
+import type { Artwork } from "@/types/artwork";
 
 import "./ProfileAchievements.css";
 
@@ -28,6 +29,7 @@ type ProfileAchievementsProps = {
   standalone?: AchievementLevelDefinition[];
   summary?: ProfileAchievementsSummary;
   loading?: boolean;
+  artworks?: Artwork[];
 };
 
 function hashString(value: string): number {
@@ -50,14 +52,72 @@ function gradientFromSlug(slug: string): string {
   return `linear-gradient(135deg, hsl(${hue1} ${saturation}% ${lightness1}%), hsl(${hue2} ${saturation + 8}% ${lightness2}%))`;
 }
 
-function resolveBackground(slug: string, metadata?: Record<string, unknown>): string {
-  // 优先使用解锁时使用的图片
-  const unlockImage = typeof metadata?.unlock_image_url === "string" ? metadata.unlock_image_url.trim() : "";
+function resolveBackground(
+  slug: string,
+  metadata?: Record<string, unknown>,
+  artworks?: Artwork[],
+): string {
+  // 优先根据图片ID从artworks中查找图片
+  const artworkId =
+    (typeof metadata?.artwork_id === "number" ? metadata.artwork_id : null) ||
+    (typeof metadata?.artworkId === "number" ? metadata.artworkId : null) ||
+    (typeof metadata?.upload_id === "number" ? metadata.upload_id : null) ||
+    (typeof metadata?.uploadId === "number" ? metadata.uploadId : null) ||
+    (typeof metadata?.artwork_id === "string" ? Number.parseInt(metadata.artwork_id, 10) : null) ||
+    (typeof metadata?.artworkId === "string" ? Number.parseInt(metadata.artworkId, 10) : null) ||
+    (typeof metadata?.upload_id === "string" ? Number.parseInt(metadata.upload_id, 10) : null) ||
+    (typeof metadata?.uploadId === "string" ? Number.parseInt(metadata.uploadId, 10) : null);
+
+  if (artworkId && artworks && artworks.length > 0) {
+    // 尝试通过 art-{id} 格式查找
+    const artwork = artworks.find((art) => {
+      const artIdMatch = art.id.match(/^art-(\d+)$/);
+      if (artIdMatch) {
+        const artIdNum = Number.parseInt(artIdMatch[1], 10);
+        return artIdNum === artworkId;
+      }
+      return false;
+    });
+    if (artwork && artwork.imageSrc) {
+      return `url("${artwork.imageSrc}")`;
+    }
+  }
+
+  // 其次使用解锁时使用的图片URL，支持多种可能的字段名
+  const unlockImage = 
+    (typeof metadata?.unlock_image_url === "string" ? metadata.unlock_image_url.trim() : "") ||
+    (typeof metadata?.unlockImageUrl === "string" ? metadata.unlockImageUrl.trim() : "") ||
+    (typeof metadata?.unlock_image === "string" ? metadata.unlock_image.trim() : "") ||
+    (typeof metadata?.unlockImage === "string" ? metadata.unlockImage.trim() : "") ||
+    (typeof metadata?.artwork_url === "string" ? metadata.artwork_url.trim() : "") ||
+    (typeof metadata?.artworkUrl === "string" ? metadata.artworkUrl.trim() : "") ||
+    (typeof metadata?.image_url === "string" ? metadata.image_url.trim() : "") ||
+    (typeof metadata?.imageUrl === "string" ? metadata.imageUrl.trim() : "");
   if (unlockImage) {
     return `url("${unlockImage}")`;
   }
   
-  // 其次使用封面图片
+  // 调试：在开发环境中输出metadata，帮助排查问题
+  if (import.meta.env.DEV && metadata) {
+    const imageKeys = Object.keys(metadata).filter(k => 
+      k.toLowerCase().includes("artwork") || 
+      k.toLowerCase().includes("upload") || 
+      k.toLowerCase().includes("image") || 
+      k.toLowerCase().includes("unlock")
+    );
+    console.log("[ProfileAchievements] resolveBackground - slug:", slug);
+    console.log("[ProfileAchievements] resolveBackground - metadata keys:", Object.keys(metadata));
+    console.log("[ProfileAchievements] resolveBackground - image-related keys:", imageKeys);
+    console.log("[ProfileAchievements] resolveBackground - artworkId:", artworkId);
+    console.log("[ProfileAchievements] resolveBackground - unlockImage:", unlockImage);
+    if (imageKeys.length > 0) {
+      console.log("[ProfileAchievements] resolveBackground - image values:", 
+        imageKeys.reduce((acc, k) => ({ ...acc, [k]: metadata[k] }), {})
+      );
+    }
+  }
+  
+  // 再次使用封面图片
   const cover = typeof metadata?.cover_image === "string" ? metadata.cover_image.trim() : "";
   if (cover) {
     if (/^(?:linear|radial|conic)-gradient|^paint\(/i.test(cover)) {
@@ -102,6 +162,7 @@ function ProfileAchievements({
   standalone = [],
   summary = null,
   loading = false,
+  artworks = [],
 }: ProfileAchievementsProps) {
   const [selected, setSelected] = useState<SelectedState>(null);
 
@@ -195,7 +256,7 @@ function ProfileAchievements({
 
     const pinnedId = buildGroupPinnedId(group);
     const isPinned = pinnedAchievementIds.includes(pinnedId);
-    const backgroundImage = resolveBackground(group.slug, group.metadata);
+    const backgroundImage = resolveBackground(representative.slug, representative.metadata, artworks);
     const subtitle = formatLevelSubtitle(representative);
 
     return (
@@ -223,8 +284,9 @@ function ProfileAchievements({
         </div>
         <div className="achievement-card__footer">
           <p className="achievement-card__date">{representative.unlockedAtLabel}</p>
-          <button
-            type="button"
+          <div
+            role="button"
+            tabIndex={0}
             className={clsx("achievement-card__action", isPinned && "achievement-card__action--pinned")}
             onClick={(event) => {
               event.stopPropagation();
@@ -235,11 +297,23 @@ function ProfileAchievements({
                 nextPinned: !isPinned,
               });
             }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                event.stopPropagation();
+                onTogglePinned({
+                  id: pinnedId,
+                  title: group.name,
+                  subtitle,
+                  nextPinned: !isPinned,
+                });
+              }
+            }}
             aria-pressed={isPinned}
           >
             <MaterialIcon name="push_pin" filled={isPinned} />
             <span>{isPinned ? "Displayed" : "Display on profile"}</span>
-          </button>
+          </div>
         </div>
       </button>
     );
@@ -253,7 +327,7 @@ function ProfileAchievements({
     const pinnedId = buildStandalonePinnedId(level);
     const isPinned = pinnedAchievementIds.includes(pinnedId);
     const subtitle = formatLevelSubtitle(level);
-    const backgroundImage = resolveBackground(level.slug, level.metadata);
+    const backgroundImage = resolveBackground(level.slug, level.metadata, artworks);
 
     return (
       <button
@@ -276,8 +350,9 @@ function ProfileAchievements({
           <p className="achievement-mini-card__subtitle">{subtitle}</p>
           <div className="achievement-mini-card__meta">
             <span>{level.unlockedAtLabel}</span>
-            <button
-              type="button"
+            <div
+              role="button"
+              tabIndex={0}
               className={clsx(
                 "achievement-mini-card__pin",
                 isPinned && "achievement-mini-card__pin--active",
@@ -291,10 +366,22 @@ function ProfileAchievements({
                   nextPinned: !isPinned,
                 });
               }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onTogglePinned({
+                    id: pinnedId,
+                    title: level.name,
+                    subtitle,
+                    nextPinned: !isPinned,
+                  });
+                }
+              }}
               aria-pressed={isPinned}
             >
               <MaterialIcon name="push_pin" filled={isPinned} />
-            </button>
+            </div>
           </div>
         </div>
       </button>
@@ -315,7 +402,7 @@ function ProfileAchievements({
             time: level.unlockedAtLabel,
             progressLabel: `等级 ${level.level}/${group.summary.levelCount}`,
             progressPercent: levelPercent,
-            background: resolveBackground(group.slug, group.metadata),
+            background: resolveBackground(level.slug, level.metadata, artworks),
             levels: group.levels,
             selectedLevelId: level.id,
             group,
@@ -328,7 +415,7 @@ function ProfileAchievements({
           time: level.unlockedAtLabel,
           progressLabel: level.unlockedAtDate ? "已完成" : "待解锁",
           progressPercent: level.unlockedAtDate ? 100 : 0,
-          background: resolveBackground(level.slug, level.metadata),
+          background: resolveBackground(level.slug, level.metadata, artworks),
           levels: null,
           selectedLevelId: level.id,
           group: null,

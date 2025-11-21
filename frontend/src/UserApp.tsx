@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, startTransition } fr
 
 import BottomNav, { type NavId } from "@/components/BottomNav";
 import AddToHomeScreen from "@/components/AddToHomeScreen";
+import { CircularRevealWrapper } from "@/components/CircularRevealWrapper";
 import Gallery, { INITIAL_ARTWORKS, type Artwork } from "@/pages/Gallery";
 import Goals from "@/pages/Goals";
 import Home from "@/pages/Home";
@@ -235,6 +236,7 @@ function UserApp() {
   } | null>(null);
   const [currentTestId, setCurrentTestId] = useState<number | null>(null);
   const [currentTestResultId, setCurrentTestResultId] = useState<number | null>(null);
+  const [uploadAnimationOrigin, setUploadAnimationOrigin] = useState<{ x: number; y: number; size: number } | null>(null);
   
   // 滚动位置存储
   const scrollPositionsRef = useRef<Map<string, number>>(new Map());
@@ -699,12 +701,19 @@ function UserApp() {
     };
   }, [refreshUserArtworks, refreshUserAchievements, isForcedLogout]);
 
-  const handleOpenUpload = useCallback(() => {
+  const handleOpenUpload = useCallback((origin?: { x: number; y: number; size: number }) => {
+    if (origin) {
+      setUploadAnimationOrigin(origin);
+    }
     setActivePage("upload");
   }, []);
 
   const handleCloseUpload = useCallback(() => {
     setActivePage((prev) => (prev === "upload" ? activeNav : prev));
+    // 延迟清除动画原点，等待动画完成
+    setTimeout(() => {
+      setUploadAnimationOrigin(null);
+    }, 400);
   }, [activeNav]);
 
   const handleOpenProfileAchievements = useCallback(() => {
@@ -1476,7 +1485,16 @@ function UserApp() {
   return (
     <div className="app-shell">
       {activePage === "upload" ? (
-        <Upload onClose={handleCloseUpload} onSave={handleUploadSave} />
+        <CircularRevealWrapper
+          key={`upload-${uploadAnimationOrigin?.x}-${uploadAnimationOrigin?.y}`}
+          open={activePage === "upload"}
+          onClose={handleCloseUpload}
+          originX={uploadAnimationOrigin?.x}
+          originY={uploadAnimationOrigin?.y}
+          originSize={uploadAnimationOrigin?.size}
+        >
+          <Upload onClose={handleCloseUpload} onSave={handleUploadSave} />
+        </CircularRevealWrapper>
       ) : activePage === "profile-achievements" ? (
         <ProfileAchievements
           onBack={() => setActivePage("profile")}
@@ -1486,6 +1504,7 @@ function UserApp() {
           standalone={standaloneAchievements}
           summary={achievementSummary}
           loading={achievementsLoading}
+          artworks={combinedArtworks}
         />
       ) : activePage === "test-list" ? (
         <TestList

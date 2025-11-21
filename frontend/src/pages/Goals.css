@@ -392,6 +392,23 @@
   outline-offset: 4px;
 }
 
+.goals-carousel__item--draft {
+  opacity: 0.7;
+  border-color: rgba(255, 197, 164, 0.3);
+  background: rgba(255, 197, 164, 0.08);
+}
+
+.goals-carousel__item--saved {
+  border-color: rgba(167, 190, 255, 0.3);
+  background: rgba(167, 190, 255, 0.08);
+}
+
+.goals-carousel__item--completed {
+  opacity: 0.8;
+  border-color: rgba(152, 219, 198, 0.4);
+  background: rgba(152, 219, 198, 0.12);
+}
+
 .goals-carousel__item--cta {
   justify-content: center;
   gap: 1.25rem;
@@ -456,6 +473,48 @@
 
 .goals-carousel__message--error {
   color: rgba(255, 163, 163, 0.85);
+}
+
+.goals-carousel__item--draft {
+  opacity: 0.7;
+  border-color: rgba(255, 197, 164, 0.3);
+  background: rgba(255, 197, 164, 0.08);
+}
+
+.goals-carousel__item--saved {
+  border-color: rgba(167, 190, 255, 0.3);
+  background: rgba(167, 190, 255, 0.08);
+}
+
+.goals-carousel__item--completed {
+  opacity: 0.8;
+  border-color: rgba(152, 219, 198, 0.4);
+  background: rgba(152, 219, 198, 0.12);
+}
+
+.goals-carousel__status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  margin-top: 0.5rem;
+}
+
+.goals-carousel__status-badge--draft {
+  background: rgba(255, 197, 164, 0.2);
+  color: rgba(255, 197, 164, 0.9);
+}
+
+.goals-carousel__status-badge--saved {
+  background: rgba(167, 190, 255, 0.2);
+  color: rgba(167, 190, 255, 0.9);
+}
+
+.goals-carousel__status-badge--completed {
+  background: rgba(152, 219, 198, 0.2);
+  color: rgba(152, 219, 198, 0.9);
 }
 
 .goals-toggle {

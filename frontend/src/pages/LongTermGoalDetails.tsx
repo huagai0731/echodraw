@@ -14,9 +14,9 @@ type LongTermGoalDetailsProps = {
   onClose: () => void;
   onEdit?: () => void;
   onExport?: () => void;
-  onSelectShowcase?: (checkpoint: LongTermGoalCheckpoint) => void;
+  onSelectShowcase?: (checkpoint: LongTermGoalCheckpoint, artworkId?: number) => void;
   onEditCompletionNote?: (checkpoint: LongTermGoalCheckpoint) => void;
-  onAddMessage?: (checkpoint: LongTermGoalCheckpoint) => void;
+  onAddMessage?: (checkpoint: LongTermGoalCheckpoint, message: string) => void;
 };
 
 function LongTermGoalDetails({
@@ -32,6 +32,8 @@ function LongTermGoalDetails({
   const [showArtworkModal, setShowArtworkModal] = useState(false);
   const [showImageViewer, setShowImageViewer] = useState(false);
   const [viewingImage, setViewingImage] = useState<string | null>(null);
+  const [showMessageModal, setShowMessageModal] = useState(false);
+  const [messageCheckpoint, setMessageCheckpoint] = useState<LongTermGoalCheckpoint | null>(null);
 
   // 计算进度轴应该到达的位置：到达当前进行中的checkpoint的圆圈
   const timelineProgressPercent = useMemo(() => {
@@ -74,6 +76,15 @@ function LongTermGoalDetails({
     goal.targetHours
   } 小时，共 ${goal.checkpointCount} 个检查点。`;
 
+  // 计算启动日期和历经天数
+  const startDate = goal.startedAt ? parseDate(goal.startedAt) : null;
+  const startDateLabel = startDate
+    ? `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, "0")}-${String(startDate.getDate()).padStart(2, "0")}`
+    : "未记录";
+  const durationDays = startDate
+    ? calculateDurationDays(goal.startedAt, new Date().toISOString())
+    : null;
+
   const handleSelectShowcase = (checkpoint: LongTermGoalCheckpoint) => {
     setSelectedCheckpoint(checkpoint);
     setShowArtworkModal(true);
@@ -92,6 +103,16 @@ function LongTermGoalDetails({
   const handleCloseImageViewer = () => {
     setShowImageViewer(false);
     setViewingImage(null);
+  };
+
+  const handleOpenMessageModal = (checkpoint: LongTermGoalCheckpoint) => {
+    setMessageCheckpoint(checkpoint);
+    setShowMessageModal(true);
+  };
+
+  const handleCloseMessageModal = () => {
+    setShowMessageModal(false);
+    setMessageCheckpoint(null);
   };
 
   return (
@@ -136,6 +157,9 @@ function LongTermGoalDetails({
 
         <section className="long-term-details__intro">
           <h1 className="long-term-details__title">{goal.title}</h1>
+          <p className="long-term-details__start-info">
+            启动于{startDateLabel}，目前历经{durationDays != null ? `${durationDays}` : "—"}天
+          </p>
           <p className="long-term-details__description">
             {goal.description?.trim() || fallbackDescription}
           </p>
@@ -179,7 +203,7 @@ function LongTermGoalDetails({
                     stageStartedAt={stageStartedAt}
                     onSelectShowcase={handleSelectShowcase}
                     onEditCompletionNote={onEditCompletionNote}
-                    onAddMessage={onAddMessage}
+                    onAddMessage={handleOpenMessageModal}
                     onViewImage={handleViewImage}
                   />
                 </div>
@@ -194,9 +218,15 @@ function LongTermGoalDetails({
           checkpoint={selectedCheckpoint}
           goal={goal}
           onClose={handleCloseArtworkModal}
-          onSelect={(_artwork) => {
-            // 注意：onSelectShowcase 只需要 checkpoint，artwork 信息已经在 checkpoint 中
-            onSelectShowcase?.(selectedCheckpoint);
+          onSelect={(artwork) => {
+            if (selectedCheckpoint) {
+              // 从 "art-{id}" 格式中提取数字ID
+              const numericId = artwork.id.replace(/^art-/, "");
+              const uploadId = Number.parseInt(numericId, 10);
+              if (Number.isFinite(uploadId) && uploadId > 0) {
+                onSelectShowcase?.(selectedCheckpoint, uploadId);
+              }
+            }
             handleCloseArtworkModal();
           }}
         />
@@ -204,6 +234,17 @@ function LongTermGoalDetails({
 
       {showImageViewer && viewingImage && (
         <ImageViewerModal imageUrl={viewingImage} onClose={handleCloseImageViewer} />
+      )}
+
+      {showMessageModal && messageCheckpoint && (
+        <MessageEditModal
+          checkpoint={messageCheckpoint}
+          onClose={handleCloseMessageModal}
+          onSave={(message) => {
+            onAddMessage?.(messageCheckpoint, message);
+            handleCloseMessageModal();
+          }}
+        />
       )}
     </div>
   );
@@ -268,9 +309,6 @@ function CheckpointCard({
             历经 {formatDays(stageDurationDays)} 天
           </span>
         </div>
-        <p className="timeline-card__subtitle">
-          累计 {formatHours(thresholdHours)} 小时
-        </p>
         <div className="timeline-card__progress timeline-card__progress--completed">
           <span className="timeline-card__progress-fill" style={{ width: "100%" }}>
             <span className="timeline-card__progress-text">100%</span>
@@ -290,27 +328,32 @@ function CheckpointCard({
                 className="timeline-card__showcase-image"
               />
             </button>
-            <div className="timeline-card__showcase-actions">
-              {onSelectShowcase && (
-                <button
-                  type="button"
-                  className="timeline-card__action-btn"
-                  onClick={() => onSelectShowcase(checkpoint)}
-                  aria-label="更换代表作"
-                >
-                  <MaterialIcon name="edit" />
-                </button>
-              )}
-              {onAddMessage && (
-                <button
-                  type="button"
-                  className="timeline-card__action-btn"
-                  onClick={() => onAddMessage(checkpoint)}
-                  aria-label="留下想说的话"
-                >
-                  <MaterialIcon name="chat_bubble_outline" />
-                </button>
-              )}
+            <div className="timeline-card__showcase-content">
+              {checkpoint.completionNote ? (
+                <p className="timeline-card__message-text">{checkpoint.completionNote}</p>
+              ) : null}
+              <div className="timeline-card__showcase-actions">
+                {onSelectShowcase && (
+                  <button
+                    type="button"
+                    className="timeline-card__action-btn"
+                    onClick={() => onSelectShowcase(checkpoint)}
+                    aria-label="更换代表作"
+                  >
+                    <MaterialIcon name="edit" />
+                  </button>
+                )}
+                {onAddMessage && (
+                  <button
+                    type="button"
+                    className="timeline-card__action-btn"
+                    onClick={() => onAddMessage(checkpoint)}
+                    aria-label="留下想说的话"
+                  >
+                    <MaterialIcon name="chat_bubble_outline" />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         ) : (
@@ -338,7 +381,7 @@ function CheckpointCard({
               <button
                 type="button"
                 className="timeline-card__action-btn"
-                onClick={() => onAddMessage(checkpoint)}
+                onClick={() => handleOpenMessageModal(checkpoint)}
                 aria-label="留下想说的话"
               >
                 <MaterialIcon name="chat_bubble_outline" />
@@ -596,6 +639,83 @@ function ImageViewerModal({ imageUrl, onClose }: ImageViewerModalProps) {
         className="image-viewer-modal__image"
         onClick={(e) => e.stopPropagation()}
       />
+    </div>
+  );
+}
+
+type MessageEditModalProps = {
+  checkpoint: LongTermGoalCheckpoint;
+  onClose: () => void;
+  onSave: (message: string) => void;
+};
+
+function MessageEditModal({ checkpoint, onClose, onSave }: MessageEditModalProps) {
+  const [message, setMessage] = useState(checkpoint.completionNote || "");
+  const MAX_LENGTH = 500;
+  const remainingChars = MAX_LENGTH - message.length;
+
+  const handleMessageChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newValue = e.target.value;
+    // 允许删除，但限制最多500字
+    if (newValue.length <= MAX_LENGTH) {
+      setMessage(newValue);
+    } else if (newValue.length < message.length) {
+      // 如果新值比旧值短（删除操作），允许更新
+      setMessage(newValue);
+    }
+    // 如果新值比旧值长且超过限制，不更新（阻止输入）
+  };
+
+  const handleSave = () => {
+    onSave(message);
+  };
+
+  return (
+    <div className="message-edit-modal" onClick={onClose}>
+      <div className="message-edit-modal__content" onClick={(e) => e.stopPropagation()}>
+        <div className="message-edit-modal__header">
+          <h3 className="message-edit-modal__title">留下想记录的话</h3>
+          <button
+            type="button"
+            className="message-edit-modal__close"
+            onClick={onClose}
+            aria-label="关闭"
+          >
+            <MaterialIcon name="close" />
+          </button>
+        </div>
+        <div className="message-edit-modal__body">
+          <textarea
+            className="message-edit-modal__textarea"
+            value={message}
+            onChange={handleMessageChange}
+            placeholder="对这张图的感受，这段时间的感悟，或是随便什么，想留给未来的自己记录的话…"
+            rows={8}
+            maxLength={MAX_LENGTH}
+          />
+          <div className="message-edit-modal__char-count">
+            <span className={remainingChars < 0 ? "message-edit-modal__char-count--warning" : ""}>
+              {message.length} / {MAX_LENGTH}
+            </span>
+          </div>
+        </div>
+        <div className="message-edit-modal__footer">
+          <button
+            type="button"
+            className="message-edit-modal__cancel"
+            onClick={onClose}
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            className="message-edit-modal__save"
+            onClick={handleSave}
+          >
+            保存
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

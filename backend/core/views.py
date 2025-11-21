@@ -27,6 +27,8 @@ from rest_framework.views import APIView
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from core.email_utils import send_mail_async
+from core.achievement_evaluator import get_evaluator
+from core.achievement_unlock import evaluate_or_unlock
 
 # 配置日志记录器
 logger = logging.getLogger(__name__)
@@ -96,7 +98,10 @@ from core.models import (
     LongTermGoal,
     LongTermPlanCopy,
     Mood,
+    MonthlyReport,
     Notification,
+    PointsOrder,
+    PointsTransaction,
     ShortTermGoal,
     ShortTermGoalTaskCompletion,
     ShortTermTaskPreset,
@@ -106,6 +111,7 @@ from core.models import (
     TestOptionText,
     TestOption,
     TestDimension,
+    UserAchievement,
     UserTestResult,
     UploadConditionalMessage,
     UserProfile,
@@ -827,9 +833,96 @@ class ProfilePreferenceView(APIView):
         return local_part[:1].upper() + local_part[1:]
 
 
-def _build_achievement_payload(achievement: Achievement, *, unlocked_at=None) -> dict:
+def _build_achievement_payload(
+    achievement: Achievement, 
+    *, 
+    unlocked_at=None, 
+    user_achievement: Optional[UserAchievement] = None,
+    user: Optional[Any] = None,
+) -> dict:
+    """
+    构建成就响应数据。
+    
+    Args:
+        achievement: 成就对象
+        unlocked_at: 解锁时间（ISO格式字符串）
+        user_achievement: 用户成就记录（如果存在），用于获取解锁时的元数据
+        user: 用户对象（用于补充缺失的图片信息）
+    """
     metadata = achievement.metadata or {}
     condition = achievement.condition or {}
+    
+    # 合并 UserAchievement 的元数据（包含触发图片信息）
+    merged_metadata = metadata.copy() if isinstance(metadata, dict) else {}
+    
+    if user_achievement:
+        logger.debug(
+            f"Building payload for achievement {achievement.slug}, user_achievement exists",
+            extra={
+                "achievement_slug": achievement.slug,
+                "has_meta": bool(user_achievement.meta),
+                "meta_type": type(user_achievement.meta).__name__ if user_achievement.meta else None,
+            }
+        )
+        if user_achievement.meta and isinstance(user_achievement.meta, dict):
+            user_meta = user_achievement.meta
+            # 将 UserAchievement.meta 中的信息合并到 metadata 中
+            logger.debug(
+                f"Merging user_achievement.meta for achievement {achievement.slug}",
+                extra={
+                    "achievement_slug": achievement.slug,
+                    "original_metadata_keys": list(metadata.keys()) if isinstance(metadata, dict) else [],
+                    "user_meta_keys": list(user_meta.keys()),
+                }
+            )
+            merged_metadata.update(user_meta)
+    else:
+        logger.debug(
+            f"Building payload for achievement {achievement.slug}, no user_achievement",
+            extra={"achievement_slug": achievement.slug}
+        )
+    
+    # 无论是否有 user_achievement，都检查并补充图片信息（如果缺少）
+    has_image_info = any(
+        key in merged_metadata for key in 
+        ["artwork_id", "upload_id", "artwork_url", "unlock_image_url", "image_url"]
+    )
+    if not has_image_info and user:
+        from core.achievement_unlock import _get_trigger_upload_info
+        trigger_info = _get_trigger_upload_info(user, achievement)
+        if trigger_info:
+            merged_metadata.update(trigger_info)
+            logger.info(
+                f"Supplemented image info for achievement {achievement.slug} in response",
+                extra={
+                    "achievement_slug": achievement.slug,
+                    "artwork_id": trigger_info.get("artwork_id"),
+                    "has_image_url": bool(trigger_info.get("artwork_url") or trigger_info.get("unlock_image_url")),
+                }
+            )
+        else:
+            logger.debug(
+                f"Could not supplement image info for achievement {achievement.slug}",
+                extra={
+                    "achievement_slug": achievement.slug,
+                    "condition_metric": achievement.condition.get("metric") if isinstance(achievement.condition, dict) else None,
+                }
+            )
+    
+    metadata = merged_metadata
+    # 调试日志：记录合并后的元数据中的图片信息
+    image_keys = [k for k in merged_metadata.keys() if any(img_key in k.lower() for img_key in ["artwork", "upload", "image", "unlock"])]
+    logger.info(
+        f"Final metadata for achievement {achievement.slug}",
+        extra={
+            "achievement_slug": achievement.slug,
+            "all_metadata_keys": list(merged_metadata.keys()),
+            "image_keys": image_keys,
+            "has_artwork_id": "artwork_id" in merged_metadata or "upload_id" in merged_metadata,
+            "has_image_url": any(k in merged_metadata for k in ["artwork_url", "unlock_image_url", "image_url"]),
+        }
+    )
+    
     return {
         "id": achievement.id,
         "slug": achievement.slug,
@@ -940,7 +1033,28 @@ def _get_user_achievement_stats(user) -> dict:
     获取用户的成就判定所需的统计数据。
     
     返回字典，键为指标名称，值为对应的统计值。
+    
+    优先使用缓存或物化表，避免重复计算。
     """
+    try:
+        from core.user_stats_cache import get_user_stats, UserStats
+        
+        # 尝试使用缓存
+        try:
+            return get_user_stats(user)
+        except Exception:
+            # 缓存失败，尝试使用物化表
+            try:
+                stats = UserStats.get_or_update_for_user(user)
+                return stats.to_dict()
+            except Exception:
+                # 物化表也失败，回退到实时计算
+                pass
+    except ImportError:
+        # 如果模块不存在，回退到原始实现
+        pass
+    
+    # 回退到实时计算
     check_in_stats = _get_check_in_stats(user)
     total_uploads = UserUpload.objects.filter(user=user).count()
     
@@ -950,6 +1064,83 @@ def _get_user_achievement_stats(user) -> dict:
         "current_streak": check_in_stats.get("current_streak", 0),
         "checked_today": 1 if check_in_stats.get("checked_today", False) else 0,
     }
+
+
+def _infer_achievement_unlock_date(user, achievement: Achievement) -> datetime | None:
+    """
+    根据成就条件推断合理的解锁日期。
+    
+    对于已经解锁但之前没有记录的成就，尝试根据条件推断一个合理的解锁日期。
+    
+    Returns:
+        推断的解锁日期，如果无法推断则返回 None
+    """
+    condition = achievement.condition or {}
+    if not isinstance(condition, dict):
+        return None
+    
+    metric = condition.get("metric", "").strip()
+    operator = condition.get("operator", ">=").strip()
+    threshold = condition.get("threshold", 0)
+    
+    if not metric:
+        return None
+    
+    try:
+        threshold = int(float(threshold))
+    except (ValueError, TypeError):
+        return None
+    
+    # 根据不同的指标类型推断解锁日期
+    if metric == "total_uploads":
+        # 查找用户第 threshold 次上传的时间
+        if operator in (">=", ">"):
+            # 对于 >= 或 >，查找第 threshold 次上传
+            uploads = UserUpload.objects.filter(user=user).order_by("uploaded_at", "id")[:threshold]
+            if uploads.count() >= threshold:
+                # 获取第 threshold 次上传的时间
+                target_upload = list(uploads)[threshold - 1]
+                return target_upload.uploaded_at
+        elif operator == "==":
+            # 对于 ==，查找第 threshold 次上传
+            uploads = UserUpload.objects.filter(user=user).order_by("uploaded_at", "id")[:threshold]
+            if uploads.count() >= threshold:
+                target_upload = list(uploads)[threshold - 1]
+                return target_upload.uploaded_at
+    
+    elif metric == "total_checkins":
+        # 查找用户第 threshold 次打卡的时间
+        # 使用 date 字段排序，因为 checked_at 是 auto_now 会变化
+        if operator in (">=", ">"):
+            checkins = DailyCheckIn.objects.filter(user=user).order_by("date", "id")[:threshold]
+            if checkins.count() >= threshold:
+                target_checkin = list(checkins)[threshold - 1]
+                # 将日期转换为 datetime（使用当天的开始时间）
+                from datetime import datetime, time as dt_time
+                if SHANGHAI_TZ is not None:
+                    date_obj = target_checkin.date
+                    dt = datetime.combine(date_obj, dt_time.min)
+                    return timezone.make_aware(dt, timezone=SHANGHAI_TZ)
+                else:
+                    date_obj = target_checkin.date
+                    dt = datetime.combine(date_obj, dt_time.min)
+                    return timezone.make_aware(dt)
+        elif operator == "==":
+            checkins = DailyCheckIn.objects.filter(user=user).order_by("date", "id")[:threshold]
+            if checkins.count() >= threshold:
+                target_checkin = list(checkins)[threshold - 1]
+                from datetime import datetime, time as dt_time
+                if SHANGHAI_TZ is not None:
+                    date_obj = target_checkin.date
+                    dt = datetime.combine(date_obj, dt_time.min)
+                    return timezone.make_aware(dt, timezone=SHANGHAI_TZ)
+                else:
+                    date_obj = target_checkin.date
+                    dt = datetime.combine(date_obj, dt_time.min)
+                    return timezone.make_aware(dt)
+    
+    # 对于其他类型的指标，无法推断，返回 None
+    return None
 
 
 @api_view(["GET"])
@@ -996,22 +1187,68 @@ def profile_achievements(request):
 
         group_map: dict[int, dict] = {}
         standalone: list[dict] = []
-        today = timezone.now().isoformat()
+        
+        # 如果用户已登录，预先加载所有已解锁的成就记录
+        user_achievements_map: dict[int, UserAchievement] = {}
+        if user and user.is_authenticated:
+            user_achievements = UserAchievement.objects.filter(
+                user=user,
+                achievement__in=achievements
+            ).select_related("achievement")
+            user_achievements_map = {
+                ua.achievement_id: ua for ua in user_achievements
+            }
 
         for achievement in achievements:
             unlocked_at = None
             
-            # 如果用户已登录，评估成就条件
+            # 如果用户已登录，评估成就条件并解锁
+            user_achievement_record = None
             if user and user.is_authenticated:
-                condition = achievement.condition or {}
-                if condition and _evaluate_achievement_condition(user, condition, user_stats):
-                    unlocked_at = today
-                    logger.debug(
-                        f"achievement unlocked: {achievement.slug} (level {achievement.level})",
-                        extra={"trace_id": trace_id, "user_id": user_id, "achievement_slug": achievement.slug}
+                # 检查是否已有解锁记录
+                existing_record = user_achievements_map.get(achievement.id)
+                if existing_record:
+                    # 使用已存在的解锁时间
+                    unlocked_at = existing_record.unlocked_at.isoformat()
+                    user_achievement_record = existing_record
+                else:
+                    # 使用新的评估和解锁逻辑
+                    unlock_result = evaluate_or_unlock(
+                        user,
+                        achievement,
+                        user_stats=user_stats,
+                        provenance=UserAchievement.PROVENANCE_AUTO,
                     )
+                    
+                    if unlock_result.unlocked:
+                        unlocked_at = unlock_result.unlocked_at.isoformat() if unlock_result.unlocked_at else None
+                        # 更新缓存
+                        if unlock_result.user_achievement:
+                            user_achievements_map[achievement.id] = unlock_result.user_achievement
+                            user_achievement_record = unlock_result.user_achievement
+                        logger.debug(
+                            f"achievement evaluated: {achievement.slug} (level {achievement.level}), unlocked: {unlock_result.is_new}",
+                            extra={"trace_id": trace_id, "user_id": user_id, "achievement_slug": achievement.slug}
+                        )
             
-            payload = _build_achievement_payload(achievement, unlocked_at=unlocked_at)
+            # 调试：记录传递给 _build_achievement_payload 的参数
+            logger.debug(
+                f"Calling _build_achievement_payload for achievement {achievement.slug}",
+                extra={
+                    "trace_id": trace_id,
+                    "user_id": user_id,
+                    "achievement_slug": achievement.slug,
+                    "has_user_achievement": bool(user_achievement_record),
+                    "has_user": bool(user and user.is_authenticated),
+                    "user_achievement_meta_keys": list(user_achievement_record.meta.keys()) if user_achievement_record and user_achievement_record.meta and isinstance(user_achievement_record.meta, dict) else [],
+                }
+            )
+            payload = _build_achievement_payload(
+                achievement, 
+                unlocked_at=unlocked_at,
+                user_achievement=user_achievement_record,
+                user=user if user and user.is_authenticated else None,
+            )
             
             if achievement.group_id:
                 group = achievement.group
@@ -1085,6 +1322,112 @@ def profile_achievements(request):
             exc_info=True
         )
         raise
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def evaluate_or_unlock_achievement(request):
+    """
+    评估并解锁成就（幂等 API）。
+    
+    如果成就条件满足且尚未解锁，则创建解锁记录。
+    如果已解锁，则返回现有记录。
+    
+    Query params:
+        achievement_id: 成就 ID（可选，如果不提供则评估所有活跃成就）
+        user_id: 用户 ID（可选，默认使用当前用户，仅管理员可指定其他用户）
+    
+    Returns:
+        {
+            "unlocked": bool,
+            "is_new": bool,
+            "unlocked_at": str (ISO format) or null,
+            "reason": str,
+            "achievement": {...} (if unlocked)
+        }
+    """
+    User = get_user_model()
+    user = request.user
+    achievement_id = request.query_params.get("achievement_id")
+    target_user_id = request.query_params.get("user_id")
+    
+    # 管理员可以指定其他用户
+    if target_user_id and user.is_staff:
+        try:
+            target_user = User.objects.get(id=int(target_user_id))
+        except (ValueError, User.DoesNotExist):
+            return Response(
+                {"error": "无效的用户 ID"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+    else:
+        target_user = user
+    
+    # 获取用户统计数据
+    user_stats = _get_user_achievement_stats(target_user)
+    
+    if achievement_id:
+        # 评估单个成就
+        try:
+            achievement = Achievement.objects.get(id=int(achievement_id), is_active=True)
+        except (ValueError, Achievement.DoesNotExist):
+            return Response(
+                {"error": "无效的成就 ID"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        
+        unlock_result = evaluate_or_unlock(
+            target_user,
+            achievement,
+            user_stats=user_stats,
+            provenance=UserAchievement.PROVENANCE_AUTO,
+        )
+        
+        if unlock_result.unlocked:
+            payload = _build_achievement_payload(
+                achievement,
+                unlocked_at=unlock_result.unlocked_at.isoformat() if unlock_result.unlocked_at else None,
+                user_achievement=unlock_result.user_achievement,
+                user=request.user if request.user.is_authenticated else None,
+            )
+            return Response({
+                **unlock_result.to_dict(),
+                "achievement": payload,
+            })
+        else:
+            return Response({
+                **unlock_result.to_dict(),
+                "achievement": _build_achievement_payload(achievement),
+            })
+    else:
+        # 批量评估所有活跃成就
+        achievements = Achievement.objects.filter(is_active=True).select_related("group")
+        results = []
+        unlocked_count = 0
+        
+        for achievement in achievements:
+            unlock_result = evaluate_or_unlock(
+                target_user,
+                achievement,
+                user_stats=user_stats,
+                provenance=UserAchievement.PROVENANCE_AUTO,
+            )
+            
+            if unlock_result.unlocked:
+                unlocked_count += 1
+                if unlock_result.is_new:
+                    results.append({
+                        "achievement_id": achievement.id,
+                        "achievement_slug": achievement.slug,
+                        "unlocked": True,
+                        "is_new": True,
+                    })
+        
+        return Response({
+            "unlocked_count": unlocked_count,
+            "total_evaluated": len(achievements),
+            "new_unlocks": results,
+        })
 
 
 class UserUploadListCreateView(generics.ListCreateAPIView):
@@ -1363,7 +1706,7 @@ class ShortTermGoalListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         return (
             ShortTermGoal.objects.filter(user=self.request.user)
-            .only("id", "title", "duration_days", "plan_type", "schedule", "created_at", "updated_at")
+            .only("id", "title", "duration_days", "plan_type", "schedule", "status", "created_at", "updated_at")
             .order_by("-created_at", "-id")
         )
 
@@ -1373,14 +1716,80 @@ class ShortTermGoalListCreateView(generics.ListCreateAPIView):
         return context
 
 
-class ShortTermGoalDetailView(generics.RetrieveDestroyAPIView):
+class ShortTermGoalDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = ShortTermGoalSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         return ShortTermGoal.objects.filter(user=self.request.user).only(
-            "id", "title", "duration_days", "plan_type", "schedule", "created_at", "updated_at", "user"
+            "id", "title", "duration_days", "plan_type", "schedule", "status", "created_at", "updated_at", "user"
         )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@transaction.atomic
+def start_short_term_goal(request, goal_id):
+    """
+    启动短期目标：将状态从draft/saved改为active，需要扣除点数。
+    """
+    from core.models import ShortTermGoal, UserProfile, PointsTransaction
+    
+    try:
+        goal = ShortTermGoal.objects.select_for_update().get(pk=goal_id, user=request.user)
+    except ShortTermGoal.DoesNotExist:
+        return Response(
+            {"detail": "指定的短期目标不存在或不属于当前用户。"},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    
+    # 检查当前状态
+    if goal.status == ShortTermGoal.STATUS_ACTIVE:
+        return Response(
+            {"detail": "该目标已经启动。"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    
+    if goal.status == ShortTermGoal.STATUS_COMPLETED:
+        return Response(
+            {"detail": "已完成的目标无法重新启动。"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    
+    # 检查点数是否足够（启动需要50点）
+    REQUIRED_POINTS = 50
+    profile, _ = UserProfile.objects.get_or_create(user=request.user)
+    
+    if profile.points < REQUIRED_POINTS:
+        return Response(
+            {
+                "detail": f"点数不足，需要{REQUIRED_POINTS}点，当前余额{profile.points}点。",
+                "required_points": REQUIRED_POINTS,
+                "current_points": profile.points,
+            },
+            status=status.HTTP_402_PAYMENT_REQUIRED,
+        )
+    
+    # 扣除点数
+    profile.points -= REQUIRED_POINTS
+    profile.save(update_fields=["points"])
+    
+    # 记录点数交易
+    PointsTransaction.objects.create(
+        user=request.user,
+        points=-REQUIRED_POINTS,
+        transaction_type=PointsTransaction.TRANSACTION_TYPE_CONSUME,
+        balance_after=profile.points,
+        description=f"启动短期目标：{goal.title}",
+    )
+    
+    # 更新状态为active
+    goal.status = ShortTermGoal.STATUS_ACTIVE
+    goal.save(update_fields=["status"])
+    
+    # 序列化并返回
+    serializer = ShortTermGoalSerializer(goal)
+    return Response(serializer.data)
 
 
 @api_view(["GET"])
@@ -2218,6 +2627,68 @@ class LongTermGoalView(APIView):
         )
 
 
+@api_view(["PATCH"])
+@permission_classes([IsAuthenticated])
+def update_checkpoint(request):
+    """更新checkpoint的showcase和completionNote"""
+    try:
+        goal = request.user.long_term_goal
+    except LongTermGoal.DoesNotExist:
+        return Response(
+            {"detail": "长期目标不存在"},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    
+    checkpoint_index = request.data.get("checkpoint_index")
+    if checkpoint_index is None:
+        return Response(
+            {"detail": "checkpoint_index是必需的"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    
+    # 使用metadata字段存储checkpoint的自定义数据
+    try:
+        if not hasattr(goal, "metadata") or goal.metadata is None:
+            goal.metadata = {}
+        elif not isinstance(goal.metadata, dict):
+            goal.metadata = {}
+    except (AttributeError, TypeError):
+        goal.metadata = {}
+    
+    checkpoint_key = f"checkpoint_{checkpoint_index}"
+    if not isinstance(goal.metadata, dict):
+        goal.metadata = {}
+    if checkpoint_key not in goal.metadata:
+        goal.metadata[checkpoint_key] = {}
+    
+    if "upload_id" in request.data:
+        goal.metadata[checkpoint_key]["upload_id"] = request.data["upload_id"]
+    
+    if "completion_note" in request.data:
+        completion_note = request.data["completion_note"]
+        # 限制最多500字
+        if completion_note and len(completion_note) > 500:
+            return Response(
+                {"detail": "留言内容不能超过500字"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        goal.metadata[checkpoint_key]["completion_note"] = completion_note
+    
+    # 只更新metadata字段
+    goal.save(update_fields=["metadata", "updated_at"])
+    
+    # 重新获取并序列化goal
+    uploads = LongTermGoalView._fetch_uploads(request.user, goal.started_at)
+    serializer = LongTermGoalSerializer(
+        goal,
+        context={
+            "request": request,
+            "uploads": uploads,
+        },
+    )
+    return Response(serializer.data)
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def notifications_list(request):
@@ -2523,6 +2994,164 @@ def user_test_result(request, result_id):
     return Response(serializer.data)
 
 
+# ==================== 点数系统 API ====================
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def user_points(request):
+    """获取用户点数余额"""
+    user = request.user
+    profile, _ = UserProfile.objects.get_or_create(user=user)
+    
+    return Response({
+        "points": profile.points,
+    })
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@transaction.atomic
+def create_points_order(request):
+    """创建点数充值订单"""
+    user = request.user
+    points = request.data.get("points")
+    amount = request.data.get("amount")
+    payment_method = request.data.get("payment_method")
+    
+    if not points or not isinstance(points, int) or points <= 0:
+        return Response(
+            {"detail": "点数必须是正整数"}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    if not amount or not isinstance(amount, (int, float)) or amount <= 0:
+        return Response(
+            {"detail": "金额必须是正数"}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    if payment_method not in [PointsOrder.PAYMENT_METHOD_WECHAT, PointsOrder.PAYMENT_METHOD_ALIPAY]:
+        return Response(
+            {"detail": "支付方式无效"}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # 生成订单号
+    import uuid
+    order_number = f"PO{timezone.now().strftime('%Y%m%d%H%M%S')}{uuid.uuid4().hex[:8].upper()}"
+    
+    # 创建订单
+    order = PointsOrder.objects.create(
+        user=user,
+        order_number=order_number,
+        points=points,
+        amount=amount,
+        payment_method=payment_method,
+        status=PointsOrder.ORDER_STATUS_PENDING,
+    )
+    
+    return Response({
+        "order_id": order.id,
+        "order_number": order.order_number,
+        "points": order.points,
+        "amount": str(order.amount),
+        "payment_method": order.payment_method,
+        "status": order.status,
+        "created_at": order.created_at.isoformat(),
+    }, status=status.HTTP_201_CREATED)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@transaction.atomic
+def complete_points_order(request, order_id):
+    """完成点数充值订单（支付成功后调用）"""
+    user = request.user
+    payment_transaction_id = request.data.get("payment_transaction_id", "")
+    
+    # 获取订单，确保是当前用户的订单
+    order = get_object_or_404(
+        PointsOrder.objects.select_for_update(),
+        id=order_id,
+        user=user
+    )
+    
+    # 检查订单状态
+    if order.status == PointsOrder.ORDER_STATUS_PAID:
+        return Response(
+            {"detail": "订单已完成，请勿重复支付"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    if order.status == PointsOrder.ORDER_STATUS_CANCELLED:
+        return Response(
+            {"detail": "订单已取消，无法完成支付"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # 更新订单状态
+    order.status = PointsOrder.ORDER_STATUS_PAID
+    order.payment_transaction_id = payment_transaction_id
+    order.paid_at = timezone.now()
+    order.save()
+    
+    # 增加用户点数
+    profile, _ = UserProfile.objects.get_or_create(user=user)
+    old_balance = profile.points
+    profile.points += order.points
+    profile.save()
+    
+    # 创建交易记录
+    PointsTransaction.objects.create(
+        user=user,
+        transaction_type=PointsTransaction.TRANSACTION_TYPE_RECHARGE,
+        points=order.points,
+        balance_after=profile.points,
+        order=order,
+        description=f"充值 {order.points} 点",
+    )
+    
+    return Response({
+        "order_id": order.id,
+        "order_number": order.order_number,
+        "points_added": order.points,
+        "balance_before": old_balance,
+        "balance_after": profile.points,
+        "paid_at": order.paid_at.isoformat(),
+    })
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def points_transactions(request):
+    """获取用户点数交易记录"""
+    user = request.user
+    page = int(request.query_params.get("page", 1))
+    page_size = int(request.query_params.get("page_size", 20))
+    
+    transactions = PointsTransaction.objects.filter(user=user).order_by("-created_at")
+    
+    # 分页
+    start = (page - 1) * page_size
+    end = start + page_size
+    paginated_transactions = transactions[start:end]
+    
+    return Response({
+        "count": transactions.count(),
+        "results": [
+            {
+                "id": t.id,
+                "transaction_type": t.transaction_type,
+                "points": t.points,
+                "balance_after": t.balance_after,
+                "description": t.description,
+                "created_at": t.created_at.isoformat(),
+            }
+            for t in paginated_transactions
+        ],
+    })
+
+
 # ==================== 标签管理 API ====================
 
 class TagListCreateView(generics.ListCreateAPIView):
@@ -2605,3 +3234,207 @@ def moods_list(request):
     moods = Mood.objects.filter(is_active=True).order_by("display_order", "name")
     serializer = MoodSerializer(moods, many=True, context={"request": request})
     return Response(serializer.data)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def monthly_report(request):
+    """获取固定月报数据"""
+    year = request.query_params.get("year")
+    month = request.query_params.get("month")
+    
+    if not year or not month:
+        return Response(
+            {"detail": "需要提供 year 和 month 参数（格式：YYYY-MM）"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    
+    try:
+        year = int(year)
+        month = int(month)
+        if not (1 <= month <= 12):
+            raise ValueError("月份必须在1-12之间")
+    except ValueError as e:
+        return Response(
+            {"detail": f"无效的年份或月份: {e}"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    
+    # 查找固定月报
+    try:
+        report = MonthlyReport.objects.get(
+            user=request.user,
+            year=year,
+            month=month,
+        )
+        
+        # 返回月报数据
+        return Response({
+            "exists": True,
+            "year": report.year,
+            "month": report.month,
+            "stats": {
+                "totalUploads": report.total_uploads,
+                "totalHours": report.total_hours,
+                "avgHoursPerUpload": report.avg_hours_per_upload,
+                "avgRating": report.avg_rating,
+                "mostUploadDay": {
+                    "date": report.most_upload_day_date.isoformat() if report.most_upload_day_date else None,
+                    "count": report.most_upload_day_count,
+                } if report.most_upload_day_date else None,
+                "currentStreak": report.current_streak,
+                "longestStreak": report.longest_streak,
+            },
+            "timeDistribution": report.time_distribution,
+            "weeklyDistribution": report.weekly_distribution,
+            "tagStats": report.tag_stats,
+            "heatmapCalendar": report.heatmap_calendar,
+            "uploadIds": report.upload_ids,
+            "reportTexts": report.report_texts,
+            "createdAt": report.created_at.isoformat(),
+        })
+    except MonthlyReport.DoesNotExist:
+        # 如果没有固定月报，返回不存在
+        return Response({
+            "exists": False,
+            "year": year,
+            "month": month,
+        })
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def admin_users_list(request):
+    """获取用户列表（仅管理员）"""
+    if not request.user.is_staff:
+        return Response(
+            {"detail": "需要管理员权限"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    
+    users = User.objects.filter(is_active=True).order_by("-date_joined")[:100]  # 限制返回100个用户
+    
+    return Response([
+        {
+            "id": user.id,
+            "email": user.email,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "date_joined": user.date_joined.isoformat() if user.date_joined else None,
+        }
+        for user in users
+    ])
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def admin_user_uploads(request):
+    """获取指定用户的上传数据（仅管理员）"""
+    if not request.user.is_staff:
+        return Response(
+            {"detail": "需要管理员权限"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    
+    user_id = request.query_params.get("user_id")
+    if not user_id:
+        return Response(
+            {"detail": "需要提供 user_id 参数"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    
+    try:
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        user = User.objects.get(id=int(user_id), is_active=True)
+    except (ValueError, User.DoesNotExist) as e:
+        return Response(
+            {"detail": f"无效的用户ID: {e}"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    
+    # 获取用户的上传记录
+    uploads = UserUpload.objects.filter(user=user).order_by("-uploaded_at")
+    serializer = UserUploadSerializer(uploads, many=True, context={"request": request})
+    
+    return Response(serializer.data)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def admin_user_monthly_report(request):
+    """获取指定用户的实时月报数据（仅管理员，用于调试）"""
+    if not request.user.is_staff:
+        return Response(
+            {"detail": "需要管理员权限"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    
+    user_id = request.query_params.get("user_id")
+    year = request.query_params.get("year")
+    month = request.query_params.get("month")
+    
+    if not user_id or not year or not month:
+        return Response(
+            {"detail": "需要提供 user_id, year 和 month 参数"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    
+    try:
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        user = User.objects.get(id=int(user_id), is_active=True)
+        year = int(year)
+        month = int(month)
+        if not (1 <= month <= 12):
+            raise ValueError("月份必须在1-12之间")
+    except (ValueError, User.DoesNotExist) as e:
+        return Response(
+            {"detail": f"无效的参数: {e}"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    
+    # 调用管理命令的逻辑来生成实时月报数据
+    from core.management.commands.generate_monthly_report import Command
+    cmd = Command()
+    
+    try:
+        report_data = cmd._generate_report_data(user, year, month)
+        
+        # 转换为前端需要的格式
+        return Response({
+            "exists": True,
+            "year": year,
+            "month": month,
+            "user": {
+                "id": user.id,
+                "email": user.email,
+            },
+            "stats": {
+                "totalUploads": report_data["total_uploads"],
+                "totalHours": report_data["total_hours"],
+                "avgHoursPerUpload": report_data["avg_hours_per_upload"],
+                "avgRating": report_data["avg_rating"],
+                "mostUploadDay": {
+                    "date": report_data["most_upload_day_date"].isoformat() if report_data["most_upload_day_date"] else None,
+                    "count": report_data["most_upload_day_count"],
+                } if report_data["most_upload_day_date"] else None,
+                "currentStreak": report_data["current_streak"],
+                "longestStreak": report_data["longest_streak"],
+            },
+            "timeDistribution": report_data["time_distribution"],
+            "weeklyDistribution": report_data["weekly_distribution"],
+            "tagStats": report_data["tag_stats"],
+            "heatmapCalendar": report_data["heatmap_calendar"],
+            "uploadIds": report_data["upload_ids"],
+            "reportTexts": report_data["report_texts"],
+        })
+    except Exception as e:
+        logger.exception("生成实时月报失败")
+        return Response(
+            {"detail": f"生成月报失败: {str(e)}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )

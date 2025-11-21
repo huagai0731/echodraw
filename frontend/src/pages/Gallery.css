@@ -118,7 +118,7 @@
 
 .gallery-item__info {
   position: absolute;
-  bottom: 0;
+  bottom: -2px;
   left: 0;
   right: 0;
   display: flex;
@@ -126,25 +126,37 @@
   justify-content: flex-end;
   gap: 0.75rem;
   padding: 1rem;
+  padding-bottom: calc(1rem + 2px);
   background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.3) 40%, rgba(0, 0, 0, 0.75) 100%);
   color: #efeae7;
   opacity: 1;
-  transform: translateY(0);
-  transition: opacity 0.25s ease, transform 0.25s ease;
-  border-radius: inherit;
+  transform: translate3d(0, 0, 0);
+  -webkit-transform: translate3d(0, 0, 0);
+  transition: opacity 0.3s ease-out, transform 0.3s ease-out;
+  -webkit-transition: opacity 0.3s ease-out, -webkit-transform 0.3s ease-out;
+  will-change: opacity, transform;
+  border-radius: 0 0 0.6rem 0.6rem;
   overflow: hidden;
+  /* 确保在iOS Safari上动画能正常触发 */
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 .gallery-item__info--hidden {
   opacity: 0;
-  transform: translateY(10%);
+  transform: translate3d(0, 15%, 0);
+  -webkit-transform: translate3d(0, 15%, 0);
   pointer-events: none;
+  /* 确保隐藏状态也应用transition */
+  transition: opacity 0.3s ease-out, transform 0.3s ease-out;
+  -webkit-transition: opacity 0.3s ease-out, -webkit-transform 0.3s ease-out;
 }
 
 .gallery-item__trigger:focus-visible .gallery-item__info {
   outline: none;
   opacity: 1;
-  transform: translateY(0);
+  transform: translate3d(0, 0, 0);
+  -webkit-transform: translate3d(0, 0, 0);
 }
 
 .gallery-item__collection-name {
