@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type Dispatch, SetStateAction } from "react";
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import clsx from "clsx";
 
 import MaterialIcon from "@/components/MaterialIcon";

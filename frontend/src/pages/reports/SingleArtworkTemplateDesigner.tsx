@@ -38,7 +38,7 @@ const CANVAS_HEIGHT = 1760;
 const DEFAULT_USERNAME = "@EchoUser";
 const MAX_TAG_COUNT = 6;
 const MIN_IMAGE_HEIGHT_RATIO = 0.3; // 放宽最小比例，支持更长的图片
-const MAX_IMAGE_HEIGHT_RATIO = 3.0; // 放宽最大比例，支持竖版长图
+// const MAX_IMAGE_HEIGHT_RATIO = 3.0; // 放宽最大比例，支持竖版长图（未使用）
 // 移除未使用的页脚高度比例常量以通过构建
 
 // 阴影颜色现在通过 HSL 参数动态生成，不再需要预设颜色
@@ -86,7 +86,7 @@ function SingleArtworkTemplateDesigner({ open, artworks, onClose }: SingleArtwor
   const [textOpacityPercent, setTextOpacityPercent] = useState<number>(92);
   const [canvasLayout, setCanvasLayout] = useState<CanvasLayout>(DEFAULT_CANVAS_LAYOUT);
   const [accentHex, setAccentHex] = useState<string>("#98dbc6");
-  const [textTone, setTextTone] = useState<"light" | "dark">("light");
+  const [textTone, _setTextTone] = useState<"light" | "dark">("light");
   const [tagOptions, setTagOptions] = useState<Array<{ id: string | number; name: string }>>([]);
   const [addSuffix, setAddSuffix] = useState<boolean>(false);
 
@@ -376,7 +376,7 @@ function SingleArtworkTemplateDesigner({ open, artworks, onClose }: SingleArtwor
     addSuffix,
   ]);
 
-  const timestampLabel = templateData?.timestampLabel ?? "日期未知";
+  // const _timestampLabel = templateData?.timestampLabel ?? "日期未知";
   const downloadDisabled = !templateData || imageStatus === "loading";
 
   const renderToggle = (active: boolean, onToggle: () => void, label: string) => (
@@ -1348,46 +1348,46 @@ function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value));
 }
 
-function clamp(value: number, min: number, max: number): number {
-  if (Number.isNaN(value)) {
-    return min;
-  }
-  if (min > max) {
-    return min;
-  }
-  return Math.min(max, Math.max(min, value));
-}
+// function clamp(value: number, min: number, max: number): number {
+//   if (Number.isNaN(value)) {
+//     return min;
+//   }
+//   if (min > max) {
+//     return min;
+//   }
+//   return Math.min(max, Math.max(min, value));
+// }
 
 type HSL = { h: number; s: number; l: number };
 
-function rgbToHsl({ r, g, b }: RGBColor): HSL {
-  const rn = r / 255;
-  const gn = g / 255;
-  const bn = b / 255;
-  const max = Math.max(rn, gn, bn);
-  const min = Math.min(rn, gn, bn);
-  let h = 0;
-  let s = 0;
-  const l = (max - min) / 2 + min;
-  const d = max - min;
-  if (d !== 0) {
-    s = d / (1 - Math.abs(2 * l - 1));
-    switch (max) {
-      case rn:
-        h = ((gn - bn) / d) % 6;
-        break;
-      case gn:
-        h = (bn - rn) / d + 2;
-        break;
-      default:
-        h = (rn - gn) / d + 4;
-        break;
-    }
-    h *= 60;
-    if (h < 0) h += 360;
-  }
-  return { h, s, l };
-}
+// function rgbToHsl({ r, g, b }: RGBColor): HSL {
+//   const rn = r / 255;
+//   const gn = g / 255;
+//   const bn = b / 255;
+//   const max = Math.max(rn, gn, bn);
+//   const min = Math.min(rn, gn, bn);
+//   let h = 0;
+//   let s = 0;
+//   const l = (max - min) / 2 + min;
+//   const d = max - min;
+//   if (d !== 0) {
+//     s = d / (1 - Math.abs(2 * l - 1));
+//     switch (max) {
+//       case rn:
+//         h = ((gn - bn) / d) % 6;
+//         break;
+//       case gn:
+//         h = (bn - rn) / d + 2;
+//         break;
+//       default:
+//         h = (rn - gn) / d + 4;
+//         break;
+//     }
+//     h *= 60;
+//     if (h < 0) h += 360;
+//   }
+//   return { h, s, l };
+// }
 
 function hslToRgb({ h, s, l }: HSL): RGBColor {
   const c = (1 - Math.abs(2 * l - 1)) * s;
@@ -1414,22 +1414,22 @@ function hslToRgb({ h, s, l }: HSL): RGBColor {
   };
 }
 
-function adjustHexSaturation(hex: string, saturation: number): string {
-  const rgb = hexToRgb(hex);
-  if (!rgb) return hex;
-  const hsl = rgbToHsl(rgb);
-  const clampedS = clamp01(saturation);
-  const adjusted = hslToRgb({ h: hsl.h, s: clampedS, l: hsl.l });
-  return rgbToHex(adjusted);
-}
+// function adjustHexSaturation(hex: string, saturation: number): string {
+//   const rgb = hexToRgb(hex);
+//   if (!rgb) return hex;
+//   const hsl = rgbToHsl(rgb);
+//   const clampedS = clamp01(saturation);
+//   const adjusted = hslToRgb({ h: hsl.h, s: clampedS, l: hsl.l });
+//   return rgbToHex(adjusted);
+// }
 
 // 移除未使用的 relativeLuminance 以通过构建
 
-function desaturateHex(hex: string, t: number): string {
-  const rgb = hexToRgb(hex);
-  if (!rgb) return hex;
-  const hsl = rgbToHsl(rgb);
-  const s = clamp01(t);
-  const adjusted = hslToRgb({ h: hsl.h, s, l: hsl.l });
-  return rgbToHex(adjusted);
-}
+// function desaturateHex(hex: string, t: number): string {
+//   const rgb = hexToRgb(hex);
+//   if (!rgb) return hex;
+//   const hsl = rgbToHsl(rgb);
+//   const s = clamp01(t);
+//   const adjusted = hslToRgb({ h: hsl.h, s, l: hsl.l });
+//   return rgbToHex(adjusted);
+// }

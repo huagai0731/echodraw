@@ -192,7 +192,7 @@ function NewChallengeWizard({ onClose, onSaved, initialGoal, mode = "create" }: 
     error: null,
   });
   const [taskLibrary, setTaskLibrary] = useState<TaskItem[]>(FALLBACK_TASK_LIBRARY);
-  const [userPresets, setUserPresets] = useState<UserTaskPreset[]>([]);
+  const [_userPresets, setUserPresets] = useState<UserTaskPreset[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>(
     FALLBACK_TASK_CATEGORIES[0]?.id ?? "",
   );
@@ -204,7 +204,7 @@ function NewChallengeWizard({ onClose, onSaved, initialGoal, mode = "create" }: 
   const [showMissingTasksAlert, setShowMissingTasksAlert] = useState(false);
   const [missingTaskDays, setMissingTaskDays] = useState<number[]>([]);
   const [showDraftAlert, setShowDraftAlert] = useState(false);
-  const [draftedGoalId, setDraftedGoalId] = useState<number | null>(null);
+  const [_draftedGoalId, setDraftedGoalId] = useState<number | null>(null);
   const taskInstanceCounter = useRef(0);
   const goalIdRef = useRef<number | null>(initialGoal?.id ?? null);
 
@@ -1594,7 +1594,7 @@ type ConfirmStepProps = {
   dayLabels: string[];
 };
 
-function ConfirmStep({ duration, planName, planType, tasks, dayLabels }: ConfirmStepProps) {
+function ConfirmStep({ duration, planName, planType, tasks, dayLabels: _dayLabels }: ConfirmStepProps) {
   const summaryList = useMemo(() => {
     if (planType === "same") {
       // 每日相同任务：只显示一次任务列表

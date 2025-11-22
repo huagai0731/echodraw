@@ -381,7 +381,7 @@ function CheckpointCard({
               <button
                 type="button"
                 className="timeline-card__action-btn"
-                onClick={() => handleOpenMessageModal(checkpoint)}
+                onClick={() => onAddMessage(checkpoint)}
                 aria-label="留下想说的话"
               >
                 <MaterialIcon name="chat_bubble_outline" />
