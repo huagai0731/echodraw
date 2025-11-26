@@ -133,7 +133,9 @@ WSGI_APPLICATION = "config.wsgi.application"
 
 # 数据库配置：支持SQLite（开发）和MySQL/PostgreSQL（生产）
 # 如果设置了数据库环境变量，使用MySQL/PostgreSQL；否则使用SQLite（仅开发环境）
-_db_engine = os.getenv("DJANGO_DB_ENGINE", "").lower()
+_db_engine = os.getenv("DJANGO_DB_ENGINE") or os.getenv("DB_ENGINE", "")
+if _db_engine:
+    _db_engine = _db_engine.lower()
 _db_name = os.getenv("DB_NAME", "")
 _db_user = os.getenv("DB_USER", "")
 _db_password = os.getenv("DB_PASSWORD", "")
