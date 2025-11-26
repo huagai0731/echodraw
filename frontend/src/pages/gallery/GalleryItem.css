@@ -1,0 +1,39 @@
+/* GalleryItem 样式继承自 Gallery.css，这里只添加骨架屏样式 */
+.gallery-item__skeleton {
+  width: 100%;
+  background: linear-gradient(
+    90deg,
+    rgba(152, 219, 198, 0.1) 0%,
+    rgba(152, 219, 198, 0.15) 50%,
+    rgba(152, 219, 198, 0.1) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s ease-in-out infinite;
+  border-radius: inherit;
+}
+
+@keyframes skeleton-loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.gallery-item__image--loading {
+  display: none !important;
+}
+
+.gallery-item__image--loaded {
+  display: block !important;
+}
+
+.gallery-item__placeholder-content {
+  width: 40%;
+  height: 40%;
+  background-color: rgba(152, 219, 198, 0.2);
+  border-radius: 4px;
+  margin: auto;
+}
+

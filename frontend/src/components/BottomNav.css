@@ -1,0 +1,108 @@
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: var(--bottom-nav-height);
+  padding: 0.35rem calc(1.25rem + env(safe-area-inset-left, 0px))
+    calc(0.6rem + env(safe-area-inset-bottom, 0px))
+    calc(1.25rem + env(safe-area-inset-right, 0px));
+  background: rgba(12, 15, 18, 0.72);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(20px);
+  z-index: 100;
+  display: flex;
+  justify-content: center;
+  /* 确保在iOS上真正固定 */
+  transform: translateZ(0);
+  will-change: transform;
+  -webkit-transform: translateZ(0);
+}
+
+.bottom-nav__container {
+  width: min(780px, 100%);
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.bottom-nav__item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.35rem 0.25rem;
+  color: rgba(255, 255, 255, 0.75);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition:
+    color 0.2s ease,
+    transform 0.2s ease;
+  position: relative;
+  border-radius: 16px;
+}
+
+.bottom-nav__item::before {
+  content: "";
+  position: absolute;
+  inset-inline: 24%;
+  bottom: -1.45rem;
+  height: 2.4rem;
+  background: radial-gradient(120% 160% at 50% 100%, rgba(152, 219, 198, 0.42) 0%, rgba(152, 219, 198, 0.12) 48%, rgba(152, 219, 198, 0) 100%);
+  filter: blur(16px);
+  opacity: 0;
+  transform: translateY(8px) scale(0.9);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  pointer-events: none;
+}
+
+.bottom-nav__item:hover {
+  color: rgba(255, 255, 255, 0.95);
+  transform: translateY(-1px);
+}
+
+.bottom-nav__item--active {
+  color: #98dbc6;
+}
+
+.bottom-nav__icon {
+  font-size: 1.4rem;
+}
+
+.bottom-nav__label {
+  font-size: 0.68rem;
+  letter-spacing: 0.02em;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.bottom-nav__item::after {
+  content: "";
+  position: absolute;
+  inset-inline: 30%;
+  bottom: -0.45rem;
+  height: 3px;
+  background: linear-gradient(90deg, rgba(152, 219, 198, 0) 0%, #98dbc6 50%, rgba(152, 219, 198, 0) 100%);
+  border-radius: 999px;
+  opacity: 0;
+  transform: translateY(3px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  box-shadow:
+    0 -16px 28px rgba(152, 219, 198, 0.6),
+    0 -6px 14px rgba(152, 219, 198, 0.38),
+    0 12px 24px rgba(152, 219, 198, 0.32);
+}
+
+.bottom-nav__item--active::after {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.bottom-nav__item--active::before {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+

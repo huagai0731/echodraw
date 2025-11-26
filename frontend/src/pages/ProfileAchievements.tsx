@@ -1,0 +1,650 @@
+import { useEffect, useMemo, useState } from "react";
+import clsx from "clsx";
+
+import MaterialIcon from "@/components/MaterialIcon";
+import type { AchievementGroupDefinition, AchievementLevelDefinition } from "@/pages/achievementsData";
+import type { Artwork } from "@/types/artwork";
+
+import "./ProfileAchievements.css";
+
+// Removed unused: GROUP_PREFIX
+const STANDALONE_PREFIX = "standalone:";
+
+type SelectedState =
+  | { kind: "group"; groupId: string; levelId: string }
+  | { kind: "standalone"; levelId: string }
+  | null;
+
+type ProfileAchievementsSummary = {
+  group_count?: number;
+  standalone_count?: number;
+  achievement_count?: number;
+} | null;
+
+type ProfileAchievementsProps = {
+  onBack: () => void;
+  pinnedAchievementIds: string[];
+  onTogglePinned: (payload: { id: string; title: string; subtitle: string; nextPinned: boolean }) => void;
+  groups?: AchievementGroupDefinition[];
+  standalone?: AchievementLevelDefinition[];
+  summary?: ProfileAchievementsSummary;
+  loading?: boolean;
+  artworks?: Artwork[];
+};
+
+function hashString(value: string): number {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash << 5) - hash + value.charCodeAt(index);
+    hash |= 0;
+  }
+  return hash;
+}
+
+function gradientFromSlug(slug: string): string {
+  const source = slug && slug.trim().length > 0 ? slug : "achievement";
+  const base = Math.abs(hashString(source));
+  const hue1 = base % 360;
+  const hue2 = (hue1 + 36) % 360;
+  const saturation = 62;
+  const lightness1 = 58;
+  const lightness2 = 34;
+  return `linear-gradient(135deg, hsl(${hue1} ${saturation}% ${lightness1}%), hsl(${hue2} ${saturation + 8}% ${lightness2}%))`;
+}
+
+function resolveImageUrl(
+  _slug: string,
+  metadata?: Record<string, unknown>,
+  artworks?: Artwork[],
+): string | null {
+  // 首先尝试使用解锁时使用的图片URL，支持多种可能的字段名（最高优先级）
+  const unlockImage = 
+    (typeof metadata?.unlock_image_url === "string" ? metadata.unlock_image_url.trim() : "") ||
+    (typeof metadata?.unlockImageUrl === "string" ? metadata.unlockImageUrl.trim() : "") ||
+    (typeof metadata?.unlock_image === "string" ? metadata.unlock_image.trim() : "") ||
+    (typeof metadata?.unlockImage === "string" ? metadata.unlockImage.trim() : "") ||
+    (typeof metadata?.artwork_url === "string" ? metadata.artwork_url.trim() : "") ||
+    (typeof metadata?.artworkUrl === "string" ? metadata.artworkUrl.trim() : "") ||
+    (typeof metadata?.image_url === "string" ? metadata.image_url.trim() : "") ||
+    (typeof metadata?.imageUrl === "string" ? metadata.imageUrl.trim() : "");
+  if (unlockImage) {
+    return unlockImage;
+  }
+
+  // 其次根据图片ID从artworks中查找图片
+  const artworkId =
+    (typeof metadata?.artwork_id === "number" ? metadata.artwork_id : null) ||
+    (typeof metadata?.artworkId === "number" ? metadata.artworkId : null) ||
+    (typeof metadata?.upload_id === "number" ? metadata.upload_id : null) ||
+    (typeof metadata?.uploadId === "number" ? metadata.uploadId : null) ||
+    (typeof metadata?.artwork_id === "string" && metadata.artwork_id.trim() 
+      ? (Number.isNaN(Number.parseInt(metadata.artwork_id.trim(), 10)) ? null : Number.parseInt(metadata.artwork_id.trim(), 10))
+      : null) ||
+    (typeof metadata?.artworkId === "string" && metadata.artworkId.trim()
+      ? (Number.isNaN(Number.parseInt(metadata.artworkId.trim(), 10)) ? null : Number.parseInt(metadata.artworkId.trim(), 10))
+      : null) ||
+    (typeof metadata?.upload_id === "string" && metadata.upload_id.trim()
+      ? (Number.isNaN(Number.parseInt(metadata.upload_id.trim(), 10)) ? null : Number.parseInt(metadata.upload_id.trim(), 10))
+      : null) ||
+    (typeof metadata?.uploadId === "string" && metadata.uploadId.trim()
+      ? (Number.isNaN(Number.parseInt(metadata.uploadId.trim(), 10)) ? null : Number.parseInt(metadata.uploadId.trim(), 10))
+      : null);
+
+  if (artworkId && artworks && artworks.length > 0) {
+    // 尝试多种格式查找artwork
+    const artwork = artworks.find((art) => {
+      // 格式1: art-{id}
+      const artIdMatch = art.id.match(/^art-(\d+)$/);
+      if (artIdMatch) {
+        const artIdNum = Number.parseInt(artIdMatch[1], 10);
+        if (artIdNum === artworkId) return true;
+      }
+      
+      // 格式2: artwork-{id}
+      const artworkIdMatch = art.id.match(/^artwork-(\d+)$/);
+      if (artworkIdMatch) {
+        const artworkIdNum = Number.parseInt(artworkIdMatch[1], 10);
+        if (artworkIdNum === artworkId) return true;
+      }
+      
+      // 格式3: upload-{id}
+      const uploadIdMatch = art.id.match(/^upload-(\d+)$/);
+      if (uploadIdMatch) {
+        const uploadIdNum = Number.parseInt(uploadIdMatch[1], 10);
+        if (uploadIdNum === artworkId) return true;
+      }
+      
+      // 格式4: 直接是数字字符串
+      const directIdMatch = art.id.match(/^(\d+)$/);
+      if (directIdMatch) {
+        const directIdNum = Number.parseInt(directIdMatch[1], 10);
+        if (directIdNum === artworkId) return true;
+      }
+      
+      // 格式5: 字符串形式的数字（去掉前缀）
+      if (typeof art.id === "string") {
+        const extractedNum = Number.parseInt(art.id.replace(/[^\d]/g, ""), 10);
+        if (!Number.isNaN(extractedNum) && extractedNum === artworkId) return true;
+      }
+      
+      return false;
+    });
+    
+    if (artwork && artwork.imageSrc) {
+      return artwork.imageSrc;
+    }
+  }
+  
+  // 再次使用封面图片
+  const cover = typeof metadata?.cover_image === "string" ? metadata.cover_image.trim() : "";
+  if (cover && !/^(?:linear|radial|conic)-gradient|^paint\(/i.test(cover)) {
+    return cover;
+  }
+  
+  return null;
+}
+
+function resolveBackground(
+  slug: string,
+  metadata?: Record<string, unknown>,
+  artworks?: Artwork[],
+): string {
+  const imageUrl = resolveImageUrl(slug, metadata, artworks);
+  if (imageUrl) {
+    return `url("${imageUrl}")`;
+  }
+
+  // 再次使用封面图片（可能是渐变色）
+  const cover = typeof metadata?.cover_image === "string" ? metadata.cover_image.trim() : "";
+  if (cover) {
+    if (/^(?:linear|radial|conic)-gradient|^paint\(/i.test(cover)) {
+      return cover;
+    }
+    return `url("${cover}")`;
+  }
+  
+  // 调试：在开发环境中输出metadata，帮助排查问题
+  if (import.meta.env.DEV && metadata) {
+    const imageKeys = Object.keys(metadata).filter(k => 
+      k.toLowerCase().includes("artwork") || 
+      k.toLowerCase().includes("upload") || 
+      k.toLowerCase().includes("image") || 
+      k.toLowerCase().includes("unlock")
+    );
+    if (imageKeys.length > 0) {
+      console.log("[ProfileAchievements] resolveBackground - slug:", slug);
+      console.log("[ProfileAchievements] resolveBackground - metadata keys:", Object.keys(metadata));
+      console.log("[ProfileAchievements] resolveBackground - image-related keys:", imageKeys);
+    }
+  }
+  
+  return gradientFromSlug(slug);
+}
+
+// Removed unused function: buildGroupPinnedId
+
+function buildStandalonePinnedId(level: AchievementLevelDefinition): string {
+  return `${STANDALONE_PREFIX}${level.slug}`;
+}
+
+function isLevelUnlocked(level: AchievementLevelDefinition): boolean {
+  return Boolean(level.unlockedAtDate);
+}
+
+function getHighestUnlockedLevel(group: AchievementGroupDefinition): AchievementLevelDefinition | null {
+  if (!group.levels || group.levels.length === 0) {
+    return null;
+  }
+  const unlocked = group.levels
+    .filter(isLevelUnlocked)
+    .sort((a, b) => b.level - a.level);
+  return unlocked[0] ?? null;
+}
+
+function formatLevelSubtitle(level: AchievementLevelDefinition): string {
+  return level.conditionText || level.description || "持续创作以解锁更多故事。";
+}
+
+function ProfileAchievements({
+  onBack,
+  pinnedAchievementIds,
+  onTogglePinned,
+  groups = [],
+  standalone = [],
+  summary = null,
+  loading = false,
+  artworks = [],
+}: ProfileAchievementsProps) {
+  const [selected, setSelected] = useState<SelectedState>(null);
+
+  // 禁止弹窗打开时外部页面滚动
+  useEffect(() => {
+    if (selected) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [selected]);
+
+  const unlockedGroups = useMemo(() => {
+    return groups
+      .map((group) => {
+        const unlockedLevel = getHighestUnlockedLevel(group);
+        return unlockedLevel ? { group, unlockedLevel } : null;
+      })
+      .filter(
+        (entry): entry is { group: AchievementGroupDefinition; unlockedLevel: AchievementLevelDefinition } =>
+          entry !== null,
+      );
+  }, [groups]);
+
+  const lockedGroups = useMemo(() => {
+    const unlockedIds = new Set(unlockedGroups.map((entry) => entry.group.id));
+    return groups.filter((group) => !unlockedIds.has(group.id));
+  }, [groups, unlockedGroups]);
+
+  const unlockedStandalone = useMemo(
+    () => standalone.filter((level) => isLevelUnlocked(level)),
+    [standalone],
+  );
+
+  const lockedStandalone = useMemo(
+    () => standalone.filter((level) => !isLevelUnlocked(level)),
+    [standalone],
+  );
+
+  const selectedEntry = useMemo(() => {
+    if (!selected) {
+      return null;
+    }
+    if (selected.kind === "group") {
+      const entry = unlockedGroups.find((item) => item.group.id === selected.groupId);
+      if (!entry) {
+        return null;
+      }
+      const { group, unlockedLevel } = entry;
+      const level = group.levels.find((item) => item.id === selected.levelId) ?? unlockedLevel;
+      if (!level) {
+        return null;
+      }
+      return { kind: "group" as const, group, level };
+    }
+    const level = unlockedStandalone.find((item) => item.id === selected.levelId);
+    if (!level) {
+      return null;
+    }
+    return { kind: "standalone" as const, level };
+  }, [selected, unlockedGroups, unlockedStandalone]);
+
+  const totalLevels = useMemo(() => {
+    const grouped = groups.reduce((sum, group) => sum + group.summary.levelCount, 0);
+    return grouped + standalone.length;
+  }, [groups, standalone.length]);
+
+  const unlockedLevels = useMemo(() => {
+    const grouped = unlockedGroups.reduce(
+      (sum, entry) => sum + entry.group.summary.unlockedLevels.length,
+      0,
+    );
+    const singles = unlockedStandalone.length;
+    return grouped + singles;
+  }, [unlockedGroups, unlockedStandalone.length]);
+
+  const progressPercent =
+    totalLevels > 0 ? Math.min(100, Math.max(0, Math.round((unlockedLevels / totalLevels) * 100))) : 0;
+  const progressLabel =
+    totalLevels > 0 ? `已解锁 ${unlockedLevels}/${totalLevels}` : "暂无成就数据";
+
+  const handleSelectGroup = (group: AchievementGroupDefinition, level: AchievementLevelDefinition | null) => {
+    if (!level || !isLevelUnlocked(level)) {
+      return;
+    }
+    setSelected({ kind: "group", groupId: group.id, levelId: level.id });
+  };
+
+  const handleSelectStandalone = (level: AchievementLevelDefinition) => {
+    if (!isLevelUnlocked(level)) {
+      return;
+    }
+    setSelected({ kind: "standalone", levelId: level.id });
+  };
+
+  const renderGroupCard = (group: AchievementGroupDefinition, representative: AchievementLevelDefinition) => {
+    if (!isLevelUnlocked(representative)) {
+      return null;
+    }
+
+    // Removed unused: pinnedId, isPinned
+    const subtitle = formatLevelSubtitle(representative);
+
+    return (
+      <button
+        key={group.id}
+        type="button"
+        className="achievement-card achievement-card--group"
+        onClick={() => handleSelectGroup(group, representative)}
+      >
+        <span className="achievement-card__accent" />
+        <div className="achievement-card__summary">
+          <div className="achievement-card__text">
+            <p className="achievement-card__title">{group.name}</p>
+            <p className="achievement-card__description">{subtitle}</p>
+          </div>
+        </div>
+        <div className="achievement-card__footer">
+          <p className="achievement-card__date">{representative.unlockedAtLabel}</p>
+        </div>
+      </button>
+    );
+  };
+
+  const renderStandaloneCard = (level: AchievementLevelDefinition) => {
+    if (!isLevelUnlocked(level)) {
+      return null;
+    }
+
+    const pinnedId = buildStandalonePinnedId(level);
+    const isPinned = pinnedAchievementIds.includes(pinnedId);
+    const subtitle = formatLevelSubtitle(level);
+    const backgroundImage = resolveBackground(level.slug, level.metadata, artworks);
+
+    return (
+      <button
+        key={level.id}
+        type="button"
+        className="achievement-mini-card"
+        onClick={() => handleSelectStandalone(level)}
+      >
+        <div
+          className="achievement-mini-card__thumb"
+          role="img"
+          aria-label={level.name}
+          style={{ backgroundImage }}
+        />
+        <div className="achievement-mini-card__body">
+          <div className="achievement-mini-card__header">
+            <strong>{level.name}</strong>
+            <span className="achievement-mini-card__tag">独立</span>
+          </div>
+          <p className="achievement-mini-card__subtitle">{subtitle}</p>
+          <div className="achievement-mini-card__meta">
+            <span>{level.unlockedAtLabel}</span>
+            <div
+              role="button"
+              tabIndex={0}
+              className={clsx(
+                "achievement-mini-card__pin",
+                isPinned && "achievement-mini-card__pin--active",
+              )}
+              onClick={(event) => {
+                event.stopPropagation();
+                onTogglePinned({
+                  id: pinnedId,
+                  title: level.name,
+                  subtitle,
+                  nextPinned: !isPinned,
+                });
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onTogglePinned({
+                    id: pinnedId,
+                    title: level.name,
+                    subtitle,
+                    nextPinned: !isPinned,
+                  });
+                }
+              }}
+              aria-pressed={isPinned}
+            >
+              <MaterialIcon name="push_pin" filled={isPinned} />
+            </div>
+          </div>
+        </div>
+      </button>
+    );
+  };
+
+  const modalContent = selectedEntry
+    ? (() => {
+        if (selectedEntry.kind === "group") {
+          const { group, level } = selectedEntry;
+          const levelPercent =
+            group.summary.levelCount > 0
+              ? Math.min(100, Math.round((level.level / group.summary.levelCount) * 100))
+              : 0;
+          return {
+            title: `${group.name} · Lv.${level.level}`,
+            subtitle: formatLevelSubtitle(level),
+            time: level.unlockedAtLabel,
+            progressLabel: `等级 ${level.level}/${group.summary.levelCount}`,
+            progressPercent: levelPercent,
+            background: resolveBackground(level.slug, level.metadata, artworks),
+            imageUrl: resolveImageUrl(level.slug, level.metadata, artworks),
+            levels: group.levels,
+            selectedLevelId: level.id,
+            group,
+          };
+        }
+        const { level } = selectedEntry;
+        return {
+          title: level.name,
+          subtitle: formatLevelSubtitle(level),
+          time: level.unlockedAtLabel,
+          progressLabel: level.unlockedAtDate ? "已完成" : "待解锁",
+          progressPercent: level.unlockedAtDate ? 100 : 0,
+          background: resolveBackground(level.slug, level.metadata, artworks),
+          imageUrl: resolveImageUrl(level.slug, level.metadata, artworks),
+          levels: null,
+          selectedLevelId: level.id,
+          group: null,
+        };
+      })()
+    : null;
+
+  return (
+    <div className="achievements-page">
+      <div className="achievements-page__bg">
+        <div className="achievements-page__glow achievements-page__glow--mint" />
+        <div className="achievements-page__glow achievements-page__glow--blue" />
+      </div>
+
+      <header className="achievements-page__header">
+        <button type="button" className="achievements-page__nav-button" onClick={onBack}>
+          <MaterialIcon name="arrow_back_ios_new" />
+        </button>
+        <h1>成就总览</h1>
+        <div className="achievements-page__header-placeholder" />
+      </header>
+
+      <main className="achievements-page__content">
+        <section className="achievements-progress">
+          <p>{progressLabel}</p>
+          <div className="achievements-progress__track">
+            <div
+              className="achievements-progress__bar"
+              style={{ width: `${progressPercent}%` }}
+              role="progressbar"
+              aria-valuenow={progressPercent}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            />
+          </div>
+          <span className="achievements-progress__caption">
+            成就组 {summary?.group_count ?? groups.length} · 独立成就 {summary?.standalone_count ?? standalone.length}
+          </span>
+        </section>
+
+        <section className="achievements-section achievements-section--groups">
+          <div className="achievements-section__header">
+            <h2>成就组</h2>
+            <span>{unlockedGroups.length}</span>
+          </div>
+          {loading ? (
+            <div className="achievements-section__state" role="status">
+              正在加载成就...
+            </div>
+          ) : unlockedGroups.length === 0 ? (
+            <div className="achievements-section__state">尚未解锁成就组</div>
+          ) : (
+            <div className="achievements-groups-grid">
+              {unlockedGroups.map(({ group, unlockedLevel }) => renderGroupCard(group, unlockedLevel))}
+            </div>
+          )}
+        </section>
+
+        <section className="achievements-section achievements-section--standalone">
+          <div className="achievements-section__header">
+            <h2>独立成就</h2>
+            <span>{unlockedStandalone.length}</span>
+          </div>
+          {loading ? (
+            <div className="achievements-section__state" role="status">
+              正在加载成就...
+            </div>
+          ) : unlockedStandalone.length === 0 ? (
+            <div className="achievements-section__state">尚未解锁独立成就</div>
+          ) : (
+            <div className="achievements-standalone-grid">
+              {unlockedStandalone.map((level) => renderStandaloneCard(level))}
+            </div>
+          )}
+        </section>
+
+        <section className="achievements-section achievements-section--locked-groups">
+          <div className="achievements-section__header">
+            <h2>未解锁成就组</h2>
+            <span>{lockedGroups.length}</span>
+          </div>
+          {lockedGroups.length === 0 ? (
+            <div className="achievements-section__state">全部成就组已解锁</div>
+          ) : (
+            <div className="achievements-locked__grid" role="list">
+              {lockedGroups.map((group) => (
+                <div key={group.id} className="achievements-locked__item" role="listitem">
+                  <span className="achievements-locked__name">{group.name}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="achievements-section achievements-section--locked-standalone">
+          <div className="achievements-section__header">
+            <h2>未解锁独立成就</h2>
+            <span>{lockedStandalone.length}</span>
+          </div>
+          {lockedStandalone.length === 0 ? (
+            <div className="achievements-section__state">全部独立成就已解锁</div>
+          ) : (
+            <div className="achievements-locked__grid" role="list">
+              {lockedStandalone.map((level) => (
+                <div key={level.id} className="achievements-locked__item" role="listitem">
+                  <span className="achievements-locked__name">{level.name}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </main>
+
+      {modalContent ? (
+        <div className="achievement-modal" role="dialog" aria-modal="true" aria-labelledby="achievement-modal-title">
+          <div className="achievement-modal__overlay" onClick={() => setSelected(null)} />
+
+          <div className="achievement-modal__inner">
+            <div className="achievement-modal__content">
+              <div className="achievement-modal__header">
+                <p className="achievement-modal__progress">{modalContent.progressLabel}</p>
+                <div className="achievement-modal__progress-track">
+                  <div
+                    className="achievement-modal__progress-bar"
+                    style={{ width: `${modalContent.progressPercent}%` }}
+                  />
+                </div>
+              </div>
+
+              <h2 id="achievement-modal-title">{modalContent.title}</h2>
+              <p className="achievement-modal__description">{modalContent.subtitle}</p>
+              <p className="achievement-modal__time">{modalContent.time}</p>
+
+              <div className="achievement-modal__artwork">
+                <div className="achievement-modal__artwork-frame">
+                  {modalContent.imageUrl ? (
+                    <img
+                      className="achievement-modal__artwork-image"
+                      src={modalContent.imageUrl}
+                      alt={modalContent.title}
+                    />
+                  ) : (
+                    <div
+                      className="achievement-modal__artwork-image achievement-modal__artwork-image--background"
+                      role="img"
+                      aria-label={modalContent.title}
+                      style={{ backgroundImage: modalContent.background }}
+                    />
+                  )}
+                  <button
+                    type="button"
+                    className="achievement-modal__download"
+                    aria-label="导出成就"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      // TODO: 实现导出功能
+                    }}
+                  >
+                    <MaterialIcon name="download" />
+                  </button>
+                </div>
+              </div>
+
+              {modalContent.levels ? (
+                <div className="achievement-modal__levels">
+                  {modalContent.levels.map((level) => {
+                    const active = level.id === modalContent.selectedLevelId;
+                    const disabled = !isLevelUnlocked(level);
+                    return (
+                      <button
+                        key={level.id}
+                        type="button"
+                        className={clsx(
+                          "achievement-modal__level",
+                          active && "achievement-modal__level--active",
+                          disabled && "achievement-modal__level--disabled",
+                        )}
+                        onClick={() =>
+                          setSelected({
+                            kind: "group",
+                            groupId: modalContent.group!.id,
+                            levelId: level.id,
+                          })
+                        }
+                        disabled={disabled}
+                      >
+                        <span className="achievement-modal__level-badge">Lv.{level.level}</span>
+                        <div className="achievement-modal__level-text">
+                          <strong>{level.name}</strong>
+                          <span>{formatLevelSubtitle(level)}</span>
+                        </div>
+                        <span className="achievement-modal__level-time">{level.unlockedAtLabel}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+
+              <p className="achievement-modal__hint">点击弹窗外关闭</p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export default ProfileAchievements;
+

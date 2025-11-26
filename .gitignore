@@ -1,0 +1,45 @@
+# Node
+frontend/node_modules/
+frontend/dist/
+npm-debug.log
+*.log
+
+# Python
+backend/.env
+backend/.venv/
+backend/__pycache__/
+*.pyc
+backend/db.sqlite3
+backend/logs/
+backend/media/
+
+# 旧项目目录（不应该提交）
+echodraw-master/
+
+# 字体文件（如果已经在仓库中，考虑使用 CDN 或子模块）
+*.ttf
+*.otf
+*.woff
+*.woff2
+
+# 大文件
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.gif
+*.mp4
+*.mov
+*.avi
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# 临时文件
+*.tmp
+*.temp
+*~

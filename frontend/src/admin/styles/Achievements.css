@@ -1,0 +1,281 @@
+.admin-achievements {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.admin-achievements__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.admin-achievements__header h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.admin-achievements__header p {
+  margin-top: 6px;
+  color: rgba(217, 222, 255, 0.72);
+  font-size: 14px;
+}
+
+.admin-achievements__reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  border-radius: 12px;
+  padding: 10px 16px;
+  background: rgba(128, 146, 255, 0.18);
+  color: #f5f7ff;
+  cursor: pointer;
+}
+
+.admin-achievements__reset:hover:not(:disabled) {
+  background: rgba(128, 146, 255, 0.28);
+}
+
+.admin-achievements__reset:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.admin-achievements__error {
+  background: rgba(255, 96, 96, 0.12);
+  border: 1px solid rgba(255, 96, 96, 0.3);
+  color: #ffb2b2;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 14px;
+}
+
+.admin-achievements__list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.admin-achievements__list h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.admin-achievements__loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: rgba(217, 222, 255, 0.8);
+  font-size: 14px;
+}
+
+.admin-achievements__spinner {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 3px solid rgba(128, 146, 255, 0.22);
+  border-top-color: rgba(128, 146, 255, 0.8);
+  animation: admin-achievements-spin 0.9s linear infinite;
+}
+
+@keyframes admin-achievements-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.admin-achievements__table-wrapper {
+  overflow-x: auto;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(14, 17, 32, 0.9);
+  box-shadow: 0 18px 32px rgba(10, 12, 24, 0.16);
+}
+
+.admin-achievements__table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 960px;
+}
+
+.admin-achievements__table thead {
+  background: rgba(13, 16, 30, 0.72);
+}
+
+.admin-achievements__table th {
+  padding: 14px 18px;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(217, 222, 255, 0.82);
+  letter-spacing: 0.02em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.admin-achievements__table td {
+  padding: 14px 18px;
+  font-size: 13px;
+  color: rgba(230, 234, 255, 0.88);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  vertical-align: top;
+}
+
+.admin-achievements__table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.admin-achievements__table tbody tr:hover {
+  background: rgba(128, 146, 255, 0.08);
+}
+
+.admin-achievements__table input,
+.admin-achievements__table textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(128, 146, 255, 0.25);
+  background: rgba(6, 9, 22, 0.65);
+  color: #f7f9ff;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  resize: vertical;
+}
+
+.admin-achievements__table textarea {
+  min-height: 94px;
+}
+
+.admin-achievements__table input:focus,
+.admin-achievements__table textarea:focus {
+  border-color: rgba(128, 146, 255, 0.55);
+  box-shadow: 0 0 0 3px rgba(86, 105, 255, 0.24);
+}
+
+.admin-achievements__field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-achievements__name {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.admin-achievements__name strong {
+  font-size: 14px;
+}
+
+.admin-achievements__name small {
+  font-size: 12px;
+  color: rgba(194, 199, 255, 0.7);
+}
+
+.admin-achievements__slug {
+  font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
+  font-size: 12px;
+}
+
+.admin-achievements__description {
+  max-width: 320px;
+  color: rgba(223, 227, 255, 0.8);
+  line-height: 1.5;
+}
+
+.admin-achievements__json details {
+  display: inline-block;
+  width: 100%;
+}
+
+.admin-achievements__json summary {
+  cursor: pointer;
+  color: rgba(176, 186, 255, 0.92);
+}
+
+.admin-achievements__json pre {
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.36);
+  color: rgba(200, 204, 255, 0.9);
+  font-size: 12px;
+  overflow-x: auto;
+}
+
+.admin-achievements__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: rgba(223, 227, 255, 0.82);
+  cursor: pointer;
+}
+
+.admin-achievements__toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: #8a98ff;
+  cursor: pointer;
+}
+
+.admin-achievements__actions-group {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-achievements__actions-group button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 12px;
+  padding: 8px 12px;
+  border: none;
+  background: rgba(128, 146, 255, 0.16);
+  color: #f5f7ff;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.admin-achievements__actions-group button:hover {
+  background: rgba(128, 146, 255, 0.24);
+  transform: translateY(-1px);
+}
+
+.admin-achievements__actions-group button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  transform: none;
+}
+
+.admin-achievements__empty {
+  padding: 32px 18px;
+  text-align: center;
+  color: rgba(207, 211, 255, 0.6);
+  font-size: 14px;
+}
+
+.status {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.status--active {
+  background: rgba(128, 146, 255, 0.22);
+  color: #cfd4ff;
+}
+
+
+
+
+
