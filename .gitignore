@@ -43,3 +43,9 @@ Thumbs.db
 *.tmp
 *.temp
 *~
+
+# Git 备份目录
+.git_backup/
+.git_backup_final/
+.git_backup_before_cleanup/
+.git_backup_before_filter/
