@@ -22,7 +22,7 @@ echodraw-master/
 *.woff
 *.woff2
 
-# 大文件
+# 大文件（排除 src/assets 和 public 中的资源文件）
 *.jpg
 *.jpeg
 *.png
@@ -31,6 +31,14 @@ echodraw-master/
 *.mp4
 *.mov
 *.avi
+
+# 但允许前端资源文件
+!frontend/src/assets/*.jpg
+!frontend/src/assets/*.png
+!frontend/src/assets/*.webp
+!frontend/public/**/*.jpg
+!frontend/public/**/*.png
+!frontend/public/**/*.webp
 
 # OS / IDE
 .DS_Store
