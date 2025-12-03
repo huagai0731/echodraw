@@ -1,0 +1,69 @@
+.layout {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: radial-gradient(circle at top, #f5f7fa, #e4ecf7);
+  color: #1f2933;
+}
+
+.layout__header {
+  padding: 2rem 3rem 1rem;
+  border-bottom: 1px solid rgba(31, 41, 51, 0.1);
+}
+
+.layout__header h1 {
+  margin: 0;
+  font-size: 1.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.layout__header p {
+  margin: 0.5rem 0 0;
+  font-size: 0.9rem;
+  color: rgba(31, 41, 51, 0.65);
+}
+
+.layout__content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

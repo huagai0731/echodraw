@@ -1,0 +1,66 @@
+.home {
+  width: min(640px, 100%);
+}
+
+.home__card {
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(12px);
+  border-radius: 16px;
+  padding: 2.5rem;
+  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.12);
+  display: grid;
+  gap: 1rem;
+}
+
+.home__card h2 {
+  margin: 0;
+  font-size: 2rem;
+}
+
+.home__card p {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.home__card strong {
+  margin-left: 0.5rem;
+  font-weight: 600;
+  color: #0b7285;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

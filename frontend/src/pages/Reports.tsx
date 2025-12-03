@@ -1,0 +1,1374 @@
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
+
+import MaterialIcon from "@/components/MaterialIcon";
+import TopNav, { type TopNavAction } from "@/components/TopNav";
+import type { Artwork } from "@/types/artwork";
+import WeeklySingleTemplateDesigner from "@/pages/reports/WeeklySingleTemplateDesigner";
+import WeeklyDoubleTemplateDesigner from "@/pages/reports/WeeklyDoubleTemplateDesigner";
+import MonthlySingleTemplateDesigner from "@/pages/reports/MonthlySingleTemplateDesigner";
+import FourImageTemplateDesigner from "@/pages/reports/FourImageTemplateDesigner";
+import CollageTemplateDesigner from "@/pages/reports/CollageTemplateDesigner";
+import YearlyTemplateDesigner from "@/pages/reports/YearlyTemplateDesigner";
+import TimeJumpComparisonTemplateDesigner from "@/pages/reports/TimeJumpComparisonTemplateDesigner";
+import LinearProgressTimelineTemplateDesigner from "@/pages/reports/LinearProgressTimelineTemplateDesigner";
+import {
+  fetchUserTestResults,
+  fetchNotifications,
+  deleteNotification,
+  deleteUserTestResult,
+  deleteVisualAnalysisResult,
+  // Removed unused: getUnreadNotificationCount
+  hasAuthToken,
+  fetchGoalsCalendar,
+  fetchVisualAnalysisResults,
+  type UserTestResult,
+  type Notification,
+  type GoalsCalendarDay,
+  type VisualAnalysisResultRecord,
+} from "@/services/api";
+import {
+  loadStoredArtworks,
+  USER_ARTWORKS_CHANGED_EVENT,
+} from "@/services/artworkStorage";
+import {
+  formatISODateInShanghai,
+  parseISODateInShanghai,
+  startOfWeekInShanghai,
+} from "@/utils/dateUtils";
+import { useCheckInDates } from "@/hooks/useCheckInDates";
+
+import "./Reports.css";
+import "./Goals.css";
+import "./ArtworkDetails.css";
+
+type TemplateAction = "weekly-single" | "weekly-double" | "monthly-single" | "four-image" | "collage" | "yearly" | "time-jump-comparison" | "linear-progress-timeline";
+
+type TemplateItem = {
+  id: string;
+  icon: string;
+  label: string;
+  action?: TemplateAction;
+};
+
+type ReportItem = {
+  id: string;
+  title: string;
+  subtitle: string;
+  glow: number;
+  testResultId?: number;
+  notificationId?: number;
+  visualAnalysisResultId?: number;
+  timestamp?: number;
+};
+
+type RangeKey = "weekly" | "monthly";
+
+const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const MONTHLY_CHART_WIDTH = 310;
+const MONTHLY_CHART_HEIGHT = 192;
+
+// 八个可滑动的模版卡片
+const TEMPLATE_CARDS: TemplateItem[] = [
+  { id: "weekly-single", icon: "view_week", label: "单周模板", action: "weekly-single" as TemplateAction },
+  { id: "weekly-double", icon: "view_week", label: "双周模板", action: "weekly-double" as TemplateAction },
+  { id: "monthly-single", icon: "calendar_month", label: "单月模板", action: "monthly-single" as TemplateAction },
+  { id: "four-image", icon: "grid_view", label: "四图模板", action: "four-image" as TemplateAction },
+  { id: "collage", icon: "apps", label: "套图模板", action: "collage" as TemplateAction },
+  { id: "yearly", icon: "calendar_today", label: "全年模板", action: "yearly" as TemplateAction },
+  { id: "time-jump-comparison", icon: "compare_arrows", label: "时间跳点对比", action: "time-jump-comparison" as TemplateAction },
+  { id: "linear-progress-timeline", icon: "timeline", label: "线性进步轨迹", action: "linear-progress-timeline" as TemplateAction },
+];
+
+type WeeklyStat = {
+  label: string;
+  minutes: number;
+  valueHours: number;
+  dateKey: string;
+};
+
+type MonthlySeriesPoint = {
+  x: number;
+  y: number;
+  minutes: number;
+  day: number;
+};
+
+type MonthlySeries = {
+  path: string;
+  labels: string[];
+  hasData: boolean;
+  points: MonthlySeriesPoint[];
+  defaultHintIndex: number;
+  year: number;
+  monthIndex: number;
+};
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
+
+function extractDurationMinutes(artwork: Artwork): number {
+  if (artwork.durationMinutes !== undefined && artwork.durationMinutes !== null) {
+    return Math.max(artwork.durationMinutes, 0);
+  }
+  // 如果没有durationMinutes，尝试从duration字符串解析
+  if (artwork.duration) {
+    const match = artwork.duration.trim().match(/^(?:(\d+)\s*h)?\s*(?:(\d+)\s*m)?$/i);
+    if (match) {
+      const hours = parseInt(match[1] || "0", 10);
+      const mins = parseInt(match[2] || "0", 10);
+      return hours * 60 + mins;
+    }
+  }
+  return 0;
+}
+
+function startOfWeek(reference: Date): Date {
+  return startOfWeekInShanghai(reference);
+}
+
+function computeWeeklyStats(uploads: Artwork[], reference: Date): WeeklyStat[] {
+  const start = startOfWeek(reference);
+  const startDateStr = formatISODateInShanghai(start);
+    if (!startDateStr) {
+      return WEEKDAY_LABELS.map((label) => ({
+      label,
+      minutes: 0,
+      valueHours: 0,
+      dateKey: "",
+    }));
+  }
+
+  const startParsed = parseISODateInShanghai(startDateStr);
+  if (!startParsed) {
+    return WEEKDAY_LABELS.map((label) => ({
+      label,
+      minutes: 0,
+      valueHours: 0,
+      dateKey: "",
+    }));
+  }
+
+    const stats = WEEKDAY_LABELS.map((label, index) => {
+      const date = new Date(startParsed);
+      date.setDate(date.getDate() + index);
+      const dateKey = formatISODateInShanghai(date) || "";
+      return {
+        label,
+        minutes: 0,
+        valueHours: 0,
+        dateKey,
+      };
+    });
+
+  uploads.forEach((artwork) => {
+    const dateKey = formatISODateInShanghai(new Date(artwork.uploadedAt || artwork.uploadedDate || ""));
+    if (!dateKey) return;
+
+    const uploadDate = parseISODateInShanghai(dateKey);
+    if (!uploadDate) return;
+
+    const dayIndex = Math.floor((uploadDate.getTime() - startParsed.getTime()) / (1000 * 60 * 60 * 24));
+    if (dayIndex >= 0 && dayIndex < 7) {
+      const minutes = extractDurationMinutes(artwork);
+      stats[dayIndex].minutes += minutes;
+    }
+  });
+
+  return stats.map((item) => ({
+    ...item,
+    valueHours: item.minutes / 60,
+  }));
+}
+
+function generateMonthlyLabels(daysInMonth: number): string[] {
+  if (daysInMonth <= 1) {
+    return ["1"];
+  }
+  const count = Math.min(7, daysInMonth);
+  const step = (daysInMonth - 1) / (count - 1);
+  const labels = new Set<number>();
+  for (let index = 0; index < count; index += 1) {
+    const day = Math.round(index * step) + 1;
+    labels.add(Math.min(day, daysInMonth));
+  }
+  return Array.from(labels).sort((a, b) => a - b).map((day) => day.toString());
+}
+
+function buildMonthlySeries(uploads: Artwork[], reference: Date): MonthlySeries {
+  const referenceDateStr = formatISODateInShanghai(reference);
+  if (!referenceDateStr) {
+    const year = reference.getFullYear();
+    const monthIndex = reference.getMonth();
+    const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+    return {
+      path: `M0 ${MONTHLY_CHART_HEIGHT} L ${MONTHLY_CHART_WIDTH} ${MONTHLY_CHART_HEIGHT}`,
+      labels: generateMonthlyLabels(daysInMonth),
+      hasData: false,
+      points: [],
+      defaultHintIndex: 0,
+      year,
+      monthIndex,
+    };
+  }
+
+  const referenceParsed = parseISODateInShanghai(referenceDateStr);
+  if (!referenceParsed) {
+    const year = reference.getFullYear();
+    const monthIndex = reference.getMonth();
+    const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+    return {
+      path: `M0 ${MONTHLY_CHART_HEIGHT} L ${MONTHLY_CHART_WIDTH} ${MONTHLY_CHART_HEIGHT}`,
+      labels: generateMonthlyLabels(daysInMonth),
+      hasData: false,
+      points: [],
+      defaultHintIndex: 0,
+      year,
+      monthIndex,
+    };
+  }
+
+  const year = referenceParsed.getFullYear();
+  const monthIndex = referenceParsed.getMonth();
+  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+  const totals = new Array<number>(daysInMonth).fill(0);
+
+  uploads.forEach((artwork) => {
+    const dateKey = formatISODateInShanghai(new Date(artwork.uploadedAt || artwork.uploadedDate || ""));
+    if (!dateKey) return;
+    const [y, m, d] = dateKey.split("-").map(Number);
+    if (Number.isNaN(y) || Number.isNaN(m) || Number.isNaN(d) || d < 1 || d > daysInMonth) {
+      return;
+    }
+    if (y !== year || m - 1 !== monthIndex || !d) {
+      return;
+    }
+    const minutes = extractDurationMinutes(artwork);
+    if (minutes <= 0) {
+      return;
+    }
+    totals[d - 1] += minutes;
+  });
+
+  const maxMinutes = Math.max(...totals, 1);
+  const chartHeight = MONTHLY_CHART_HEIGHT - 28;
+  const points: MonthlySeriesPoint[] = totals.map((minutes, day) => {
+    const x = (day / (daysInMonth - 1)) * MONTHLY_CHART_WIDTH;
+    const y = chartHeight - (minutes / maxMinutes) * chartHeight;
+    return { x, y, minutes, day: day + 1 };
+  });
+
+  const pathParts: string[] = [];
+  if (points.length > 0) {
+    pathParts.push(`M${points[0].x} ${points[0].y}`);
+    for (let i = 1; i < points.length; i++) {
+      pathParts.push(`L${points[i].x} ${points[i].y}`);
+    }
+  } else {
+    pathParts.push(`M0 ${chartHeight} L ${MONTHLY_CHART_WIDTH} ${chartHeight}`);
+  }
+
+  return {
+    path: pathParts.join(" "),
+    labels: generateMonthlyLabels(daysInMonth),
+    hasData: totals.some((t) => t > 0),
+    points,
+    defaultHintIndex: Math.floor(points.length / 2),
+    year,
+    monthIndex,
+  };
+}
+
+type ReportsProps = {
+  artworks?: Artwork[];
+  onOpenTestResult?: (resultId: number) => void;
+  onOpenVisualAnalysisResult?: (resultId: number) => void;
+};
+
+function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }: ReportsProps) {
+  // 模版相关状态
+  const [weeklySingleTemplateOpen, setWeeklySingleTemplateOpen] = useState(false);
+  const [weeklyDoubleTemplateOpen, setWeeklyDoubleTemplateOpen] = useState(false);
+  const [monthlySingleTemplateOpen, setMonthlySingleTemplateOpen] = useState(false);
+  const [fourImageTemplateOpen, setFourImageTemplateOpen] = useState(false);
+  const [collageTemplateOpen, setCollageTemplateOpen] = useState(false);
+  const [yearlyTemplateOpen, setYearlyTemplateOpen] = useState(false);
+  const [timeJumpComparisonTemplateOpen, setTimeJumpComparisonTemplateOpen] = useState(false);
+  const [linearProgressTimelineTemplateOpen, setLinearProgressTimelineTemplateOpen] = useState(false);
+  const [templatesPageOpen, setTemplatesPageOpen] = useState(false);
+  const [reportsPageOpen, setReportsPageOpen] = useState(false);
+
+  // 报告相关状态
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [testResults, setTestResults] = useState<UserTestResult[]>([]);
+  const [visualAnalysisResults, setVisualAnalysisResults] = useState<VisualAnalysisResultRecord[]>([]);
+  const [reportsLoading, setReportsLoading] = useState(true);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<ReportItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // 趋势相关状态
+  const [range, setRange] = useState<RangeKey>("weekly");
+  const [uploads, setUploads] = useState<Artwork[]>([]);
+  const [activeMonth, setActiveMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+  const [calendarDays, setCalendarDays] = useState<GoalsCalendarDay[]>([]);
+  const [calendarLoading, setCalendarLoading] = useState(false);
+  const [calendarError, setCalendarError] = useState<string | null>(null);
+  const [monthlyHoverIndex, setMonthlyHoverIndex] = useState<number | null>(null);
+  const [monthlySelectedIndex, setMonthlySelectedIndex] = useState<number | null>(null);
+  const [monthlyPointerActive, setMonthlyPointerActive] = useState(false);
+  
+  // 跟踪触摸起始位置，用于判断是滚动还是交互
+  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+
+  // 栏的展开/收起状态
+  // 模版和报告栏始终展开，不再需要状态控制
+  const [trendsExpanded, setTrendsExpanded] = useState(false); // 趋势栏默认收起
+
+  const { checkInDates: localUploadDates } = useCheckInDates();
+
+  // 加载通知、测试结果和视觉分析结果
+  useEffect(() => {
+    const loadData = async () => {
+      setReportsLoading(true);
+      if (!hasAuthToken()) {
+        setNotifications([]);
+        setTestResults([]);
+        setVisualAnalysisResults([]);
+        setReportsLoading(false);
+        return;
+      }
+
+      // 并行加载所有数据，提高速度
+      const [notifs, results, visualResults] = await Promise.allSettled([
+        fetchNotifications(),
+        fetchUserTestResults(),
+        fetchVisualAnalysisResults(),
+      ]);
+
+      // 处理通知
+      if (notifs.status === 'fulfilled') {
+        setNotifications(notifs.value);
+      } else {
+        console.warn("[Reports] Failed to load notifications:", notifs.reason);
+        setNotifications([]);
+      }
+
+      // 处理测试结果
+      if (results.status === 'fulfilled') {
+        setTestResults(results.value);
+      } else {
+        console.warn("[Reports] Failed to load test results:", results.reason);
+        setTestResults([]);
+      }
+
+      // 处理视觉分析结果
+      if (visualResults.status === 'fulfilled') {
+        setVisualAnalysisResults(visualResults.value);
+      } else {
+        console.warn("[Reports] Failed to load visual analysis results:", visualResults.reason);
+        setVisualAnalysisResults([]);
+      }
+      
+      setReportsLoading(false);
+    };
+
+    loadData();
+  }, []);
+
+  // 使用模块级缓存，避免组件重新挂载时丢失数据
+  const reportsCacheKey = 'reports-cache';
+  const CACHE_MAX_AGE = 5 * 60 * 1000; // 5分钟
+  
+  // 组件挂载时，先尝试使用缓存数据（立即显示，提升用户体验）
+  const useCacheRef = useRef(false);
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !useCacheRef.current) {
+      useCacheRef.current = true;
+      try {
+        const cached = localStorage.getItem(reportsCacheKey);
+        if (cached) {
+          const { data, timestamp } = JSON.parse(cached);
+          const cacheAge = Date.now() - timestamp;
+          if (cacheAge < CACHE_MAX_AGE) {
+            setNotifications(data.notifications || []);
+            setTestResults(data.testResults || []);
+            setVisualAnalysisResults(data.visualAnalysisResults || []);
+            setReportsLoading(false);
+            console.log("[Reports] 使用缓存数据，立即显示（后台会更新）");
+          }
+        }
+      } catch (err) {
+        console.warn("[Reports] 读取缓存失败:", err);
+      }
+    }
+  }, []);
+  
+  // 当数据加载成功后，更新缓存
+  useEffect(() => {
+    if (!reportsLoading && (notifications.length > 0 || testResults.length > 0 || visualAnalysisResults.length > 0)) {
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem(reportsCacheKey, JSON.stringify({
+            data: {
+              notifications,
+              testResults,
+              visualAnalysisResults,
+            },
+            timestamp: Date.now(),
+          }));
+        } catch (err) {
+          console.warn("[Reports] 保存缓存失败:", err);
+        }
+      }
+    }
+  }, [reportsLoading, notifications, testResults, visualAnalysisResults]);
+
+  // 加载上传数据
+  useEffect(() => {
+    const stored = loadStoredArtworks();
+    setUploads(stored);
+  }, []);
+
+  useEffect(() => {
+    const handleArtworksChanged = () => {
+      const stored = loadStoredArtworks();
+      setUploads(stored);
+    };
+
+    window.addEventListener(USER_ARTWORKS_CHANGED_EVENT, handleArtworksChanged);
+    return () => {
+      window.removeEventListener(USER_ARTWORKS_CHANGED_EVENT, handleArtworksChanged);
+    };
+  }, []);
+
+  // 加载打卡日历
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadCalendar(year: number, month: number) {
+      if (!hasAuthToken()) {
+        setCalendarDays([]);
+        setCalendarError(null);
+        return;
+      }
+
+      setCalendarLoading(true);
+      try {
+        const data = await fetchGoalsCalendar({ year, month });
+        if (!isMounted) return;
+        setCalendarDays(data.days);
+        setCalendarError(null);
+      } catch (error) {
+        if (!isMounted) return;
+        console.warn("Failed to load goals calendar", error);
+        setCalendarDays([]);
+        setCalendarError("获取打卡记录失败，请稍后重试。");
+      } finally {
+        if (isMounted) {
+          setCalendarLoading(false);
+        }
+      }
+    }
+
+    loadCalendar(activeMonth.getFullYear(), activeMonth.getMonth() + 1);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeMonth]);
+
+  const mergedCalendarDays = useMemo(() => {
+    if (calendarDays.length === 0) return [];
+    return calendarDays.map((day) => {
+      if (localUploadDates.has(day.date) && day.status === "none") {
+        return { ...day, status: "upload" as GoalsCalendarDay["status"] };
+      }
+      return day;
+    });
+  }, [calendarDays, localUploadDates]);
+
+  const handleTemplateAction = useCallback(
+    (action: TemplateAction) => {
+      if (action === "weekly-single") {
+        setWeeklySingleTemplateOpen(true);
+        return;
+      }
+      if (action === "weekly-double") {
+        setWeeklyDoubleTemplateOpen(true);
+        return;
+      }
+      if (action === "monthly-single") {
+        setMonthlySingleTemplateOpen(true);
+        return;
+      }
+      if (action === "four-image") {
+        setFourImageTemplateOpen(true);
+        return;
+      }
+      if (action === "collage") {
+        setCollageTemplateOpen(true);
+        return;
+      }
+      if (action === "yearly") {
+        setYearlyTemplateOpen(true);
+        return;
+      }
+      if (action === "time-jump-comparison") {
+        setTimeJumpComparisonTemplateOpen(true);
+        return;
+      }
+      if (action === "linear-progress-timeline") {
+        setLinearProgressTimelineTemplateOpen(true);
+        return;
+      }
+    },
+    [],
+  );
+
+  const renderTemplateItem = useCallback(
+    (item: { id: string; icon: string; label: string; action?: TemplateAction }) => {
+      if (item.action) {
+        return (
+          <button
+            key={item.id}
+            type="button"
+            className="reports-template reports-template--action"
+            onClick={() => handleTemplateAction(item.action!)}
+          >
+            <MaterialIcon name={item.icon} className="reports-template__icon" />
+            <p className="reports-template__label">{item.label}</p>
+          </button>
+        );
+      }
+      return (
+        <article key={item.id} className="reports-template">
+          <MaterialIcon name={item.icon} className="reports-template__icon" />
+          <p className="reports-template__label">{item.label}</p>
+        </article>
+      );
+    },
+    [handleTemplateAction],
+  );
+
+  // 计算趋势数据
+  const todayInShanghai = useMemo(() => {
+    const todayStr = formatISODateInShanghai(new Date());
+    if (todayStr) {
+      const parsed = parseISODateInShanghai(todayStr);
+      return parsed || new Date();
+    }
+    return new Date();
+  }, []);
+
+  const weeklyStats = useMemo(() => computeWeeklyStats(uploads, todayInShanghai), [uploads, todayInShanghai]);
+  const maxWeekly = useMemo(
+    () => weeklyStats.reduce((max, item) => Math.max(max, item.valueHours), 0),
+    [weeklyStats],
+  );
+  const hasWeeklyData = weeklyStats.some((item) => item.minutes > 0);
+  const monthlySeries = useMemo(() => buildMonthlySeries(uploads, todayInShanghai), [uploads, todayInShanghai]);
+
+  const monthlyHint = useMemo(() => {
+    if (!monthlySeries.hasData || monthlySeries.points.length === 0) {
+      return null;
+    }
+    const maxIndex = monthlySeries.points.length - 1;
+    const targetIndex =
+      monthlyHoverIndex !== null
+        ? clamp(monthlyHoverIndex, 0, maxIndex)
+        : monthlySelectedIndex !== null
+          ? clamp(monthlySelectedIndex, 0, maxIndex)
+          : clamp(monthlySeries.defaultHintIndex, 0, maxIndex);
+    const point = monthlySeries.points[targetIndex];
+    const left = clamp((point.x / MONTHLY_CHART_WIDTH) * 100, 0, 100);
+    const top = clamp((point.y / MONTHLY_CHART_HEIGHT) * 100, 0, 100);
+    const valueHours = point.minutes / 60;
+    return {
+      dateLabel: `${point.day}日`,
+      valueLabel: `${valueHours.toFixed(1)} 小时`,
+      left,
+      top,
+    };
+  }, [monthlySeries, monthlyHoverIndex, monthlySelectedIndex]);
+
+  const updateMonthlyHoverIndex = useCallback(
+    (event: ReactPointerEvent<SVGSVGElement>) => {
+      if (!monthlySeries.hasData || monthlySeries.points.length === 0) {
+        return;
+      }
+      const rect = event.currentTarget.getBoundingClientRect();
+      if (rect.width === 0) {
+        return;
+      }
+      const relativeX = clamp(event.clientX - rect.left, 0, rect.width);
+      const ratio =
+        monthlySeries.points.length > 1 ? relativeX / rect.width : 0;
+      const nextIndex = Math.round(
+        ratio * (monthlySeries.points.length - 1),
+      );
+      setMonthlyHoverIndex(nextIndex);
+      setMonthlySelectedIndex(nextIndex);
+    },
+    [monthlySeries],
+  );
+
+  const handleMonthlyPointerDown = useCallback(
+    (event: ReactPointerEvent<SVGSVGElement>) => {
+      if (!monthlySeries.hasData || monthlySeries.points.length === 0) {
+        return;
+      }
+      const isTouch = event.pointerType === "touch";
+      
+      // 记录触摸起始位置
+      if (isTouch) {
+        touchStartRef.current = {
+          x: event.clientX,
+          y: event.clientY,
+          time: Date.now(),
+        };
+        // 触摸设备不阻止默认行为，允许滚动
+      } else {
+        // 非触摸设备（鼠标/笔）正常处理
+        event.preventDefault();
+        setMonthlyPointerActive(true);
+        if (event.currentTarget.setPointerCapture) {
+          try {
+            event.currentTarget.setPointerCapture(event.pointerId);
+          } catch {
+            // ignore capture errors
+          }
+        }
+        updateMonthlyHoverIndex(event);
+      }
+    },
+    [monthlySeries, updateMonthlyHoverIndex],
+  );
+
+  const handleMonthlyPointerMove = useCallback(
+    (event: ReactPointerEvent<SVGSVGElement>) => {
+      if (!monthlySeries.hasData || monthlySeries.points.length === 0) {
+        return;
+      }
+      const isMouseLike = event.pointerType === "mouse" || event.pointerType === "pen";
+      const isTouch = event.pointerType === "touch";
+      
+      if (isTouch) {
+        // 触摸设备：检测滑动方向
+        if (!touchStartRef.current) {
+          return;
+        }
+        const deltaX = Math.abs(event.clientX - touchStartRef.current.x);
+        const deltaY = Math.abs(event.clientY - touchStartRef.current.y);
+        
+        // 如果是垂直滑动（滚动），不处理，让页面滚动
+        if (deltaY > deltaX && deltaY > 10) {
+          touchStartRef.current = null;
+          setMonthlyPointerActive(false);
+          return;
+        }
+        
+        // 如果是水平滑动或点击，激活交互
+        if (deltaX > 5 || (deltaX < 5 && deltaY < 5)) {
+          if (!monthlyPointerActive) {
+            setMonthlyPointerActive(true);
+          }
+          updateMonthlyHoverIndex(event);
+        }
+      } else {
+        // 鼠标和笔设备正常处理
+        if (!isMouseLike && !monthlyPointerActive) {
+          return;
+        }
+        updateMonthlyHoverIndex(event);
+      }
+    },
+    [monthlySeries, monthlyPointerActive, updateMonthlyHoverIndex],
+  );
+
+  const endMonthlyPointerInteraction = useCallback(() => {
+    setMonthlyPointerActive(false);
+    touchStartRef.current = null;
+  }, []);
+
+  const handleMonthlyPointerLeave = useCallback(() => {
+    setMonthlyPointerActive(false);
+    setMonthlyHoverIndex(null);
+    touchStartRef.current = null;
+  }, []);
+
+  // 构建报告列表
+  const reportItems = useMemo<ReportItem[]>(() => {
+    const items: ReportItem[] = [];
+    
+    // 从通知中提取报告
+    notifications.forEach((notif, index) => {
+      // 根据标题判断是否是报告
+      if (notif.title?.includes("报告") || notif.title?.includes("月报") || notif.title?.includes("周报")) {
+        items.push({
+          id: `notification-${notif.id}`,
+          title: notif.title || "报告",
+          subtitle: notif.created_at ? new Date(notif.created_at).toLocaleDateString("zh-CN") : "",
+          glow: (index % 7) + 1,
+          notificationId: notif.id,
+          timestamp: notif.created_at ? new Date(notif.created_at).getTime() : 0,
+        });
+      }
+    });
+
+    // 从测试结果中提取
+    testResults.forEach((result, index) => {
+      const date = new Date(result.completed_at);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      const hours = String(date.getHours()).padStart(2, "0");
+      const minutes = String(date.getMinutes()).padStart(2, "0");
+      
+      items.push({
+        id: `test-result-${result.id}`,
+        title: result.test_name,
+        subtitle: `${year}年${month}月${day}日 ${hours}:${minutes}`,
+        glow: ((notifications.length + index) % 7) + 1,
+        testResultId: result.id,
+        timestamp: date.getTime(),
+      });
+    });
+
+    // 从视觉分析结果中提取
+    // 视觉分析结果不再显示在报告页（只在视觉分析卡片中显示）
+    // visualAnalysisResults.forEach((result, index) => {
+    //   const date = new Date(result.created_at);
+    //   const year = date.getFullYear();
+    //   const month = String(date.getMonth() + 1).padStart(2, "0");
+    //   const day = String(date.getDate()).padStart(2, "0");
+    //   const hours = String(date.getHours()).padStart(2, "0");
+    //   const minutes = String(date.getMinutes()).padStart(2, "0");
+    //   
+    //   items.push({
+    //     id: `visual-analysis-${result.id}`,
+    //     title: "视觉分析",
+    //     subtitle: `${year}年${month}月${day}日 ${hours}:${minutes}`,
+    //     glow: ((notifications.length + testResults.length + index) % 7) + 1,
+    //     visualAnalysisResultId: result.id,
+    //     timestamp: date.getTime(),
+    //   });
+    // });
+
+    // 按时间戳排序，最新的在前
+    return items.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+  }, [notifications, testResults, visualAnalysisResults]);
+
+  const unreadReports = useMemo(() => {
+    if (!hasAuthToken()) return [];
+    const readIds = new Set<number>();
+    try {
+      const stored = localStorage.getItem("echo-read-notifications");
+      if (stored) {
+        const ids = JSON.parse(stored) as number[];
+        ids.forEach((id) => readIds.add(id));
+      }
+    } catch {
+      // ignore
+    }
+    return reportItems.filter((item) => {
+      if (item.notificationId) {
+        return !readIds.has(item.notificationId);
+      }
+      return true; // 测试结果默认算作未读
+    });
+  }, [reportItems]);
+
+  const hasUnreadReports = unreadReports.length > 0;
+
+  // 处理删除报告
+  const handleDeleteReport = useCallback(async (item: ReportItem) => {
+    if (isDeleting) return;
+    
+    setIsDeleting(true);
+    try {
+      if (item.notificationId !== undefined) {
+        await deleteNotification(item.notificationId);
+        setNotifications((prev) => prev.filter((n) => n.id !== item.notificationId));
+      } else if (item.testResultId !== undefined) {
+        await deleteUserTestResult(item.testResultId);
+        setTestResults((prev) => prev.filter((r) => r.id !== item.testResultId));
+      } else if (item.visualAnalysisResultId !== undefined) {
+        await deleteVisualAnalysisResult(item.visualAnalysisResultId);
+        setVisualAnalysisResults((prev) => prev.filter((r) => r.id !== item.visualAnalysisResultId));
+      }
+      setShowDeleteConfirm(false);
+      setDeleteTarget(null);
+    } catch (err) {
+      console.error("[Reports] Failed to delete report:", err);
+      if (typeof window !== "undefined" && typeof window.alert === "function") {
+        window.alert("删除失败，请稍后重试");
+      }
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [isDeleting]);
+
+  const handleToggleMenu = useCallback(() => {
+    setMenuOpen((prev) => !prev);
+  }, []);
+
+  useEffect(() => {
+    if (!menuOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+      if (
+        target.closest(".reports-list-menu") ||
+        target.closest(".reports-list-menu__trigger")
+      ) {
+        return;
+      }
+      setMenuOpen(false);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [menuOpen]);
+
+  useEffect(() => {
+    if (!showDeleteConfirm) {
+      return;
+    }
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setShowDeleteConfirm(false);
+        setDeleteTarget(null);
+      }
+    };
+
+    document.addEventListener("keydown", handleEscape);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", handleEscape);
+      document.body.style.overflow = "";
+    };
+  }, [showDeleteConfirm]);
+
+  const topNavActions = useMemo<TopNavAction[]>(
+    () => [
+      {
+        icon: "more_vert",
+        label: "更多操作",
+        onClick: handleToggleMenu,
+        className: "reports-list-menu__trigger",
+      },
+    ],
+    [handleToggleMenu],
+  );
+
+  // 处理报告列表页
+  if (reportsPageOpen) {
+    return (
+      <div className="reports-screen">
+        <div className="reports-screen__background">
+          <div className="reports-screen__glow reports-screen__glow--mint" />
+          <div className="reports-screen__glow reports-screen__glow--brown" />
+        </div>
+
+        <div className="reports-screen__topbar">
+          <TopNav
+            title="报告"
+            subtitle="Reports"
+            className="top-nav--fixed top-nav--flush"
+            leadingAction={{
+              icon: "arrow_back",
+              label: "返回",
+              onClick: () => setReportsPageOpen(false),
+            }}
+            trailingActions={topNavActions}
+          />
+          {menuOpen ? (
+            <div className="reports-list-menu artwork-details-menu" role="menu">
+              <button
+                type="button"
+                className="artwork-details-menu__item"
+                onClick={() => {
+                  if (reportItems.length > 0) {
+                    setMenuOpen(false);
+                    setDeleteTarget(reportItems[0]);
+                    setShowDeleteConfirm(true);
+                  }
+                }}
+                disabled={reportItems.length === 0}
+              >
+                <MaterialIcon name="delete" className="artwork-details-menu__icon artwork-details-menu__icon--danger" />
+                删除最新报告
+              </button>
+            </div>
+          ) : null}
+        </div>
+
+        <main className="reports-screen__content">
+          <div className="reports-screen__list">
+            {reportsLoading ? (
+              <div className="reports-loading">
+                <MaterialIcon name="hourglass_empty" className="reports-loading-icon" />
+                <p>正在加载报告...</p>
+              </div>
+            ) : reportItems.length > 0 ? (
+              reportItems.map((item) => (
+                <article
+                  key={item.id}
+                  className={`reports-card reports-card--glow-${item.glow} reports-card--full-width`}
+                  onClick={() => {
+                    if (item.testResultId !== undefined && onOpenTestResult) {
+                      onOpenTestResult(item.testResultId);
+                    } else if (item.visualAnalysisResultId !== undefined && onOpenVisualAnalysisResult) {
+                      onOpenVisualAnalysisResult(item.visualAnalysisResultId);
+                    }
+                  }}
+                  style={(item.testResultId !== undefined || item.visualAnalysisResultId !== undefined) ? { cursor: "pointer" } : undefined}
+                >
+                  <div className="reports-card__body">
+                    <p className="reports-card__title">{item.title}</p>
+                    <p className="reports-card__subtitle">{item.subtitle}</p>
+                  </div>
+                  {(item.testResultId !== undefined || item.visualAnalysisResultId !== undefined) && (
+                    <MaterialIcon name="chevron_right" className="reports-card__icon" />
+                  )}
+                </article>
+              ))
+            ) : (
+              <div className="reports-empty">暂无报告</div>
+            )}
+          </div>
+        </main>
+
+        {showDeleteConfirm && deleteTarget ? (
+          <div className="artwork-delete-confirm-overlay" onClick={() => {
+            setShowDeleteConfirm(false);
+            setDeleteTarget(null);
+          }}>
+            <div className="artwork-delete-confirm-modal" onClick={(e) => e.stopPropagation()}>
+              <h2 className="artwork-delete-confirm-title">要删除这份报告吗？</h2>
+              <div className="artwork-delete-confirm-content">
+                <p className="artwork-delete-confirm-text">
+                  删除后，这份报告将无法恢复。
+                </p>
+                <p className="artwork-delete-confirm-text artwork-delete-confirm-text--highlight">
+                  确认要删除吗？
+                </p>
+              </div>
+              <div className="artwork-delete-confirm-actions">
+                <button
+                  type="button"
+                  className="artwork-delete-confirm-button artwork-delete-confirm-button--cancel"
+                  onClick={() => {
+                    setShowDeleteConfirm(false);
+                    setDeleteTarget(null);
+                  }}
+                  disabled={isDeleting}
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  className="artwork-delete-confirm-button artwork-delete-confirm-button--confirm"
+                  onClick={() => handleDeleteReport(deleteTarget)}
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? "删除中..." : "确认删除"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  // 处理模版页（原来的templates tab）
+  if (templatesPageOpen) {
+    // 检查是否有模版设计器打开
+    const anyTemplateOpen = weeklySingleTemplateOpen || weeklyDoubleTemplateOpen || monthlySingleTemplateOpen || fourImageTemplateOpen || collageTemplateOpen || yearlyTemplateOpen || timeJumpComparisonTemplateOpen || linearProgressTimelineTemplateOpen;
+    
+    return (
+      <div className="reports-screen">
+        <div className="reports-screen__background">
+          <div className="reports-screen__glow reports-screen__glow--mint" />
+          <div className="reports-screen__glow reports-screen__glow--brown" />
+        </div>
+
+        {!anyTemplateOpen && (
+          <TopNav
+            title="模版"
+            subtitle="Templates"
+            className="top-nav--fixed top-nav--flush"
+            leadingAction={{
+              icon: "arrow_back",
+              label: "返回",
+              onClick: () => setTemplatesPageOpen(false),
+            }}
+          />
+        )}
+
+        <main className="reports-screen__content">
+          <div className="reports-screen__templates">
+            <section className="reports-section">
+              <header className="reports-section__header">
+                <h2>图片导出</h2>
+              </header>
+              <div className="reports-section__grid">
+                {TEMPLATE_CARDS.map(renderTemplateItem)}
+              </div>
+            </section>
+          </div>
+        </main>
+
+        <WeeklySingleTemplateDesigner open={weeklySingleTemplateOpen} artworks={artworks} onClose={() => setWeeklySingleTemplateOpen(false)} />
+        <WeeklyDoubleTemplateDesigner open={weeklyDoubleTemplateOpen} artworks={artworks} onClose={() => setWeeklyDoubleTemplateOpen(false)} />
+        <MonthlySingleTemplateDesigner open={monthlySingleTemplateOpen} artworks={artworks} onClose={() => setMonthlySingleTemplateOpen(false)} />
+        <FourImageTemplateDesigner open={fourImageTemplateOpen} artworks={artworks} onClose={() => setFourImageTemplateOpen(false)} />
+        <CollageTemplateDesigner open={collageTemplateOpen} artworks={artworks} onClose={() => setCollageTemplateOpen(false)} />
+        <YearlyTemplateDesigner open={yearlyTemplateOpen} artworks={artworks} onClose={() => setYearlyTemplateOpen(false)} />
+        <TimeJumpComparisonTemplateDesigner open={timeJumpComparisonTemplateOpen} artworks={artworks} onClose={() => setTimeJumpComparisonTemplateOpen(false)} />
+        <LinearProgressTimelineTemplateDesigner open={linearProgressTimelineTemplateOpen} artworks={artworks} onClose={() => setLinearProgressTimelineTemplateOpen(false)} />
+      </div>
+    );
+  }
+
+  // 检查是否有模版设计器打开
+  const anyTemplateOpen = weeklySingleTemplateOpen || weeklyDoubleTemplateOpen || monthlySingleTemplateOpen || fourImageTemplateOpen || collageTemplateOpen || yearlyTemplateOpen || timeJumpComparisonTemplateOpen;
+
+  return (
+    <div className="reports-screen">
+      <div className="reports-screen__background">
+        <div className="reports-screen__pattern" />
+        <div className="reports-screen__glow reports-screen__glow--one" />
+        <div className="reports-screen__glow reports-screen__glow--two" />
+        <div className="reports-screen__glow reports-screen__glow--three" />
+      </div>
+
+      {!anyTemplateOpen && (
+        <TopNav
+          title="报告"
+          subtitle="Reports"
+          className="top-nav--fixed top-nav--flush"
+        />
+      )}
+
+      <main className="reports-screen__content">
+        {/* 模版栏 */}
+        <section className="reports-collapsible">
+          <button
+            type="button"
+            className="reports-collapsible__header"
+            onClick={() => setTemplatesPageOpen(true)}
+          >
+            <h2 className="reports-collapsible__title">模版</h2>
+            <MaterialIcon
+              name="chevron_right"
+              className="reports-collapsible__icon"
+            />
+          </button>
+          <div className="reports-collapsible__content">
+            <div className="reports-templates-scroll">
+              {TEMPLATE_CARDS.map((card) => (
+                <button
+                  key={card.id}
+                  type="button"
+                  className="reports-template-card"
+                  onClick={() => handleTemplateAction(card.action!)}
+                >
+                  <MaterialIcon name={card.icon} className="reports-template-card__icon" />
+                  <p className="reports-template-card__label">{card.label}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* 报告栏 */}
+        <section className="reports-collapsible">
+          <button
+            type="button"
+            className="reports-collapsible__header"
+            onClick={() => setReportsPageOpen(true)}
+          >
+            <h2 className="reports-collapsible__title">报告</h2>
+            <MaterialIcon
+              name="chevron_right"
+              className="reports-collapsible__icon"
+            />
+          </button>
+          <div className="reports-collapsible__content">
+            {hasUnreadReports ? (
+              <div className="reports-list-single">
+                {unreadReports.slice(0, 1).map((item) => (
+                  <article
+                    key={item.id}
+                    className={`reports-card reports-card--glow-${item.glow} reports-card--full-width`}
+                    onClick={() => {
+                      if (item.testResultId !== undefined && onOpenTestResult) {
+                        onOpenTestResult(item.testResultId);
+                      } else if (item.visualAnalysisResultId !== undefined && onOpenVisualAnalysisResult) {
+                        onOpenVisualAnalysisResult(item.visualAnalysisResultId);
+                      }
+                    }}
+                    style={(item.testResultId !== undefined || item.visualAnalysisResultId !== undefined) ? { cursor: "pointer" } : undefined}
+                  >
+                    <div className="reports-card__body">
+                      <p className="reports-card__title">{item.title}</p>
+                      <p className="reports-card__subtitle">{item.subtitle}</p>
+                    </div>
+                    <MaterialIcon name="chevron_right" className="reports-card__icon" />
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="reports-empty">暂无未读报告</div>
+            )}
+          </div>
+        </section>
+
+        {/* 趋势栏 */}
+        <section className="reports-collapsible">
+          <button
+            type="button"
+            className="reports-collapsible__header"
+            onClick={() => setTrendsExpanded(!trendsExpanded)}
+          >
+            <h2 className="reports-collapsible__title">趋势</h2>
+            <MaterialIcon
+              name={trendsExpanded ? "expand_less" : "expand_more"}
+              className="reports-collapsible__icon"
+            />
+          </button>
+          {trendsExpanded && (
+            <div className="reports-collapsible__content">
+              <section className="goals-section">
+                <div className="goals-card">
+                  <div className="goals-toggle">
+                    <button
+                      type="button"
+                      className={
+                        range === "weekly"
+                          ? "goals-toggle__button goals-toggle__button--active"
+                          : "goals-toggle__button"
+                      }
+                      onClick={() => setRange("weekly")}
+                    >
+                      周度
+                    </button>
+                    <button
+                      type="button"
+                      className={
+                        range === "monthly"
+                          ? "goals-toggle__button goals-toggle__button--active"
+                          : "goals-toggle__button"
+                      }
+                      onClick={() => setRange("monthly")}
+                    >
+                      月度
+                    </button>
+                  </div>
+
+                  {range === "weekly" ? (
+                    hasWeeklyData ? (
+                      <div className="goals-weekly">
+                        {weeklyStats.map((item) => {
+                          const ratio = maxWeekly > 0 ? item.valueHours / maxWeekly : 0;
+                          const height = ratio * 100;
+                          return (
+                            <div className="goals-weekly__bar" key={item.dateKey}>
+                                <span className="goals-weekly__value">{item.valueHours.toFixed(1)} h</span>
+                              <div className="goals-weekly__track">
+                                <div
+                                  className="goals-weekly__fill"
+                                  style={{ height: `${height}%` }}
+                                >
+                                  <span className="goals-weekly__spark" />
+                                </div>
+                              </div>
+                              <span className="goals-weekly__label">{item.label}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="goals-trend__empty">暂无绘画时长数据</p>
+                    )
+                  ) : (
+                    <div className="goals-monthly">
+                      <div className="goals-monthly__grid">
+                        {Array.from({ length: 5 }).map((_, index) => (
+                          <span key={index} className="goals-monthly__line" />
+                        ))}
+                      </div>
+                      <div className="goals-monthly__canvas">
+                        <svg
+                          className="goals-monthly__path"
+                          viewBox="0 0 310 192"
+                          xmlns="http://www.w3.org/2000/svg"
+                          preserveAspectRatio="none"
+                          onPointerDown={(e) => {
+                            // 在移动设备上完全禁用交互，避免干扰滚动
+                            if (e.pointerType === "touch") {
+                              return;
+                            }
+                            handleMonthlyPointerDown(e);
+                          }}
+                          onPointerMove={(e) => {
+                            // 在移动设备上完全禁用交互，避免干扰滚动
+                            if (e.pointerType === "touch") {
+                              return;
+                            }
+                            handleMonthlyPointerMove(e);
+                          }}
+                          onPointerUp={endMonthlyPointerInteraction}
+                          onPointerCancel={endMonthlyPointerInteraction}
+                          onPointerLeave={handleMonthlyPointerLeave}
+                        >
+                          <rect className="goals-monthly__hit" x="0" y="0" width="310" height="192" fill="transparent" />
+                          <path d={monthlySeries.path} />
+                        </svg>
+                        {monthlyHint ? (
+                          <div
+                            className="goals-monthly__hint"
+                            style={{
+                              left: `${monthlyHint.left}%`,
+                              top: `${monthlyHint.top}%`,
+                            }}
+                          >
+                            <div className="goals-monthly__hint-card">
+                              <span>{monthlyHint.dateLabel}</span>
+                              <strong>{monthlyHint.valueLabel}</strong>
+                            </div>
+                            <span className="goals-monthly__hint-line" />
+                            <span className="goals-monthly__hint-dot" />
+                          </div>
+                        ) : null}
+                      </div>
+                      <div className="goals-monthly__labels">
+                        {monthlySeries.labels.map((label) => (
+                          <span key={label}>{label}</span>
+                        ))}
+                      </div>
+                      {!monthlySeries.hasData && (
+                        <p className="goals-trend__empty">暂无绘画时长数据</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              <section className="goals-section">
+                <div className="goals-card goals-card--calendar">
+                  <header className="goals-calendar__header">
+                    <h3>
+                      {activeMonth.toLocaleDateString("zh-CN", {
+                        year: "numeric",
+                        month: "long",
+                      })}
+                    </h3>
+                    <div className="goals-calendar__pager">
+                      <button
+                        type="button"
+                        className="goals-calendar__pager-button"
+                        onClick={() =>
+                          setActiveMonth(
+                            (prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1),
+                          )
+                        }
+                        aria-label="上一月"
+                      >
+                        <MaterialIcon name="chevron_left" />
+                      </button>
+                      <button
+                        type="button"
+                        className="goals-calendar__pager-button"
+                        onClick={() =>
+                          setActiveMonth(
+                            (prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1),
+                          )
+                        }
+                        aria-label="下一月"
+                      >
+                        <MaterialIcon name="chevron_right" />
+                      </button>
+                    </div>
+                  </header>
+                  <div className="goals-calendar__weekdays">
+                    <span>日</span>
+                    <span>一</span>
+                    <span>二</span>
+                    <span>三</span>
+                    <span>四</span>
+                    <span>五</span>
+                    <span>六</span>
+                  </div>
+                  <div
+                    className="goals-calendar__days"
+                    aria-busy={calendarLoading ? "true" : undefined}
+                  >
+                    {mergedCalendarDays.map((day) => {
+                      const classes = [
+                        "goals-calendar__day",
+                        day.in_month ? "" : "goals-calendar__day--muted",
+                        day.status === "check" ? "goals-calendar__day--check" : "",
+                        day.status === "upload" ? "goals-calendar__day--upload" : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ");
+                      return (
+                        <span key={day.date} className={classes}>
+                          {day.day}
+                        </span>
+                      );
+                    })}
+                  </div>
+                  {calendarError && !calendarLoading && (
+                    <p className="goals-calendar__message goals-calendar__message--error">
+                      {calendarError}
+                    </p>
+                  )}
+                  <footer className="goals-calendar__legend">
+                    <div className="goals-calendar__legend-item">
+                      <span className="goals-calendar__dot goals-calendar__dot--check" />
+                      <span>已打卡</span>
+                    </div>
+                    <div className="goals-calendar__legend-item">
+                      <span className="goals-calendar__dot goals-calendar__dot--upload" />
+                      <span>上传作品</span>
+                    </div>
+                  </footer>
+                </div>
+              </section>
+            </div>
+          )}
+        </section>
+      </main>
+
+      <WeeklySingleTemplateDesigner open={weeklySingleTemplateOpen} artworks={artworks} onClose={() => setWeeklySingleTemplateOpen(false)} />
+      <WeeklyDoubleTemplateDesigner open={weeklyDoubleTemplateOpen} artworks={artworks} onClose={() => setWeeklyDoubleTemplateOpen(false)} />
+      <MonthlySingleTemplateDesigner open={monthlySingleTemplateOpen} artworks={artworks} onClose={() => setMonthlySingleTemplateOpen(false)} />
+      <FourImageTemplateDesigner open={fourImageTemplateOpen} artworks={artworks} onClose={() => setFourImageTemplateOpen(false)} />
+      <CollageTemplateDesigner open={collageTemplateOpen} artworks={artworks} onClose={() => setCollageTemplateOpen(false)} />
+      <YearlyTemplateDesigner open={yearlyTemplateOpen} artworks={artworks} onClose={() => setYearlyTemplateOpen(false)} />
+      <TimeJumpComparisonTemplateDesigner open={timeJumpComparisonTemplateOpen} artworks={artworks} onClose={() => setTimeJumpComparisonTemplateOpen(false)} />
+    </div>
+  );
+}
+
+// 使用 React.memo 优化，避免不必要的重渲染
+export default memo(Reports);

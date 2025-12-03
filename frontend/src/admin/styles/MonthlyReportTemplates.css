@@ -1,0 +1,521 @@
+.admin-monthly-report-templates {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.admin-monthly-report-templates__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.admin-monthly-report-templates__header h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.admin-monthly-report-templates__header p {
+  margin-top: 6px;
+  color: rgba(217, 222, 255, 0.72);
+  font-size: 14px;
+}
+
+.admin-monthly-report-templates__create {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  border-radius: 12px;
+  padding: 10px 16px;
+  background: rgba(128, 146, 255, 0.16);
+  color: #f5f7ff;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s ease, opacity 0.2s ease;
+}
+
+.admin-monthly-report-templates__create:hover {
+  background: rgba(128, 146, 255, 0.28);
+}
+
+.admin-monthly-report-templates__error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 96, 96, 0.12);
+  border: 1px solid rgba(255, 96, 96, 0.3);
+  color: #ffb2b2;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 14px;
+}
+
+.admin-monthly-report-templates__loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  color: rgba(217, 222, 255, 0.8);
+  font-size: 14px;
+}
+
+.admin-monthly-report-templates__filter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-monthly-report-templates__filter label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: rgba(217, 222, 255, 0.82);
+}
+
+.admin-monthly-report-templates__filter select {
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(128, 146, 255, 0.25);
+  background: rgba(6, 9, 22, 0.65);
+  color: #f7f9ff;
+  font-size: 13px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.admin-monthly-report-templates__filter select:focus {
+  border-color: rgba(128, 146, 255, 0.55);
+  box-shadow: 0 0 0 3px rgba(86, 105, 255, 0.24);
+}
+
+.admin-monthly-report-templates__form {
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(14, 17, 32, 0.9);
+  box-shadow: 0 20px 40px rgba(10, 12, 24, 0.18);
+  overflow: hidden;
+}
+
+.admin-monthly-report-templates__form-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(13, 16, 30, 0.72);
+}
+
+.admin-monthly-report-templates__form-header h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.admin-monthly-report-templates__form-header button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(217, 222, 255, 0.72);
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.admin-monthly-report-templates__form-header button:hover {
+  background: rgba(128, 146, 255, 0.16);
+  color: #f5f7ff;
+}
+
+.admin-monthly-report-templates__form-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.admin-monthly-report-templates__form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  border-radius: 12px;
+  background: rgba(6, 9, 22, 0.4);
+  border: 1px solid rgba(128, 146, 255, 0.1);
+}
+
+.admin-monthly-report-templates__form-section h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(217, 222, 255, 0.82);
+}
+
+.admin-monthly-report-templates__form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-monthly-report-templates__form-row--inline {
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 16px;
+}
+
+.admin-monthly-report-templates__form-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+  color: rgba(201, 207, 255, 0.72);
+}
+
+.admin-monthly-report-templates__form-row input,
+.admin-monthly-report-templates__form-row textarea,
+.admin-monthly-report-templates__form-row select {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(128, 146, 255, 0.25);
+  background: rgba(6, 9, 22, 0.65);
+  color: #f7f9ff;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.admin-monthly-report-templates__form-row textarea {
+  min-height: 100px;
+}
+
+.admin-monthly-report-templates__form-row input:focus,
+.admin-monthly-report-templates__form-row textarea:focus,
+.admin-monthly-report-templates__form-row select:focus {
+  border-color: rgba(128, 146, 255, 0.55);
+  box-shadow: 0 0 0 3px rgba(86, 105, 255, 0.24);
+}
+
+.admin-monthly-report-templates__form-row input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: #8a98ff;
+  cursor: pointer;
+}
+
+.admin-monthly-report-templates__form-row small {
+  font-size: 12px;
+  color: rgba(201, 207, 255, 0.52);
+  margin-top: -4px;
+}
+
+.admin-monthly-report-templates__form-range {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-monthly-report-templates__form-range input {
+  flex: 1;
+}
+
+.admin-monthly-report-templates__form-range span {
+  color: rgba(217, 222, 255, 0.62);
+  font-size: 13px;
+}
+
+.admin-monthly-report-templates__form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.admin-monthly-report-templates__form-actions button {
+  padding: 10px 20px;
+  border-radius: 12px;
+  border: none;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s ease, opacity 0.2s ease;
+}
+
+.admin-monthly-report-templates__form-actions button:first-child {
+  background: transparent;
+  color: rgba(217, 222, 255, 0.72);
+}
+
+.admin-monthly-report-templates__form-actions button:first-child:hover {
+  background: rgba(128, 146, 255, 0.12);
+  color: #f5f7ff;
+}
+
+.admin-monthly-report-templates__form-actions button:last-child {
+  background: rgba(128, 146, 255, 0.35);
+  color: #ffffff;
+}
+
+.admin-monthly-report-templates__form-actions button:last-child:hover:not(:disabled) {
+  background: rgba(128, 146, 255, 0.5);
+}
+
+.admin-monthly-report-templates__form-actions button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.admin-monthly-report-templates__list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.admin-monthly-report-templates__empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: rgba(207, 211, 255, 0.62);
+  font-size: 14px;
+  border-radius: 12px;
+  background: rgba(6, 9, 22, 0.4);
+  border: 1px dashed rgba(128, 146, 255, 0.2);
+}
+
+.admin-monthly-report-templates__item {
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(14, 17, 32, 0.9);
+  box-shadow: 0 8px 24px rgba(10, 12, 24, 0.12);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  overflow: hidden;
+}
+
+.admin-monthly-report-templates__item:hover {
+  border-color: rgba(128, 146, 255, 0.25);
+  box-shadow: 0 12px 32px rgba(10, 12, 24, 0.18);
+  transform: translateY(-2px);
+}
+
+.admin-monthly-report-templates__item--editing {
+  border-color: rgba(128, 146, 255, 0.5);
+  box-shadow: 0 0 0 3px rgba(128, 146, 255, 0.15);
+}
+
+.admin-monthly-report-templates__item--inactive {
+  opacity: 0.65;
+}
+
+.admin-monthly-report-templates__item-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(13, 16, 30, 0.72);
+}
+
+.admin-monthly-report-templates__item-section {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(128, 146, 255, 0.18);
+  color: #cfd4ff;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin-bottom: 8px;
+}
+
+.admin-monthly-report-templates__item-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: rgba(230, 234, 255, 0.92);
+}
+
+.admin-monthly-report-templates__item-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(255, 96, 96, 0.18);
+  color: #ffb2b2;
+  font-size: 11px;
+  font-weight: 600;
+  margin-left: 8px;
+}
+
+.admin-monthly-report-templates__item-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.admin-monthly-report-templates__item-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(128, 146, 255, 0.12);
+  color: rgba(217, 222, 255, 0.72);
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.admin-monthly-report-templates__item-actions button:hover:not(:disabled) {
+  background: rgba(128, 146, 255, 0.24);
+  color: #f5f7ff;
+}
+
+.admin-monthly-report-templates__item-actions button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.admin-monthly-report-templates__item-body {
+  padding: 16px 20px;
+}
+
+.admin-monthly-report-templates__item-text {
+  color: rgba(230, 234, 255, 0.88);
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 0 0 12px 0;
+  white-space: pre-wrap;
+}
+
+.admin-monthly-report-templates__item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  font-size: 12px;
+  color: rgba(207, 211, 255, 0.62);
+}
+
+.admin-monthly-report-templates__item-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 新的分组布局样式 */
+.admin-monthly-report-templates__sections {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.admin-monthly-report-templates__section {
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(14, 17, 32, 0.9);
+  box-shadow: 0 8px 24px rgba(10, 12, 24, 0.12);
+  overflow: hidden;
+}
+
+.admin-monthly-report-templates__section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(13, 16, 30, 0.72);
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.admin-monthly-report-templates__section-header:hover {
+  background: rgba(13, 16, 30, 0.85);
+}
+
+.admin-monthly-report-templates__section-header h3 {
+  margin: 0 0 4px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: rgba(230, 234, 255, 0.92);
+}
+
+.admin-monthly-report-templates__section-header p {
+  margin: 0;
+  font-size: 13px;
+  color: rgba(217, 222, 255, 0.62);
+}
+
+.admin-monthly-report-templates__section-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-monthly-report-templates__section-count {
+  font-size: 13px;
+  color: rgba(217, 222, 255, 0.62);
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: rgba(128, 146, 255, 0.12);
+}
+
+.admin-monthly-report-templates__section-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  border-radius: 10px;
+  padding: 8px 14px;
+  background: rgba(128, 146, 255, 0.16);
+  color: #f5f7ff;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.2s ease, opacity 0.2s ease;
+}
+
+.admin-monthly-report-templates__section-add:hover:not(:disabled) {
+  background: rgba(128, 146, 255, 0.28);
+}
+
+.admin-monthly-report-templates__section-add:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.admin-monthly-report-templates__section-toggle {
+  color: rgba(217, 222, 255, 0.62);
+  transition: transform 0.2s ease;
+}
+
+.admin-monthly-report-templates__section-content {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.admin-monthly-report-templates__item h4 {
+  margin: 0 0 8px 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: rgba(230, 234, 255, 0.92);
+}
+
+.admin-monthly-report-templates__item-priority {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: rgba(128, 146, 255, 0.12);
+  color: rgba(207, 211, 255, 0.72);
+  font-size: 11px;
+  font-weight: 500;
+}
+

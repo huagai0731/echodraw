@@ -1,0 +1,35 @@
+========================================
+  Celery Worker 启动命令
+========================================
+
+由于 celery 命令不在 PATH 中，请使用以下命令：
+
+python -m celery -A config worker --loglevel=info --pool=solo
+
+或者：
+
+1. 双击 START_CELERY.bat 文件
+2. 运行 .\start_celery.ps1 脚本
+
+========================================
+  快速启动步骤
+========================================
+
+1. 打开终端，进入 backend 目录
+2. 运行: python -m celery -A config worker --loglevel=info --pool=solo
+3. 保持终端窗口打开
+4. 在另一个终端启动 Django: python manage.py runserver
+5. 测试专业分析功能
+
+========================================
+  验证 Worker 是否运行
+========================================
+
+Worker 启动后会显示类似以下信息：
+- [INFO/MainProcess] celery@xxx ready.
+- [INFO/MainProcess] received task: core.tasks.analyze_image_comprehensive_task
+
+如果看到这些信息，说明 Worker 正常运行。
+
+========================================
+

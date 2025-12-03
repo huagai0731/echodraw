@@ -1,0 +1,73 @@
+#root {
+  min-height: 100svh;
+}
+
+.app-shell {
+  position: relative;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-shell > :first-child {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: calc(var(--bottom-nav-safe-area) + 1.5rem);
+  min-height: 0;
+}
+
+.forced-logout-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(12, 12, 12, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  padding: 24px;
+}
+
+.forced-logout-dialog {
+  width: min(420px, 100%);
+  background: #ffffff;
+  border-radius: 18px;
+  box-shadow: 0 24px 48px rgba(12, 12, 12, 0.24);
+  padding: 32px 28px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.forced-logout-dialog h2 {
+  margin: 0;
+  font-size: 22px;
+  color: #262626;
+}
+
+.forced-logout-dialog p {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.5;
+  color: #525252;
+}
+
+.forced-logout-dialog button {
+  align-self: center;
+  padding: 12px 32px;
+  border-radius: 999px;
+  border: none;
+  background: linear-gradient(135deg, #5d5fef, #8a77f5);
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.forced-logout-dialog button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 18px rgba(93, 95, 239, 0.24);
+}

@@ -1,0 +1,320 @@
+.admin-test-accounts {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.admin-test-accounts__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.admin-test-accounts__header h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.admin-test-accounts__header p {
+  margin-top: 6px;
+  color: rgba(217, 222, 255, 0.72);
+  font-size: 14px;
+}
+
+.admin-test-accounts__search {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.admin-test-accounts__search input {
+  background: transparent;
+  border: none;
+  color: #f5f7ff;
+  font-size: 14px;
+  outline: none;
+  width: 220px;
+}
+
+.admin-test-accounts__search input::placeholder {
+  color: rgba(217, 222, 255, 0.6);
+}
+
+.admin-test-accounts__error {
+  background: rgba(255, 96, 96, 0.12);
+  border: 1px solid rgba(255, 96, 96, 0.3);
+  color: #ffb2b2;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 14px;
+}
+
+.admin-test-accounts__form-card {
+  background: rgba(15, 18, 36, 0.92);
+  border-radius: 20px;
+  padding: 24px 28px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 0 24px 46px rgba(10, 12, 24, 0.2);
+}
+
+.admin-test-accounts__form-card header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.admin-test-accounts__form-card header p {
+  margin-top: 6px;
+  color: rgba(217, 222, 255, 0.72);
+  font-size: 14px;
+}
+
+.admin-test-accounts__form {
+  margin-top: 20px;
+  display: grid;
+  gap: 16px 20px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.admin-test-accounts__form label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.admin-test-accounts__form input,
+.admin-test-accounts__form textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(128, 146, 255, 0.25);
+  background: rgba(6, 9, 22, 0.65);
+  color: #f7f9ff;
+  font-size: 15px;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  resize: vertical;
+}
+
+.admin-test-accounts__form input:focus,
+.admin-test-accounts__form textarea:focus {
+  border-color: rgba(128, 146, 255, 0.55);
+  box-shadow: 0 0 0 3px rgba(86, 105, 255, 0.24);
+}
+
+.admin-test-accounts__full {
+  grid-column: 1 / -1;
+}
+
+.admin-test-accounts__switch {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-test-accounts__switch input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: #8a98ff;
+  cursor: pointer;
+}
+
+.admin-test-accounts__actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.admin-test-accounts__actions button {
+  padding: 10px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(128, 146, 255, 0.24);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(235, 239, 255, 0.85);
+  cursor: pointer;
+}
+
+.admin-test-accounts__actions button.primary {
+  border: none;
+  background: linear-gradient(135deg, rgba(128, 146, 255, 0.85), rgba(86, 105, 255, 0.95));
+  color: #0d1022;
+  font-weight: 600;
+}
+
+.admin-test-accounts__list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.admin-test-accounts__list header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.admin-test-accounts__list header h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.admin-test-accounts__list header span {
+  color: rgba(217, 222, 255, 0.72);
+  font-size: 13px;
+}
+
+.admin-test-accounts__loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: rgba(217, 222, 255, 0.8);
+  font-size: 14px;
+}
+
+.admin-test-accounts__spinner {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 3px solid rgba(128, 146, 255, 0.22);
+  border-top-color: rgba(128, 146, 255, 0.8);
+  animation: admin-test-accounts-spin 0.9s linear infinite;
+}
+
+@keyframes admin-test-accounts-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.admin-test-accounts__table-wrapper {
+  overflow-x: auto;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(14, 17, 32, 0.9);
+  box-shadow: 0 18px 32px rgba(10, 12, 24, 0.16);
+}
+
+.admin-test-accounts__table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 720px;
+}
+
+.admin-test-accounts__table thead {
+  background: rgba(13, 16, 30, 0.72);
+}
+
+.admin-test-accounts__table th {
+  padding: 14px 18px;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(217, 222, 255, 0.82);
+  letter-spacing: 0.02em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.admin-test-accounts__table td {
+  padding: 14px 18px;
+  font-size: 14px;
+  color: rgba(230, 234, 255, 0.88);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  vertical-align: top;
+}
+
+.admin-test-accounts__table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.admin-test-accounts__table tbody tr:hover {
+  background: rgba(128, 146, 255, 0.08);
+}
+
+.admin-test-accounts__email {
+  font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
+  font-size: 13px;
+}
+
+.admin-test-accounts__notes {
+  max-width: 360px;
+  color: rgba(223, 227, 255, 0.78);
+  line-height: 1.5;
+}
+
+.admin-test-accounts__actions-group {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-test-accounts__actions-group button,
+.admin-test-accounts__actions-group a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 12px;
+  padding: 8px 12px;
+  border: none;
+  background: rgba(128, 146, 255, 0.16);
+  color: #f5f7ff;
+  cursor: pointer;
+  font-size: 13px;
+  text-decoration: none;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.admin-test-accounts__actions-group button:hover,
+.admin-test-accounts__actions-group a:hover {
+  background: rgba(128, 146, 255, 0.24);
+  transform: translateY(-1px);
+}
+
+.admin-test-accounts__actions-group button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.admin-test-accounts__empty {
+  padding: 32px 18px;
+  text-align: center;
+  color: rgba(207, 211, 255, 0.66);
+  font-size: 14px;
+}
+
+.status {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.status--active {
+  background: rgba(128, 146, 255, 0.22);
+  color: #cfd4ff;
+}
+
+@media (max-width: 960px) {
+  .admin-test-accounts__form {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-test-accounts__search input {
+    width: 160px;
+  }
+}
+
+
+
+
+

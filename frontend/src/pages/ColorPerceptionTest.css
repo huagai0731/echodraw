@@ -1,0 +1,324 @@
+@import url("https://fonts.googleapis.com/css2?family=Spline+Sans:wght@300;400;700&display=swap");
+
+.color-perception-test {
+  position: relative;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  background: #221b1b;
+  color: #efeae7;
+  font-family: "Spline Sans", "Manrope", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-weight: 300;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.color-perception-test__background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  z-index: 0;
+}
+
+.color-perception-test__glow {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(90px);
+}
+
+.color-perception-test__glow--primary {
+  top: 10%;
+  left: 5%;
+  width: 12rem;
+  height: 12rem;
+  background: rgba(152, 219, 198, 0.1);
+  animation: color-perception-pulse 4s ease-in-out infinite;
+}
+
+.color-perception-test__glow--secondary {
+  bottom: 5%;
+  right: -10%;
+  width: 16rem;
+  height: 16rem;
+  background: rgba(197, 225, 226, 0.05);
+  animation: color-perception-pulse 8s ease-in-out infinite;
+}
+
+.color-perception-test__glow--tertiary {
+  top: 30%;
+  right: 10%;
+  width: 8rem;
+  height: 8rem;
+  border: 1px solid rgba(152, 219, 198, 0.2);
+  filter: blur(4px);
+  transform: rotate(-12deg);
+}
+
+@keyframes color-perception-pulse {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.color-perception-test__content {
+  position: relative;
+  z-index: 10;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: calc(var(--top-nav-height, 64px) + clamp(1rem, 3vh, 2rem)) clamp(1rem, 4vw, 1.5rem)
+    clamp(1rem, 3vh, 2rem);
+  gap: clamp(1.5rem, 4vh, 2.5rem);
+}
+
+.color-perception-test__header {
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.color-perception-test__title {
+  margin: 0;
+  font-size: clamp(1.5rem, 5vw, 2rem);
+  font-weight: 300;
+  line-height: 1.4;
+  letter-spacing: -0.01em;
+  color: #efeae7;
+}
+
+.color-perception-test__description {
+  margin: 0.75rem 0 0;
+  font-size: clamp(0.875rem, 3vw, 1rem);
+  font-weight: 300;
+  line-height: 1.6;
+  color: rgba(239, 234, 231, 0.8);
+}
+
+.color-perception-test__date {
+  margin: 1rem 0 0;
+  font-size: 0.875rem;
+  font-weight: 300;
+  letter-spacing: 0.1em;
+  color: #98dbc6;
+}
+
+.color-perception-test__main-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(1.5rem, 4vh, 2.5rem);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.color-perception-test__main-image-container {
+  position: relative;
+  width: 100%;
+  max-width: 32rem;
+  margin: 0 auto;
+  aspect-ratio: 4 / 3;
+  flex-shrink: 0;
+}
+
+.color-perception-test__main-image {
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.color-perception-test__marker {
+  position: absolute;
+  width: 4rem;
+  height: 4rem;
+  border-radius: 0.5rem;
+  border: 2px solid #98dbc6;
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 0 15px 3px rgba(152, 219, 198, 0.4), 0 0 5px 1px rgba(152, 219, 198, 0.4) inset;
+  pointer-events: none;
+  animation: color-perception-marker-pulse 2s ease-in-out infinite;
+}
+
+@keyframes color-perception-marker-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 15px 3px rgba(152, 219, 198, 0.4), 0 0 5px 1px rgba(152, 219, 198, 0.4) inset;
+  }
+  50% {
+    box-shadow: 0 0 20px 5px rgba(152, 219, 198, 0.6), 0 0 8px 2px rgba(152, 219, 198, 0.6) inset;
+  }
+}
+
+.color-perception-test__options {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+  max-width: 32rem;
+  margin: 0 auto;
+  width: 100%;
+  flex-shrink: 0;
+}
+
+.color-perception-test__option {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  padding: 0;
+  transition: transform 0.2s ease;
+}
+
+.color-perception-test__option:hover:not(:disabled) {
+  transform: translateY(-2px);
+}
+
+.color-perception-test__option:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.color-perception-test__option:disabled {
+  cursor: default;
+}
+
+.color-perception-test__option-image {
+  width: 100%;
+  aspect-ratio: 1;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-radius: 0.75rem;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.color-perception-test__option:hover:not(:disabled) .color-perception-test__option-image {
+  border-color: rgba(152, 219, 198, 0.5);
+  box-shadow: 0 6px 20px rgba(152, 219, 198, 0.2);
+}
+
+.color-perception-test__option--selected .color-perception-test__option-image {
+  border-color: #98dbc6;
+  box-shadow: 0 0 20px 5px rgba(152, 219, 198, 0.6), 0 0 8px 2px rgba(152, 219, 198, 0.6) inset;
+}
+
+.color-perception-test__option--correct .color-perception-test__option-image {
+  border-color: #98dbc6;
+  box-shadow: 0 0 24px 6px rgba(152, 219, 198, 0.8), 0 0 10px 3px rgba(152, 219, 198, 0.8) inset;
+  animation: color-perception-correct-pulse 1s ease-in-out;
+}
+
+.color-perception-test__option--incorrect .color-perception-test__option-image {
+  border-color: #ff6b6b;
+  box-shadow: 0 0 20px 5px rgba(255, 107, 107, 0.6), 0 0 8px 2px rgba(255, 107, 107, 0.6) inset;
+  animation: color-perception-incorrect-shake 0.5s ease-in-out;
+}
+
+@keyframes color-perception-correct-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+@keyframes color-perception-incorrect-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-4px);
+  }
+  75% {
+    transform: translateX(4px);
+  }
+}
+
+.color-perception-test__option-label {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.9);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  transition: color 0.3s ease;
+  pointer-events: none;
+}
+
+.color-perception-test__option:hover:not(:disabled) .color-perception-test__option-label {
+  color: #ffffff;
+}
+
+.color-perception-test__option-label--selected {
+  color: #98dbc6;
+  text-shadow: 0 0 8px rgba(152, 219, 198, 0.6);
+}
+
+.color-perception-test__option--correct .color-perception-test__option-label {
+  color: #98dbc6;
+  text-shadow: 0 0 10px rgba(152, 219, 198, 0.8);
+}
+
+.color-perception-test__option--incorrect .color-perception-test__option-label {
+  color: #ff6b6b;
+  text-shadow: 0 0 8px rgba(255, 107, 107, 0.6);
+}
+
+.color-perception-test__actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(0.5rem, 2vh, 1rem) 0;
+  margin-top: auto;
+  flex-shrink: 0;
+}
+
+.color-perception-test__submit-button {
+  flex: 1;
+  max-width: 24rem;
+  height: 3.5rem;
+  text-align: center;
+  border-radius: 9999px;
+  font-size: 1rem;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  background: #98dbc6;
+  color: #221b1b;
+}
+
+.color-perception-test__submit-button:hover:not(:disabled) {
+  background: #87d7d8;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(152, 219, 198, 0.3);
+}
+
+.color-perception-test__submit-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.color-perception-test__submit-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}

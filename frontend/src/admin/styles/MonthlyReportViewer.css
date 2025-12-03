@@ -1,0 +1,169 @@
+.admin-monthly-report-viewer {
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.admin-monthly-report-viewer__header {
+  margin-bottom: 32px;
+}
+
+.admin-monthly-report-viewer__header h2 {
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+  color: #1a1a1a;
+}
+
+.admin-monthly-report-viewer__header p {
+  font-size: 14px;
+  color: #666;
+  margin: 0;
+}
+
+.admin-monthly-report-viewer__controls {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+  margin-bottom: 24px;
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-monthly-report-viewer__control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 150px;
+}
+
+.admin-monthly-report-viewer__control-group label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+}
+
+.admin-monthly-report-viewer__select {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  background: white;
+  color: #333;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.admin-monthly-report-viewer__select:hover {
+  border-color: #999;
+}
+
+.admin-monthly-report-viewer__select:focus {
+  outline: none;
+  border-color: #0066cc;
+  box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.1);
+}
+
+.admin-monthly-report-viewer__load-button {
+  padding: 10px 24px;
+  background: #0066cc;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  height: fit-content;
+}
+
+.admin-monthly-report-viewer__load-button:hover:not(:disabled) {
+  background: #0052a3;
+}
+
+.admin-monthly-report-viewer__load-button:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.admin-monthly-report-viewer__error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #fee;
+  border: 1px solid #fcc;
+  border-radius: 4px;
+  color: #c33;
+  margin-bottom: 24px;
+}
+
+.admin-monthly-report-viewer__info {
+  padding: 20px;
+  background: #f0f7ff;
+  border: 1px solid #b3d9ff;
+  border-radius: 8px;
+  margin-bottom: 24px;
+}
+
+.admin-monthly-report-viewer__info p {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  color: #333;
+}
+
+.admin-monthly-report-viewer__info p:last-child {
+  margin-bottom: 0;
+}
+
+.admin-monthly-report-viewer__info strong {
+  color: #0066cc;
+}
+
+.admin-monthly-report-viewer__stats-preview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #b3d9ff;
+}
+
+.admin-monthly-report-viewer__stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.admin-monthly-report-viewer__stat-label {
+  font-size: 12px;
+  color: #666;
+}
+
+.admin-monthly-report-viewer__stat-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: #0066cc;
+}
+
+@media (max-width: 768px) {
+  .admin-monthly-report-viewer__controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-monthly-report-viewer__control-group {
+    min-width: auto;
+  }
+
+  .admin-monthly-report-viewer__load-button {
+    width: 100%;
+  }
+
+  .admin-monthly-report-viewer__stats-preview {
+    grid-template-columns: 1fr;
+  }
+}
+

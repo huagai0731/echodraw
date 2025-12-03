@@ -1,0 +1,111 @@
+/* 图片预览弹窗样式 */
+.image-preview-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.image-preview-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
+}
+
+.image-preview-modal__content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(90vw, 800px);
+  max-height: 90vh;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: linear-gradient(155deg, rgba(46, 38, 38, 0.98), rgba(22, 18, 24, 0.95));
+  box-shadow:
+    0 32px 96px rgba(0, 0, 0, 0.5),
+    0 12px 48px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+
+.image-preview-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.image-preview-modal__header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 500;
+  color: #ffffff;
+}
+
+.image-preview-modal__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(34, 27, 27, 0.65);
+  color: #efeae7;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+
+.image-preview-modal__close:hover {
+  background: rgba(152, 219, 198, 0.16);
+  border-color: rgba(152, 219, 198, 0.45);
+  color: #ffffff;
+}
+
+.image-preview-modal__body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+  overflow-y: auto;
+  max-height: calc(90vh - 80px);
+}
+
+.image-preview-modal__image {
+  max-width: 100%;
+  height: auto;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: default;
+}
+
+.image-preview-modal__hint {
+  margin: 16px 0 0;
+  font-size: 13px;
+  color: rgba(239, 234, 231, 0.7);
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .image-preview-modal__content {
+    width: 95vw;
+    max-height: 95vh;
+  }
+
+  .image-preview-modal__body {
+    padding: 16px;
+    max-height: calc(95vh - 80px);
+  }
+
+  .image-preview-modal__hint {
+    font-size: 12px;
+  }
+}
+

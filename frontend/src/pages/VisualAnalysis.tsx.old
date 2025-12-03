@@ -1,0 +1,1994 @@
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import MaterialIcon from "@/components/MaterialIcon";
+import TopNav, { type TopNavAction } from "@/components/TopNav";
+import { fetchVisualAnalysisResult, analyzeImageComprehensive, getImageAnalysisTaskStatus, getPendingImageAnalysisTask, deleteVisualAnalysisResult, createVisualAnalysisResult, fetchVisualAnalysisResults, API_BASE_URL } from "@/services/api";
+import VisualAnalysisComprehensive from "./VisualAnalysisComprehensive";
+import { compressImageToSize, fileToDataURL } from "@/utils/imageCompression";
+import { replaceLocalhostInUrl } from "@/utils/urlUtils";
+import { DeleteConfirmModal } from "./visualAnalysis/components/DeleteConfirmModal";
+import { VisualAnalysisMenu } from "./visualAnalysis/components/VisualAnalysisMenu";
+import { ImageUploadArea } from "./visualAnalysis/components/ImageUploadArea";
+import { useMenuActions } from "./visualAnalysis/hooks/useMenuActions";
+import { useOpenCV } from "./visualAnalysis/hooks/useOpenCV";
+import { useImageUpload } from "./visualAnalysis/hooks/useImageUpload";
+import "./VisualAnalysis.css";
+import "./ArtworkDetails.css";
+
+type VisualAnalysisProps = {
+  onBack: () => void;
+  onSave?: (result: VisualAnalysisResult) => void;
+  resultId?: number; // 如果提供resultId，则显示已保存的结果
+};
+
+type VisualAnalysisResult = {
+  originalImage: string;
+  step1Binary: string;
+  step2Grayscale: string;
+  step2Grayscale3Level: string; // 3阶层灰度
+  step2Grayscale4Level: string; // 4阶层灰度
+  step3LabL: string;
+  step4HsvS: string;
+  step4HlsS: string;
+  step5Hue: string;
+  binaryThreshold: number;
+  timestamp: string;
+  comprehensive_analysis?: any; // 专业分析结果
+};
+
+// 二值化阈值选项（6个等级，从高到低）
+const BINARY_THRESHOLD_OPTIONS = [
+  { label: "等级1（最高）", value: 200 },
+  { label: "等级2", value: 170 },
+  { label: "等级3", value: 140 },
+  { label: "等级4", value: 110 },
+  { label: "等级5", value: 80 },
+  { label: "等级6（最低）", value: 50 },
+];
+
+function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
+  const [originalImage, setOriginalImage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [loadingSavedResult, setLoadingSavedResult] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedThreshold, setSelectedThreshold] = useState<number>(140); // 默认等级3
+  const [results, setResults] = useState<Partial<VisualAnalysisResult> | null>(null);
+  
+  // 使用 OpenCV Hook
+  const { opencvReady, error: opencvError } = useOpenCV();
+  
+  // 使用图片上传 Hook
+  const {
+    imageFile,
+    imagePreview,
+    isCompressing,
+    error: uploadError,
+    handleFileSelect,
+    handleFileSelectDirect,
+    handleConfirm: handleImageConfirm,
+    clear: clearUpload,
+    setError: setUploadError,
+  } = useImageUpload();
+  
+  const [isViewMode, setIsViewMode] = useState(false); // 是否为查看模式
+  const [showComprehensive, setShowComprehensive] = useState(false); // 是否显示专业分析
+  const [comprehensiveLoading, setComprehensiveLoading] = useState(false);
+  const [comprehensiveResults, setComprehensiveResults] = useState<any>(null);
+  const [comprehensiveProgress, setComprehensiveProgress] = useState(0); // 分析进度
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null); // 轮询定时器引用
+  const [isDeleting, setIsDeleting] = useState(false);
+  
+  // 使用菜单操作 Hook
+  const {
+    menuOpen,
+    showDeleteConfirm,
+    handleToggleMenu,
+    handleOpenDeleteConfirm,
+    handleCloseDeleteConfirm,
+  } = useMenuActions();
+  
+  const [savedResultId, setSavedResultId] = useState<number | null>(null); // 保存的结果ID
+  const savedResultIdRef = useRef<number | null>(null); // 使用 ref 跟踪 savedResultId，确保能访问最新值
+  const [currentTaskId, setCurrentTaskId] = useState<string | null>(null); // 当前分析任务ID
+  const [checkingExistingResult, setCheckingExistingResult] = useState(true); // 是否正在检查已有结果
+  const [savedResultData, setSavedResultData] = useState<any>(null); // 保存的结果数据（用于传递给子组件）
+  const loadResultWithGrayscaleLevelsRef = useRef<((savedResult: any) => Promise<void>) | null>(null);
+  
+  // 同步 savedResultId 到 ref
+  useEffect(() => {
+    savedResultIdRef.current = savedResultId;
+  }, [savedResultId]);
+
+  // 从灰度图生成3阶和4阶灰度图的辅助函数
+  const generateGrayscaleLevels = useCallback(async (grayscaleImageUrl: string): Promise<{ level3: string; level4: string }> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      let gray: any = null;
+      let gray3Level: any = null;
+      let gray4Level: any = null;
+      let canvas: HTMLCanvasElement | null = null;
+      
+      // 资源清理函数
+      const cleanup = () => {
+        try {
+          if (gray3Level) {
+            gray3Level.delete();
+            gray3Level = null;
+          }
+          if (gray4Level) {
+            gray4Level.delete();
+            gray4Level = null;
+          }
+          if (gray) {
+            gray.delete();
+            gray = null;
+          }
+          if (canvas) {
+            canvas.remove();
+            canvas = null;
+          }
+        } catch (err) {
+          console.warn("[VisualAnalysis] 清理OpenCV资源时出错:", err);
+        }
+      };
+      
+      img.onload = () => {
+        try {
+          const cv = (window as any).cv;
+          if (!cv || !opencvReady) {
+            cleanup();
+            reject(new Error("OpenCV未就绪"));
+            return;
+          }
+
+          // 创建canvas
+          canvas = document.createElement("canvas");
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            cleanup();
+            reject(new Error("无法创建canvas上下文"));
+            return;
+          }
+
+          canvas.width = img.width;
+          canvas.height = img.height;
+          ctx.drawImage(img, 0, 0);
+
+          // 转换为OpenCV Mat
+          gray = cv.imread(canvas);
+          if (!gray || gray.empty()) {
+            cleanup();
+            reject(new Error("无法读取图片数据"));
+            return;
+          }
+
+          // 生成3阶层灰度
+          gray3Level = new cv.Mat();
+          gray.copyTo(gray3Level);
+          const data3 = gray3Level.data;
+          for (let i = 0; i < data3.length; i++) {
+            const val = data3[i];
+            if (val < 85) {
+              data3[i] = 0;
+            } else if (val < 170) {
+              data3[i] = 127;
+            } else {
+              data3[i] = 255;
+            }
+          }
+          const level3 = matToDataUrl(gray3Level);
+
+          // 生成4阶层灰度
+          gray4Level = new cv.Mat();
+          gray.copyTo(gray4Level);
+          const data4 = gray4Level.data;
+          for (let i = 0; i < data4.length; i++) {
+            const val = data4[i];
+            if (val < 64) {
+              data4[i] = 0;
+            } else if (val < 128) {
+              data4[i] = 85;
+            } else if (val < 192) {
+              data4[i] = 170;
+            } else {
+              data4[i] = 255;
+            }
+          }
+          const level4 = matToDataUrl(gray4Level);
+
+          // 清理资源
+          cleanup();
+
+          resolve({ level3, level4 });
+        } catch (err) {
+          cleanup();
+          reject(err);
+        }
+      };
+      img.onerror = () => {
+        cleanup();
+        reject(new Error("图片加载失败"));
+      };
+      img.src = grayscaleImageUrl;
+    });
+  }, [opencvReady]);
+
+  // 处理图片URL的辅助函数（与画集使用相同的逻辑）
+  const processImageUrl = useCallback((url: string | null | undefined): string => {
+    if (!url || typeof url !== 'string') {
+      return url || "";
+    }
+    
+    // 如果是base64数据URL，直接返回
+    if (url.startsWith('data:')) {
+      return url;
+    }
+    
+    // 如果是相对路径 /api/...，说明后端返回的是代理URL，需要拼接API base
+    if (url.startsWith("/api/") && !url.startsWith("http")) {
+      const apiBase = API_BASE_URL.replace(/\/api\/?$/, "");
+      url = apiBase ? `${apiBase}${url}` : url;
+    }
+    
+    // 如果URL包含127.0.0.1或localhost，且当前页面不是localhost，则替换为当前hostname
+    if (typeof window !== "undefined" && window.location?.hostname) {
+      url = replaceLocalhostInUrl(url);
+    }
+    
+    return url;
+  }, []);
+
+  // 处理 savedResult 中的所有图片URL
+  const processSavedResultUrls = useCallback((savedResult: any) => {
+    if (!savedResult) return savedResult;
+    return {
+      ...savedResult,
+      original_image: processImageUrl(savedResult.original_image),
+      step1_binary: processImageUrl(savedResult.step1_binary),
+      step2_grayscale: processImageUrl(savedResult.step2_grayscale),
+      step2_grayscale_3_level: processImageUrl(savedResult.step2_grayscale_3_level),
+      step2_grayscale_4_level: processImageUrl(savedResult.step2_grayscale_4_level),
+      step3_lab_l: processImageUrl(savedResult.step3_lab_l),
+      step4_hsv_s: processImageUrl(savedResult.step4_hsv_s),
+      step4_hls_s: processImageUrl(savedResult.step4_hls_s),
+      step4_hls_s_inverted: processImageUrl(savedResult.step4_hls_s_inverted),
+      step5_hue: processImageUrl(savedResult.step5_hue),
+      kmeans_segmentation_image: processImageUrl(savedResult.kmeans_segmentation_image),
+      kmeans_segmentation_image_12: processImageUrl(savedResult.kmeans_segmentation_image_12),
+    };
+  }, [processImageUrl]);
+
+  // 加载结果并生成3阶4阶灰度图的辅助函数
+  const loadResultWithGrayscaleLevels = useCallback(async (savedResult: any) => {
+    console.log("[VisualAnalysis] loadResultWithGrayscaleLevels 开始，结果ID:", savedResult.id);
+    // 处理 savedResult 中的所有图片URL，然后保存完整的结果数据，用于传递给子组件
+    const processedSavedResult = processSavedResultUrls(savedResult);
+    setSavedResultData(processedSavedResult);
+    // 先设置基础结果，不等待3阶4阶灰度图生成
+    // 处理所有图片URL（与画集使用相同的逻辑）
+    const resultData = {
+      originalImage: processImageUrl(savedResult.original_image),
+      step1Binary: processImageUrl(savedResult.step1_binary),
+      step2Grayscale: processImageUrl(savedResult.step2_grayscale),
+      step2Grayscale3Level: processImageUrl(savedResult.step2_grayscale_3_level) || "", // 从服务器加载，如果没有则重新生成
+      step2Grayscale4Level: processImageUrl(savedResult.step2_grayscale_4_level) || "", // 从服务器加载，如果没有则重新生成
+      step3LabL: processImageUrl(savedResult.step3_lab_l),
+      step4HsvS: processImageUrl(savedResult.step4_hsv_s),
+      step4HlsS: processImageUrl(savedResult.step4_hls_s),
+      step5Hue: processImageUrl(savedResult.step5_hue),
+      binaryThreshold: savedResult.binary_threshold,
+      timestamp: savedResult.created_at,
+    };
+    console.log("[VisualAnalysis] 设置结果数据:", {
+      hasOriginalImage: !!resultData.originalImage,
+      hasStep1Binary: !!resultData.step1Binary,
+      hasStep2Grayscale: !!resultData.step2Grayscale,
+    });
+    setResults(resultData);
+    setSelectedThreshold(savedResult.binary_threshold);
+    setOriginalImage(resultData.originalImage); // 使用处理后的URL
+    console.log("[VisualAnalysis] 状态已设置: originalImage 和 results");
+    
+    if (savedResult.comprehensive_analysis && Object.keys(savedResult.comprehensive_analysis).length > 0) {
+      console.log("[VisualAnalysis] 设置专业分析结果", {
+        hasComprehensiveAnalysis: true,
+        keys: Object.keys(savedResult.comprehensive_analysis),
+        comprehensiveAnalysisType: typeof savedResult.comprehensive_analysis,
+      });
+      // 确保 comprehensive_analysis 是对象而不是字符串
+      let comprehensiveData = savedResult.comprehensive_analysis;
+      if (typeof comprehensiveData === 'string') {
+        try {
+          comprehensiveData = JSON.parse(comprehensiveData);
+          console.log("[VisualAnalysis] 解析了字符串格式的专业分析结果");
+        } catch (err) {
+          console.error("[VisualAnalysis] 解析专业分析结果失败:", err);
+          comprehensiveData = null;
+        }
+      }
+      if (comprehensiveData && Object.keys(comprehensiveData).length > 0) {
+        // 检查是否有结构化数据（色相直方图、主色调等）
+        const hasHueHistogram = comprehensiveData?.color_quality?.hue_distribution?.hue_histogram;
+        const hasDominantPalette = comprehensiveData?.color_block_structure?.dominant_palette;
+        const hasColorRatio = comprehensiveData?.color_block_structure?.color_ratio;
+        // 注意：图片数据已经保存到单独的字段中，不应该在comprehensive_analysis中查找
+        console.log("[VisualAnalysis] 专业分析结果已设置", {
+          hasHueHistogram: !!hasHueHistogram && Array.isArray(hasHueHistogram),
+          hasDominantPalette: !!hasDominantPalette,
+          hasColorRatio: !!hasColorRatio,
+          hueHistogramLength: hasHueHistogram ? hasHueHistogram.length : 0,
+          paletteLength: hasDominantPalette?.palette ? hasDominantPalette.palette.length : 0,
+          keys: Object.keys(comprehensiveData),
+        });
+        setComprehensiveResults(comprehensiveData);
+        setShowComprehensive(true);
+      } else {
+        console.warn("[VisualAnalysis] 专业分析结果为空或无效", {
+          comprehensiveDataKeys: comprehensiveData ? Object.keys(comprehensiveData) : [],
+          comprehensiveDataType: typeof comprehensiveData,
+        });
+      }
+    } else {
+      console.log("[VisualAnalysis] 没有专业分析结果", {
+        hasComprehensiveAnalysis: !!savedResult.comprehensive_analysis,
+        isObject: savedResult.comprehensive_analysis && typeof savedResult.comprehensive_analysis === 'object',
+        keysCount: savedResult.comprehensive_analysis && typeof savedResult.comprehensive_analysis === 'object' 
+          ? Object.keys(savedResult.comprehensive_analysis).length 
+          : 0,
+      });
+      // 即使没有comprehensiveResults状态，也要从savedResult加载comprehensive_analysis
+      if (savedResult.comprehensive_analysis && typeof savedResult.comprehensive_analysis === 'object' && Object.keys(savedResult.comprehensive_analysis).length > 0) {
+        console.log("[VisualAnalysis] 从savedResult加载comprehensive_analysis", {
+          keys: Object.keys(savedResult.comprehensive_analysis),
+          hasColorQuality: !!savedResult.comprehensive_analysis.color_quality,
+          hasColorBlockStructure: !!savedResult.comprehensive_analysis.color_block_structure,
+          hasValueStructure: !!savedResult.comprehensive_analysis.value_structure,
+        });
+        setComprehensiveResults(savedResult.comprehensive_analysis);
+      }
+    }
+
+    // 如果缺少3阶4阶灰度图，从step2Grayscale重新生成（异步，不阻塞显示）
+    // 注意：优先使用服务器保存的图片，如果没有才重新生成
+    if (savedResult.step2_grayscale && (!savedResult.step2_grayscale_3_level || !savedResult.step2_grayscale_4_level)) {
+      // 辅助函数：将URL转换为base64（如果需要）
+      const convertUrlToBase64 = async (url: string): Promise<string> => {
+        // 如果已经是base64数据URL，直接返回
+        if (url.startsWith('data:')) {
+          return url;
+        }
+        // 如果是URL，需要先加载图片再转换为base64
+        try {
+          const response = await fetch(url);
+          const blob = await response.blob();
+          return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+        } catch (err) {
+          console.error("[VisualAnalysis] 转换URL到base64失败:", err);
+          throw err;
+        }
+      };
+      
+      // 异步生成3阶4阶灰度图，不阻塞UI
+      // 先尝试立即生成（如果OpenCV已就绪）
+      const generateLevels = async () => {
+        // 等待OpenCV加载完成（最多等待30秒）
+        let attempts = 0;
+        const maxAttempts = 60; // 最多尝试60次，每次等待500ms，总共30秒
+        while (!opencvReady && attempts < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+          attempts++;
+        }
+        
+        if (!opencvReady) {
+          console.warn("[VisualAnalysis] OpenCV 加载超时，无法生成3阶4阶灰度图");
+          return;
+        }
+        
+        try {
+        console.log("[VisualAnalysis] OpenCV 已就绪，开始生成3阶4阶灰度图");
+        // 先转换URL为base64（如果需要）
+          const base64Image = await convertUrlToBase64(savedResult.step2_grayscale);
+          const levels = await generateGrayscaleLevels(base64Image);
+            console.log("[VisualAnalysis] 3阶4阶灰度图生成完成");
+            setResults((prev) => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                step2Grayscale3Level: levels.level3,
+                step2Grayscale4Level: levels.level4,
+              };
+            });
+        } catch (err) {
+            console.warn("[VisualAnalysis] 生成3阶4阶灰度图失败:", err);
+        }
+      };
+      
+      // 立即开始生成（不阻塞）
+      generateLevels().catch((err) => {
+        console.error("[VisualAnalysis] 生成3阶4阶灰度图过程出错:", err);
+      });
+    } else {
+      console.log("[VisualAnalysis] 没有 step2_grayscale，跳过生成3阶4阶灰度图");
+    }
+    console.log("[VisualAnalysis] loadResultWithGrayscaleLevels 完成");
+  }, [opencvReady, generateGrayscaleLevels, processImageUrl, processSavedResultUrls]);
+
+  // 更新 ref，确保总是使用最新的函数
+  useEffect(() => {
+    loadResultWithGrayscaleLevelsRef.current = loadResultWithGrayscaleLevels;
+  }, [loadResultWithGrayscaleLevels]);
+
+  // 如果提供了resultId，加载已保存的结果
+  useEffect(() => {
+    if (resultId) {
+      setLoadingSavedResult(true);
+      setIsViewMode(true);
+      setError(null);
+      setSavedResultId(resultId);
+      savedResultIdRef.current = resultId;
+      fetchVisualAnalysisResult(resultId)
+        .then(async (savedResult) => {
+          // 验证结果是否有效
+          if (!savedResult.original_image || !savedResult.step1_binary) {
+            throw new Error("结果无效");
+          }
+
+          // 加载结果（包括生成3阶4阶灰度图）
+          await loadResultWithGrayscaleLevels(savedResult);
+          console.log("[VisualAnalysis] 已加载专业分析结果");
+        })
+        .catch((err) => {
+          console.error("加载视觉分析结果失败:", err);
+          setError("加载保存的结果失败，请稍后重试");
+        })
+        .finally(() => {
+          setLoadingSavedResult(false);
+          setCheckingExistingResult(false);
+        });
+    }
+  }, [resultId, loadResultWithGrayscaleLevels]);
+
+  // 当opencvReady变为true时，如果已有结果但缺少3阶4阶灰度图，重新生成
+  useEffect(() => {
+    if (opencvReady && results && results.step2Grayscale) {
+      const needsGeneration = !results.step2Grayscale3Level || !results.step2Grayscale4Level;
+      if (needsGeneration) {
+        console.log("[VisualAnalysis] OpenCV 已就绪，开始生成缺失的3阶4阶灰度图");
+        
+        // 辅助函数：将URL转换为base64（如果需要）
+        const convertUrlToBase64 = async (url: string): Promise<string> => {
+          // 如果已经是base64数据URL，直接返回
+          if (url.startsWith('data:')) {
+            return url;
+          }
+          // 如果是URL，需要先加载图片再转换为base64
+          try {
+            const response = await fetch(url);
+            const blob = await response.blob();
+            return new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.onerror = reject;
+              reader.readAsDataURL(blob);
+            });
+          } catch (err) {
+            console.error("[VisualAnalysis] 转换URL到base64失败:", err);
+            throw err;
+          }
+        };
+        
+        // 异步生成，不阻塞UI
+        convertUrlToBase64(results.step2Grayscale)
+          .then((base64Image) => {
+            return generateGrayscaleLevels(base64Image);
+          })
+          .then((levels) => {
+            console.log("[VisualAnalysis] 3阶4阶灰度图生成完成（OpenCV就绪后）");
+            setResults((prev) => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                step2Grayscale3Level: levels.level3,
+                step2Grayscale4Level: levels.level4,
+              };
+            });
+          })
+          .catch((err) => {
+            console.warn("[VisualAnalysis] 生成3阶4阶灰度图失败（OpenCV就绪后）:", err);
+          });
+      }
+    }
+  }, [opencvReady, results?.step2Grayscale, results?.step2Grayscale3Level, results?.step2Grayscale4Level, generateGrayscaleLevels]);
+
+  // 组件加载时检查是否有最新的分析结果或任务
+  useEffect(() => {
+    if (resultId) {
+      // 如果提供了resultId，不需要检查
+      console.log("[VisualAnalysis] 提供了 resultId，跳过检查:", resultId);
+      setCheckingExistingResult(false);
+      return;
+    }
+
+    let isMounted = true;
+
+    async function checkExistingResult() {
+      console.log("[VisualAnalysis] 开始检查已有结果和进行中的任务...");
+      try {
+        // 并行执行：同时检查进行中的任务和已有结果，减少等待时间
+        const [pendingTaskResponse, results] = await Promise.all([
+          getPendingImageAnalysisTask().catch((err) => {
+            console.warn("[VisualAnalysis] 查询进行中任务失败:", err);
+            return { task: null };
+          }),
+          fetchVisualAnalysisResults().catch((err) => {
+            console.warn("[VisualAnalysis] 查询结果列表失败:", err);
+            return [];
+          }),
+        ]);
+
+        if (!isMounted) {
+          console.log("[VisualAnalysis] 组件已卸载，取消检查");
+          return;
+        }
+
+        const pendingTask = pendingTaskResponse?.task || null;
+
+        // 如果有进行中的任务，先检查任务状态
+        if (pendingTask) {
+          console.log("[VisualAnalysis] 发现进行中的任务，先检查任务状态");
+          
+          // 立即检查一次任务状态，避免恢复已完成的任务
+          try {
+            const statusResponse = await getImageAnalysisTaskStatus(pendingTask.task_id);
+            console.log(`[VisualAnalysis] 任务状态检查: ${statusResponse.status}, 进度: ${statusResponse.progress}%`);
+            
+            // 如果任务已完成或失败，直接加载结果，不恢复轮询
+            if (statusResponse.status === "success") {
+              console.log("[VisualAnalysis] 任务已完成，加载结果");
+              const resultId = statusResponse.result?.result_id;
+              if (resultId) {
+                try {
+                  const savedResult = await fetchVisualAnalysisResult(resultId);
+                  setSavedResultId(resultId);
+                  savedResultIdRef.current = resultId;
+                  setSavedResultData(processSavedResultUrls(savedResult));
+                  
+                  if (savedResult.comprehensive_analysis) {
+                    setComprehensiveResults(savedResult.comprehensive_analysis);
+                  }
+                  
+                  setShowComprehensive(true);
+                  setIsViewMode(true);
+                  setComprehensiveLoading(false);
+                  setComprehensiveProgress(100);
+                  
+                  if (loadResultWithGrayscaleLevelsRef.current) {
+                    await loadResultWithGrayscaleLevelsRef.current(savedResult);
+                  }
+                  
+                  setCheckingExistingResult(false);
+                  return;
+                } catch (err) {
+                  console.error("[VisualAnalysis] 加载已完成任务的结果失败:", err);
+                  // 继续执行，显示上传页面
+                }
+              }
+            } else if (statusResponse.status === "failure") {
+              console.log("[VisualAnalysis] 任务已失败，显示错误");
+              setError(statusResponse.error || "分析任务失败");
+              setCheckingExistingResult(false);
+              return;
+            } else {
+              // 检查任务是否真的在进行中
+              // 如果任务一直是 pending 且没有进度，可能是任务卡住了
+              const taskCreatedAt = pendingTask.created_at ? new Date(pendingTask.created_at).getTime() : Date.now();
+              const taskAge = Date.now() - taskCreatedAt;
+              const maxTaskAge = 5 * 60 * 1000; // 5分钟
+              
+              // 如果任务创建时间超过5分钟但一直是 pending，先检查是否有已完成的结果
+              if (statusResponse.status === "pending" && taskAge > maxTaskAge) {
+                console.warn("[VisualAnalysis] 任务创建时间超过5分钟但仍是pending，检查是否有已完成的结果");
+                
+                // 先检查是否有已完成的结果（可能任务已经完成但状态没有更新）
+                if (results && results.length > 0) {
+                  const latestResult = [...results].sort((a, b) => 
+                    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+                  )[0];
+                  
+                  // 如果最新结果的创建时间晚于任务创建时间，说明任务可能已经完成
+                  const resultCreatedAt = new Date(latestResult.created_at).getTime();
+                  if (resultCreatedAt >= taskCreatedAt) {
+                    console.log("[VisualAnalysis] 发现已完成的结果，任务可能已完成但状态未更新，加载结果");
+                    try {
+                      const savedResult = await fetchVisualAnalysisResult(latestResult.id);
+                      setSavedResultId(latestResult.id);
+                      savedResultIdRef.current = latestResult.id;
+                      setSavedResultData(processSavedResultUrls(savedResult));
+                      
+                      if (savedResult.comprehensive_analysis) {
+                        setComprehensiveResults(savedResult.comprehensive_analysis);
+                      }
+                      
+                      setShowComprehensive(true);
+                      setIsViewMode(true);
+                      setComprehensiveLoading(false);
+                      setComprehensiveProgress(100);
+                      
+                      if (loadResultWithGrayscaleLevelsRef.current) {
+                        await loadResultWithGrayscaleLevelsRef.current(savedResult);
+                      }
+                      
+                      setCheckingExistingResult(false);
+                      return;
+                    } catch (err) {
+                      console.error("[VisualAnalysis] 加载结果失败:", err);
+                      // 继续执行，显示错误
+                    }
+                  }
+                }
+                
+                // 如果没有找到已完成的结果，显示错误，但不阻止继续检查其他结果
+                console.warn("[VisualAnalysis] 任务创建时间超过5分钟但仍是pending，且没有已完成的结果，认为任务失败");
+                setError("任务似乎卡住了。可能的原因：\n1. Celery worker 未运行\n2. 服务器负载过高\n\n请检查后端日志或联系管理员，或尝试重新上传图片");
+                setComprehensiveLoading(false);
+                // 不return，继续检查是否有其他结果（可能任务已经完成但状态没有更新）
+              }
+              
+              // 如果任务状态是 pending 且没有进度，检查是否有已完成的结果
+              if (statusResponse.status === "pending" && (!statusResponse.progress || statusResponse.progress === 0)) {
+                // 检查是否有已完成的结果（可能任务已经完成但状态没有更新）
+                if (results && results.length > 0) {
+                  const latestResult = [...results].sort((a, b) => 
+                    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+                  )[0];
+                  
+                  // 如果最新结果的创建时间晚于任务创建时间，说明任务可能已经完成
+                  const resultCreatedAt = new Date(latestResult.created_at).getTime();
+                  if (resultCreatedAt >= taskCreatedAt) {
+                    console.log("[VisualAnalysis] 发现已完成的结果，任务可能已完成但状态未更新，加载结果");
+                    try {
+                      const savedResult = await fetchVisualAnalysisResult(latestResult.id);
+                      setSavedResultId(latestResult.id);
+                      savedResultIdRef.current = latestResult.id;
+                      setSavedResultData(processSavedResultUrls(savedResult));
+                      
+                      if (savedResult.comprehensive_analysis) {
+                        setComprehensiveResults(savedResult.comprehensive_analysis);
+                      }
+                      
+                      setShowComprehensive(true);
+                      setIsViewMode(true);
+                      setComprehensiveLoading(false);
+                      setComprehensiveProgress(100);
+                      
+                      if (loadResultWithGrayscaleLevelsRef.current) {
+                        await loadResultWithGrayscaleLevelsRef.current(savedResult);
+                      }
+                      
+                      setCheckingExistingResult(false);
+                      return;
+                    } catch (err) {
+                      console.error("[VisualAnalysis] 加载结果失败:", err);
+                      // 继续执行，尝试恢复轮询
+                    }
+                  }
+                }
+              }
+              
+              // 任务仍在进行中，恢复轮询
+              console.log("[VisualAnalysis] 任务仍在进行中，恢复轮询");
+              
+              // 在创建新轮询前，先清理旧的轮询，避免重复创建
+              if (pollIntervalRef.current) {
+                clearInterval(pollIntervalRef.current);
+                pollIntervalRef.current = null;
+              }
+              
+              setCurrentTaskId(pendingTask.task_id);
+              setComprehensiveLoading(true);
+              setShowComprehensive(true);
+              setComprehensiveProgress(statusResponse.progress || 0);
+              setIsViewMode(true);
+              
+              // 立即开始轮询
+              let pollCount = 0;
+              const maxPolls = 180; // 最多轮询180次（6分钟，每2秒一次）
+              const maxPendingPolls = 30; // 如果一直是pending，最多轮询30次（1分钟）
+              let pendingCount = 0; // 连续pending的次数
+              
+              pollIntervalRef.current = setInterval(async () => {
+              // 首先检查组件是否已卸载
+              if (!isMounted) {
+                if (pollIntervalRef.current) {
+                  clearInterval(pollIntervalRef.current);
+                  pollIntervalRef.current = null;
+                }
+                return;
+              }
+              
+              pollCount++;
+              
+              // 超时检查
+              if (pollCount > maxPolls) {
+                if (pollIntervalRef.current) {
+                  clearInterval(pollIntervalRef.current);
+                  pollIntervalRef.current = null;
+                }
+                if (isMounted) {
+                  setComprehensiveLoading(false);
+                  setError("分析超时（超过6分钟）。可能的原因：\n1. Celery worker 未运行\n2. 服务器负载过高\n3. 图片处理时间过长\n\n请检查后端日志或联系管理员");
+                }
+                return;
+              }
+              
+              try {
+                const statusResponse = await getImageAnalysisTaskStatus(pendingTask.task_id);
+                
+                console.log(`[VisualAnalysis] 任务状态: ${statusResponse.status}, 进度: ${statusResponse.progress}%, 轮询次数: ${pollCount}`);
+                
+                if (!isMounted) return;
+                
+                // 如果一直是pending且没有进度，增加pending计数
+                if (statusResponse.status === "pending" && (!statusResponse.progress || statusResponse.progress === 0)) {
+                  pendingCount++;
+                  // 如果连续pending超过30次（1分钟），认为任务失败
+                  if (pendingCount > maxPendingPolls) {
+                    if (pollIntervalRef.current) {
+                      clearInterval(pollIntervalRef.current);
+                      pollIntervalRef.current = null;
+                    }
+                    if (isMounted) {
+                      setComprehensiveLoading(false);
+                      setError("任务一直处于等待状态，可能的原因：\n1. Celery worker 未运行\n2. 服务器负载过高\n\n请检查后端日志或联系管理员，或尝试重新上传图片");
+                    }
+                    return;
+                  }
+                } else {
+                  // 如果任务有进度或状态改变，重置pending计数
+                  pendingCount = 0;
+                }
+                
+                // 更新进度
+                if (statusResponse.progress !== undefined) {
+                  setComprehensiveProgress(statusResponse.progress);
+                }
+              
+              // 任务完成
+              if (statusResponse.status === "success") {
+                console.log("[VisualAnalysis] 检测到任务成功状态");
+                
+                if (pollIntervalRef.current) {
+                  clearInterval(pollIntervalRef.current);
+                  pollIntervalRef.current = null;
+                }
+                
+                // 从任务结果获取 result_id，然后加载完整结果
+                const resultId = statusResponse.result?.result_id;
+                if (resultId) {
+                  try {
+                    // 获取完整结果（包含所有图片URL和结构化数据）
+                    const savedResult = await fetchVisualAnalysisResult(resultId);
+                    setSavedResultId(resultId);
+                    savedResultIdRef.current = resultId;
+                    
+                    // 加载基础结果（这会处理URL并设置所有状态）
+                    if (loadResultWithGrayscaleLevelsRef.current) {
+                      await loadResultWithGrayscaleLevelsRef.current(savedResult);
+                    }
+                    
+                    // loadResultWithGrayscaleLevels 已经设置了 savedResultData，但为了确保一致，再设置一次
+                    const processedSavedResult = processSavedResultUrls(savedResult);
+                    setSavedResultData(processedSavedResult);
+                    
+                    setComprehensiveLoading(false);
+                    setComprehensiveProgress(100);
+                    setIsViewMode(true);
+                    console.log("[图像分析] 任务完成，结果已加载", {
+                      resultId,
+                      hasImages: !!savedResult.step1_binary,
+                      hasComprehensiveAnalysis: !!savedResult.comprehensive_analysis,
+                    });
+                  } catch (err) {
+                    console.error("[VisualAnalysis] 加载结果失败:", err);
+                    setError("分析完成，但加载结果失败，请刷新页面重试");
+                    setComprehensiveLoading(false);
+                  }
+                } else {
+                  console.warn("[图像分析] 任务状态为success但没有result_id，继续等待...");
+                }
+              }
+              // 任务失败
+              else if (statusResponse.status === "failure") {
+                if (pollIntervalRef.current) {
+                  clearInterval(pollIntervalRef.current);
+                  pollIntervalRef.current = null;
+                }
+                if (isMounted) {
+                  setComprehensiveLoading(false);
+                  const errorMsg = statusResponse.error || "未知错误";
+                  setError(`专业分析失败: ${errorMsg}`);
+                }
+              }
+            } catch (err) {
+              console.error("查询任务状态失败:", err);
+              if (pollIntervalRef.current) {
+                clearInterval(pollIntervalRef.current);
+                pollIntervalRef.current = null;
+              }
+              if (isMounted) {
+                setComprehensiveLoading(false);
+                setError(`查询任务状态失败: ${err instanceof Error ? err.message : "未知错误"}`);
+              }
+            }
+          }, 2000); // 每2秒轮询一次
+            }
+          } catch (err) {
+            console.error("[VisualAnalysis] 检查任务状态失败:", err);
+            // 如果检查失败，假设任务已完成，尝试加载结果
+            // 继续执行下面的逻辑
+          }
+          
+          // 即使有进行中的任务，也继续检查是否有已完成的结果（因为基础分析可能已完成）
+        }
+
+        // 获取用户的分析结果列表（已在上面并行获取）
+        console.log("[VisualAnalysis] 获取到结果列表:", results?.length || 0, "个结果");
+        if (!isMounted) {
+          console.log("[VisualAnalysis] 组件已卸载，取消检查");
+          return;
+        }
+        
+        if (results && results.length > 0) {
+          // 获取最新的结果（按创建时间排序，最新的在前）
+          const latestResult = [...results].sort((a, b) => 
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          )[0];
+          
+          console.log("[VisualAnalysis] 找到最新结果，ID:", latestResult.id, "创建时间:", latestResult.created_at);
+          
+          // 直接获取完整的结果详情，因为列表中的字段可能是 URL 或空
+          // 加载结果（不管是否完成）
+          if (isMounted && !pendingTask) {
+            // 只有在没有进行中任务时才设置加载状态（避免覆盖任务恢复的状态）
+            console.log("[VisualAnalysis] 开始加载结果，ID:", latestResult.id);
+            setSavedResultId(latestResult.id);
+            savedResultIdRef.current = latestResult.id;
+            setIsViewMode(true);
+            setLoadingSavedResult(true);
+            // 注意：不要在这里设置 checkingExistingResult = false
+            // 应该等到结果加载完成后再设置
+          } else if (isMounted && pendingTask) {
+            // 如果有进行中的任务，只设置savedResultId，不设置loading状态
+            setSavedResultId(latestResult.id);
+            savedResultIdRef.current = latestResult.id;
+          }
+          
+          try {
+            const savedResult = await fetchVisualAnalysisResult(latestResult.id);
+            console.log("[VisualAnalysis] 成功获取结果详情", {
+              hasOriginalImage: !!savedResult.original_image,
+              hasStep1Binary: !!savedResult.step1_binary,
+              hasStep2Grayscale: !!savedResult.step2_grayscale,
+              hasComprehensiveAnalysis: !!savedResult.comprehensive_analysis,
+              originalImageType: typeof savedResult.original_image,
+              step1BinaryType: typeof savedResult.step1_binary,
+              step2GrayscaleType: typeof savedResult.step2_grayscale,
+              comprehensiveAnalysisType: typeof savedResult.comprehensive_analysis,
+            });
+            if (!isMounted) {
+              console.log("[VisualAnalysis] 组件已卸载，取消加载");
+              return;
+            }
+            
+            // 验证结果是否有效（检查字段是否存在且不为空）
+            // 注意：original_image 和 step1_binary 可能是 URL 字符串或 base64 数据
+            const hasOriginalImage = savedResult.original_image && 
+              (typeof savedResult.original_image === 'string') && 
+              savedResult.original_image.trim().length > 0;
+            const hasStep1Binary = savedResult.step1_binary && 
+              (typeof savedResult.step1_binary === 'string') && 
+              savedResult.step1_binary.trim().length > 0;
+            
+            if (!hasOriginalImage || !hasStep1Binary) {
+              console.warn("[VisualAnalysis] 结果无效，缺少必要字段", {
+                hasOriginalImage,
+                hasStep1Binary,
+              });
+              throw new Error("结果无效：缺少必要字段");
+            }
+
+            // 加载结果（包括生成3阶4阶灰度图）
+            if (loadResultWithGrayscaleLevelsRef.current) {
+              console.log("[VisualAnalysis] 开始加载结果数据...");
+              await loadResultWithGrayscaleLevelsRef.current(savedResult);
+              console.log("[VisualAnalysis] 结果数据加载完成");
+            } else {
+              console.warn("[VisualAnalysis] loadResultWithGrayscaleLevelsRef.current 为 null");
+            }
+            
+            // 只有在成功加载结果后才设置 checkingExistingResult = false
+            if (isMounted) {
+              console.log("[VisualAnalysis] 检查完成，结果已加载");
+              setCheckingExistingResult(false);
+            }
+          } catch (err) {
+            if (!isMounted) {
+              console.log("[VisualAnalysis] 组件已卸载，取消错误处理");
+              return;
+            }
+            console.error("[VisualAnalysis] 加载最新结果失败:", err);
+            // 如果加载失败（可能是已删除），清除状态并显示上传页面
+            if (isMounted && !pendingTask) {
+              // 只有在没有进行中任务时才清除状态
+              setLoadingSavedResult(false);
+              setCheckingExistingResult(false);
+              setIsViewMode(false);
+              setSavedResultId(null);
+              savedResultIdRef.current = null;
+            } else if (isMounted) {
+              // 如果有进行中的任务，只清除checkingExistingResult
+              setCheckingExistingResult(false);
+            }
+          } finally {
+            if (isMounted && !pendingTask) {
+              // 只有在没有进行中任务时才清除loadingSavedResult
+              setLoadingSavedResult(false);
+            } else if (isMounted && pendingTask) {
+              // 如果有进行中的任务，只清除checkingExistingResult
+              setCheckingExistingResult(false);
+            }
+          }
+        } else {
+          // 没有找到结果
+          if (pendingTask) {
+            // 如果有进行中的任务但没有结果，检查任务是否真的在进行
+            // 如果任务超过5分钟且是pending，可能任务已经失败，显示上传页面
+            const taskCreatedAt = pendingTask.created_at ? new Date(pendingTask.created_at).getTime() : Date.now();
+            const taskAge = Date.now() - taskCreatedAt;
+            const maxTaskAge = 5 * 60 * 1000; // 5分钟
+            
+            if (taskAge > maxTaskAge) {
+              // 任务超过5分钟，认为任务失败，显示上传页面
+              console.log("[VisualAnalysis] 任务超过5分钟但没有结果，显示上传页面");
+              if (isMounted) {
+                setCheckingExistingResult(false);
+                setComprehensiveLoading(false);
+              }
+            } else {
+              // 任务还在合理时间内，显示加载状态
+              console.log("[VisualAnalysis] 没有找到结果，但有进行中的任务，显示加载状态");
+              if (isMounted) {
+                setCheckingExistingResult(false);
+              }
+            }
+          } else {
+            // 没有找到结果，也没有进行中的任务，显示上传页面
+            console.log("[VisualAnalysis] 没有找到已有结果，显示上传页面");
+            if (isMounted) {
+              setCheckingExistingResult(false);
+            }
+          }
+        }
+      } catch (err) {
+        if (!isMounted) {
+          console.log("[VisualAnalysis] 组件已卸载，取消错误处理");
+          return;
+        }
+        console.error("[VisualAnalysis] 检查已有结果失败:", err);
+        // 检查失败的原因可能是：
+        // 1. 网络错误
+        // 2. 认证错误（未登录）
+        // 3. 服务器错误
+        // 在这些情况下，显示上传页面是合理的
+        const error = err as any;
+        if (error?.response?.status === 401 || error?.response?.status === 403) {
+          console.warn("[VisualAnalysis] 认证失败，可能需要重新登录");
+        }
+        if (isMounted) {
+          setCheckingExistingResult(false);
+        }
+      }
+    }
+
+    checkExistingResult();
+
+    return () => {
+      console.log("[VisualAnalysis] 清理检查逻辑");
+      isMounted = false;
+    };
+  }, [resultId]); // 移除 loadResultWithGrayscaleLevels 依赖，只在 resultId 变化时执行
+
+  // OpenCV 错误处理
+  useEffect(() => {
+    if (opencvError) {
+      setError(opencvError);
+    }
+  }, [opencvError]);
+
+  // 上传错误处理
+  useEffect(() => {
+    if (uploadError) {
+      setError(uploadError);
+    }
+  }, [uploadError]);
+
+  // 处理文件选择（包装 useImageUpload 的 handleFileSelectDirect）
+  const handleFileSelectWrapped = useCallback((file: File) => {
+    handleFileSelectDirect(file);
+    // 清除之前的错误
+    if (uploadError) {
+      setUploadError(null);
+    }
+    setError(null);
+  }, [handleFileSelectDirect, uploadError, setUploadError]);
+
+  // 用户点击确认按钮后开始处理（将在 handleComprehensiveAnalysis 之后定义，见下方）
+
+  const processImage = async (imageDataUrl: string, _file?: File) => {
+    if (!opencvReady) {
+      setError("OpenCV 库尚未加载完成，请稍候");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    let src: any = null;
+    let gray: any = null;
+    let binary: any = null;
+    let lab: any = null;
+    let labChannels: any = null;
+    let hls: any = null;
+    let hlsChannels: any = null;
+    let hueOnly: any = null;
+    let rgbHue: any = null;
+    let maxS: any = null;
+    let maxV: any = null;
+    let merged: any = null;
+    let canvas: HTMLCanvasElement | null = null;
+
+    try {
+      const cv = (window as any).cv;
+      if (!cv) {
+        throw new Error("OpenCV 未加载");
+      }
+      
+      // 创建图像对象
+      const img = new Image();
+      img.src = imageDataUrl;
+      
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error("图片加载失败"));
+        // 设置超时
+        setTimeout(() => reject(new Error("图片加载超时")), 10000);
+      });
+
+      // 检查图片尺寸，如果太大则先压缩
+      const MAX_DIMENSION = 2048;
+      let targetWidth = img.width;
+      let targetHeight = img.height;
+      
+      if (targetWidth > MAX_DIMENSION || targetHeight > MAX_DIMENSION) {
+        const scale = Math.min(MAX_DIMENSION / targetWidth, MAX_DIMENSION / targetHeight);
+        targetWidth = Math.floor(targetWidth * scale);
+        targetHeight = Math.floor(targetHeight * scale);
+      }
+
+      // 创建 canvas 用于处理
+      canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        throw new Error("无法创建 canvas 上下文");
+      }
+
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+      ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+
+      // 转换为 OpenCV Mat
+      src = cv.imread(canvas);
+      if (!src || src.empty()) {
+        throw new Error("无法读取图片数据");
+      }
+      
+      // 第一步：二值化（黑白）
+      gray = new cv.Mat();
+      cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+      
+      binary = new cv.Mat();
+      cv.threshold(gray, binary, selectedThreshold, 255, cv.THRESH_BINARY);
+      const step1Binary = matToDataUrl(binary);
+
+      // 第二步：RGB转灰度
+      const step2Grayscale = matToDataUrl(gray);
+
+      // 第二步扩展：3阶层灰度（将0-255分为3个等级：0-85, 85-170, 170-255）
+      const gray3Level = new cv.Mat();
+      gray.copyTo(gray3Level);
+      const data3 = gray3Level.data;
+      for (let i = 0; i < data3.length; i++) {
+        const val = data3[i];
+        if (val < 85) {
+          data3[i] = 0;
+        } else if (val < 170) {
+          data3[i] = 127;
+        } else {
+          data3[i] = 255;
+        }
+      }
+      const step2Grayscale3Level = matToDataUrl(gray3Level);
+      gray3Level.delete();
+
+      // 第二步扩展：4阶层灰度（将0-255分为4个等级：0-64, 64-128, 128-192, 192-255）
+      const gray4Level = new cv.Mat();
+      gray.copyTo(gray4Level);
+      const data4 = gray4Level.data;
+      for (let i = 0; i < data4.length; i++) {
+        const val = data4[i];
+        if (val < 64) {
+          data4[i] = 0;
+        } else if (val < 128) {
+          data4[i] = 85;
+        } else if (val < 192) {
+          data4[i] = 170;
+        } else {
+          data4[i] = 255;
+        }
+      }
+      const step2Grayscale4Level = matToDataUrl(gray4Level);
+      gray4Level.delete();
+
+      // 第三步：LAB的L通道
+      lab = new cv.Mat();
+      cv.cvtColor(src, lab, cv.COLOR_RGBA2RGB);
+      cv.cvtColor(lab, lab, cv.COLOR_RGB2Lab);
+      labChannels = new cv.MatVector();
+      cv.split(lab, labChannels);
+      const step3LabL = matToDataUrl(labChannels.get(0)); // L通道
+
+      // 第四步：HLS的S通道（HSV饱和度已删除）
+      hls = new cv.Mat();
+      cv.cvtColor(src, hls, cv.COLOR_RGBA2RGB);
+      cv.cvtColor(hls, hls, cv.COLOR_RGB2HLS);
+      hlsChannels = new cv.MatVector();
+      cv.split(hls, hlsChannels);
+      const step4HlsS = matToDataUrl(hlsChannels.get(2)); // S通道（HLS中S是第三个通道）
+
+      // 第五步：纯色相图（固定饱和度和亮度）
+      // 需要重新计算HSV（因为删除了之前的HSV计算）
+      const hsvForHue = new cv.Mat();
+      cv.cvtColor(src, hsvForHue, cv.COLOR_RGBA2RGB);
+      cv.cvtColor(hsvForHue, hsvForHue, cv.COLOR_RGB2HSV);
+      const hsvChannelsForHue = new cv.MatVector();
+      cv.split(hsvForHue, hsvChannelsForHue);
+      
+      maxS = new cv.Mat(hsvForHue.rows, hsvForHue.cols, cv.CV_8UC1, new cv.Scalar(255));
+      maxV = new cv.Mat(hsvForHue.rows, hsvForHue.cols, cv.CV_8UC1, new cv.Scalar(255));
+      merged = new cv.MatVector();
+      merged.push_back(hsvChannelsForHue.get(0)); // H
+      merged.push_back(maxS); // S = 255
+      merged.push_back(maxV); // V = 255
+      hueOnly = new cv.Mat();
+      cv.merge(merged, hueOnly);
+      rgbHue = new cv.Mat();
+      cv.cvtColor(hueOnly, rgbHue, cv.COLOR_HSV2RGB);
+      const step5Hue = matToDataUrl(rgbHue);
+      
+      // 清理临时HSV变量
+      hsvForHue.delete();
+      hsvChannelsForHue.delete();
+
+      // 清理资源
+      if (src) src.delete();
+      if (gray) gray.delete();
+      if (binary) binary.delete();
+      if (lab) lab.delete();
+      if (labChannels) labChannels.delete();
+      if (hls) hls.delete();
+      if (hlsChannels) hlsChannels.delete();
+      if (hueOnly) hueOnly.delete();
+      if (rgbHue) rgbHue.delete();
+      if (maxS) maxS.delete();
+      if (maxV) maxV.delete();
+      if (merged) merged.delete();
+      if (canvas) canvas.remove();
+
+      const result: Partial<VisualAnalysisResult> = {
+        originalImage: imageDataUrl,
+        step1Binary,
+        step2Grayscale,
+        step2Grayscale3Level,
+        step2Grayscale4Level,
+        step3LabL,
+        step4HsvS: "", // 已删除，保留字段以兼容
+        step4HlsS,
+        step5Hue,
+        binaryThreshold: selectedThreshold,
+        timestamp: new Date().toISOString(),
+      };
+
+      setResults(result);
+      
+      // 保存基础分析结果到服务器
+      saveBasicResultsToServer(result, imageDataUrl);
+      
+      // 自动开始专业分析（使用imageFile状态）
+      setTimeout(() => {
+        if (imageFile) {
+          handleComprehensiveAnalysis(imageFile);
+        } else {
+          console.warn("[VisualAnalysis] imageFile 不存在，无法进行专业分析");
+        }
+      }, 100);
+    } catch (err: any) {
+      console.error("图像处理错误:", err);
+      
+      // 清理资源（即使出错也要清理）
+      try {
+        if (src) src.delete();
+        if (gray) gray.delete();
+        if (binary) binary.delete();
+        if (lab) lab.delete();
+        if (labChannels) labChannels.delete();
+        if (hls) hls.delete();
+        if (hlsChannels) hlsChannels.delete();
+        if (hueOnly) hueOnly.delete();
+        if (rgbHue) rgbHue.delete();
+        if (maxS) maxS.delete();
+        if (maxV) maxV.delete();
+        if (merged) merged.delete();
+        if (canvas) canvas.remove();
+      } catch (cleanupErr) {
+        console.error("清理资源时出错:", cleanupErr);
+      }
+      
+      // 提供更详细的错误信息
+      let errorMessage = "处理图像时出错";
+      if (err instanceof Error) {
+        errorMessage = err.message;
+      } else if (typeof err === "number") {
+        // OpenCV 错误代码
+        errorMessage = `OpenCV 错误代码: ${err}`;
+        if (err === 7083872 || err === -215) {
+          errorMessage = "图片尺寸过大或格式不支持，请尝试使用较小的图片";
+        } else if (err === -27) {
+          errorMessage = "内存不足，请尝试使用较小的图片";
+        }
+      } else if (err && typeof err === "object" && "message" in err) {
+        errorMessage = String(err.message);
+      }
+      
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const matToDataUrl = (mat: any): string => {
+    const cv = (window as any).cv;
+    const canvas = document.createElement("canvas");
+    cv.imshow(canvas, mat);
+    return canvas.toDataURL("image/png");
+  };
+
+  const handleThresholdChange = (threshold: number) => {
+    setSelectedThreshold(threshold);
+    if (originalImage) {
+      processImage(originalImage, imageFile || undefined);
+    }
+  };
+
+  const handleSave = () => {
+    if (results && onSave) {
+      // 保存时包含专业分析结果（如果有）
+      const saveData = {
+        ...results,
+        comprehensive_analysis: comprehensiveResults || null,
+      } as VisualAnalysisResult & { comprehensive_analysis?: any };
+      onSave(saveData);
+    }
+  };
+
+  // 保存基础分析结果到服务器
+  const saveBasicResultsToServer = async (basicResults: Partial<VisualAnalysisResult>, imageDataUrl: string) => {
+    if (!basicResults.originalImage || !basicResults.step1Binary) {
+      console.warn("[VisualAnalysis] 基础结果不完整，跳过保存");
+      return;
+    }
+
+    try {
+      console.log("[VisualAnalysis] 开始保存基础结果到服务器...");
+      const savedResult = await createVisualAnalysisResult({
+        original_image: basicResults.originalImage,
+        step1_binary: basicResults.step1Binary,
+        step2_grayscale: basicResults.step2Grayscale || "",
+        step3_lab_l: basicResults.step3LabL || "",
+        step4_hsv_s: basicResults.step4HsvS || "",
+        step4_hls_s: basicResults.step4HlsS || "",
+        step5_hue: basicResults.step5Hue || "",
+        step2_grayscale_3_level: basicResults.step2Grayscale3Level || "",
+        step2_grayscale_4_level: basicResults.step2Grayscale4Level || "",
+        binary_threshold: basicResults.binaryThreshold || 140,
+      });
+      
+      console.log("[VisualAnalysis] 基础结果已保存到服务器，ID:", savedResult.id);
+      // 立即设置 savedResultId，确保后续操作可以使用
+      setSavedResultId(savedResult.id);
+      savedResultIdRef.current = savedResult.id; // 同时更新 ref
+      // 保存后设置为查看模式，这样刷新后能正确加载
+      setIsViewMode(true);
+      console.log("[VisualAnalysis] savedResultId 已设置为:", savedResult.id);
+    } catch (err) {
+      console.error("[VisualAnalysis] 保存基础结果失败:", err);
+      // 不显示错误给用户，因为分析可以继续进行
+    }
+  };
+
+  // 更新服务器上的分析结果（保存固定5步流程的结果）
+  const updateComprehensiveResultsToServer = async (comprehensiveResults: any) => {
+    // 使用 ref 获取最新的 savedResultId
+    let currentSavedResultId = savedResultIdRef.current;
+    if (!currentSavedResultId) {
+      console.warn("[VisualAnalysis] savedResultId 尚未设置，创建新结果...");
+      // 如果没有savedResultId，创建新结果
+      try {
+        const newResult = await createVisualAnalysisResult({
+          original_image: originalImage || "",
+          step1_binary: comprehensiveResults?.step1?.binary || "",
+          step2_grayscale: results?.step2Grayscale || "", // 必需字段
+          step2_grayscale_3_level: comprehensiveResults?.step1?.grayscale_3_level || "",
+          step2_grayscale_4_level: comprehensiveResults?.step1?.grayscale_4_level || "",
+          step3_lab_l: comprehensiveResults?.step2?.lab_luminance || "",
+          step4_hls_s: comprehensiveResults?.step3?.hls_saturation || "",
+          step4_hls_s_inverted: comprehensiveResults?.step3?.hls_saturation_inverted || "",
+          step5_hue: comprehensiveResults?.step4?.hue_map || "",
+          kmeans_segmentation_image: comprehensiveResults?.step5?.kmeans_segmentation || "",
+          binary_threshold: selectedThreshold,
+          comprehensive_analysis: {
+            step1: {},
+            step2: {},
+            step3: {},
+            step4: {
+              hue_histogram: comprehensiveResults?.step4?.hue_histogram || [],
+            },
+            step5: {
+              dominant_palette: comprehensiveResults?.step5?.dominant_palette || {},
+            },
+          },
+        });
+        setSavedResultId(newResult.id);
+        savedResultIdRef.current = newResult.id;
+        currentSavedResultId = newResult.id;
+        console.log("[VisualAnalysis] 创建新结果成功，ID:", newResult.id);
+        return;
+      } catch (err) {
+        console.error("[VisualAnalysis] 创建新结果失败:", err);
+        return;
+      }
+    }
+
+    try {
+      console.log("[VisualAnalysis] 开始更新分析结果到服务器，ID:", currentSavedResultId);
+      console.log("[VisualAnalysis] comprehensiveResults 原始数据:", {
+        hasStep1: !!comprehensiveResults?.step1,
+        hasStep2: !!comprehensiveResults?.step2,
+        hasStep3: !!comprehensiveResults?.step3,
+        hasStep4: !!comprehensiveResults?.step4,
+        hasStep5: !!comprehensiveResults?.step5,
+        keys: comprehensiveResults ? Object.keys(comprehensiveResults) : [],
+      });
+      
+      // 从comprehensiveResults中提取图片和结构化数据
+      // 使用深拷贝避免修改原始对象
+      const structuredAnalysis = JSON.parse(JSON.stringify(comprehensiveResults || {}));
+      
+      // 提取图片数据（这些会被序列化器处理并保存到TOS）
+      const step1Binary = structuredAnalysis.step1?.binary;
+      const step1Grayscale3Level = structuredAnalysis.step1?.grayscale_3_level;
+      const step1Grayscale4Level = structuredAnalysis.step1?.grayscale_4_level;
+      const step2LabLuminance = structuredAnalysis.step2?.lab_luminance;
+      const step3HlsSaturation = structuredAnalysis.step3?.hls_saturation;
+      const step3HlsSaturationInverted = structuredAnalysis.step3?.hls_saturation_inverted;
+      const step4HueMap = structuredAnalysis.step4?.hue_map;
+      // 8色和12色K-means图片
+      const step5KmeansSegmentation8 = structuredAnalysis.step5?.kmeans_segmentation_8 || structuredAnalysis.step5?.kmeans_segmentation; // 向后兼容
+      const step5KmeansSegmentation12 = structuredAnalysis.step5?.kmeans_segmentation_12;
+      
+      // 从JSON中移除图片数据，只保留结构化数据
+      if (structuredAnalysis.step1) {
+        delete structuredAnalysis.step1.binary;
+        delete structuredAnalysis.step1.grayscale_3_level;
+        delete structuredAnalysis.step1.grayscale_4_level;
+      }
+      if (structuredAnalysis.step2) {
+        delete structuredAnalysis.step2.rgb_luminance;
+        delete structuredAnalysis.step2.lab_luminance;
+      }
+      if (structuredAnalysis.step3) {
+        delete structuredAnalysis.step3.hls_saturation;
+        delete structuredAnalysis.step3.hls_saturation_inverted;
+      }
+      if (structuredAnalysis.step4) {
+        delete structuredAnalysis.step4.hue_map;
+        // hue_histogram保留在JSON中
+      }
+      if (structuredAnalysis.step5) {
+        delete structuredAnalysis.step5.kmeans_segmentation_8;
+        delete structuredAnalysis.step5.kmeans_segmentation; // 向后兼容：删除旧字段
+        // kmeans_segmentation_12保留在JSON中（因为没有对应的ImageField）
+        // dominant_palette_8和dominant_palette_12保留在JSON中
+      }
+      
+      // 验证关键数据是否存在
+      if (!structuredAnalysis.step4?.hue_histogram) {
+        console.warn("[VisualAnalysis] 警告：色相直方图数据缺失！");
+      }
+      // 验证主色调数据（新版本有8色和12色，旧版本只有dominant_palette）
+      if (!structuredAnalysis.step5?.dominant_palette_8 && !structuredAnalysis.step5?.dominant_palette && !structuredAnalysis.step5?.dominant_palette_12) {
+        console.warn("[VisualAnalysis] 警告：主色调分析数据缺失！");
+      }
+      
+      // 辅助函数：检查字符串是否是URL
+      const isUrl = (str: string | undefined): boolean => {
+        if (!str) return false;
+        return str.startsWith('http://') || str.startsWith('https://');
+      };
+      
+      // 辅助函数：获取图片数据，如果是URL则返回空字符串（跳过发送）
+      const getImageData = (imageData: string | undefined): string => {
+        if (!imageData) return "";
+        // 如果是URL，返回空字符串（让后端保留原有数据）
+        if (isUrl(imageData)) return "";
+        // 如果是base64，直接返回
+        return imageData;
+      };
+      
+      // 保存完整结果（包括所有图片和结构化数据）
+      const updatedResult = await createVisualAnalysisResult({
+        original_image: getImageData(originalImage || undefined),
+        step1_binary: getImageData(step1Binary),
+        step2_grayscale: results?.step2Grayscale || "", // 必需字段
+        step2_grayscale_3_level: getImageData(step1Grayscale3Level),
+        step2_grayscale_4_level: getImageData(step1Grayscale4Level),
+        step3_lab_l: getImageData(step2LabLuminance),
+        step4_hls_s: getImageData(step3HlsSaturation),
+        step4_hls_s_inverted: getImageData(step3HlsSaturationInverted),
+        step5_hue: getImageData(step4HueMap),
+        kmeans_segmentation_image: getImageData(step5KmeansSegmentation8), // 8色图片保存到ImageField
+        binary_threshold: selectedThreshold,
+        comprehensive_analysis: structuredAnalysis, // 只包含结构化数据（已移除图片）
+      });
+      console.log("[VisualAnalysis] 专业分析结果已更新到服务器，新ID:", updatedResult.id);
+      // 更新 savedResultId（虽然通常是同一个，但为了确保一致性）
+      setSavedResultId(updatedResult.id);
+      savedResultIdRef.current = updatedResult.id;
+      // 同时更新 savedResultData，确保子组件能获取到最新的图片URL（包括HLS反色图和K-means图片）
+      setSavedResultData(processSavedResultUrls(updatedResult));
+      console.log("[VisualAnalysis] savedResultData 已更新，包含的图片字段:", {
+        hasStep4HlsSInverted: !!updatedResult.step4_hls_s_inverted,
+        hasKmeansSegmentation: !!updatedResult.kmeans_segmentation_image,
+        hasComprehensiveAnalysis: !!updatedResult.comprehensive_analysis,
+        comprehensiveAnalysisKeys: updatedResult.comprehensive_analysis ? Object.keys(updatedResult.comprehensive_analysis) : [],
+        comprehensiveAnalysisType: typeof updatedResult.comprehensive_analysis,
+        comprehensiveAnalysisLength: updatedResult.comprehensive_analysis ? JSON.stringify(updatedResult.comprehensive_analysis).length : 0,
+      });
+    } catch (err) {
+      console.error("[VisualAnalysis] 更新专业分析结果失败:", err);
+    }
+  };
+
+  const handleComprehensiveAnalysis = async (imageFileOrDataUrl?: File | string) => {
+    // 使用传入的文件，或者使用当前选择的文件
+    let fileToAnalyze: File | null = null;
+    
+    if (imageFileOrDataUrl instanceof File) {
+      fileToAnalyze = imageFileOrDataUrl;
+    } else if (typeof imageFileOrDataUrl === 'string') {
+      // 如果是字符串（base64或URL），需要转换为File
+      // 但analyzeImageComprehensive需要File，所以这里应该使用imageFile状态
+      fileToAnalyze = imageFile;
+    } else {
+      fileToAnalyze = imageFile;
+    }
+    
+    if (!fileToAnalyze) {
+      setError("缺少图片文件，无法进行分析");
+      return;
+    }
+    
+    // 清理之前的轮询
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+    
+    setComprehensiveLoading(true);
+    setShowComprehensive(true);
+    setComprehensiveResults(null);
+    setComprehensiveProgress(0);
+    setError(null);
+    
+    console.log("[图像分析] 开始分析，图片文件:", fileToAnalyze.name, "大小:", fileToAnalyze.size);
+    
+    try {
+      // 创建异步任务（固定5步流程）- 直接上传文件
+      const taskResponse = await analyzeImageComprehensive(fileToAnalyze, selectedThreshold);
+      console.log("[专业分析] 任务创建成功:", taskResponse);
+      
+      // 如果有 result_id，立即加载结果（虽然图片还在处理中）
+      if (taskResponse.result_id) {
+        setSavedResultId(taskResponse.result_id);
+        savedResultIdRef.current = taskResponse.result_id;
+      }
+      
+      // 如果返回的是任务ID（异步模式），则轮询任务状态
+      if (taskResponse.task_id) {
+        const taskId = taskResponse.task_id;
+        setCurrentTaskId(taskId);
+        
+        // 在创建新轮询前，先清理旧的轮询，避免重复创建
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
+        
+        // 轮询任务状态
+        let pollCount = 0;
+        const maxPolls = 180; // 最多轮询180次（6分钟，每2秒一次）
+        let isPollingMounted = true; // 用于跟踪轮询是否应该继续
+        
+        // 在组件卸载时标记轮询应该停止
+        const cleanupPolling = () => {
+          isPollingMounted = false;
+          if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current);
+            pollIntervalRef.current = null;
+          }
+        };
+        
+        pollIntervalRef.current = setInterval(async () => {
+          // 首先检查轮询是否应该继续
+          if (!isPollingMounted) {
+            if (pollIntervalRef.current) {
+              clearInterval(pollIntervalRef.current);
+              pollIntervalRef.current = null;
+            }
+            return;
+          }
+          
+          pollCount++;
+          
+          // 超时检查
+          if (pollCount > maxPolls) {
+            cleanupPolling();
+            setComprehensiveLoading(false);
+            setError("分析超时（超过6分钟）。可能的原因：\n1. Celery worker 未运行\n2. 服务器负载过高\n3. 图片处理时间过长\n\n请检查后端日志或联系管理员");
+            return;
+          }
+          
+          try {
+            const statusResponse = await getImageAnalysisTaskStatus(taskId);
+            
+            console.log(`[专业分析] 任务状态: ${statusResponse.status}, 进度: ${statusResponse.progress}%, 轮询次数: ${pollCount}`);
+            
+            // 更新进度
+            if (statusResponse.progress !== undefined) {
+              setComprehensiveProgress(statusResponse.progress);
+            }
+            
+            // 任务完成
+            if (statusResponse.status === "success") {
+              console.log("[专业分析] 检测到任务成功状态", {
+                hasResult: !!statusResponse.result,
+                resultKeys: statusResponse.result ? Object.keys(statusResponse.result) : [],
+              });
+              
+              // 从任务结果获取 result_id，然后加载完整结果
+              const resultId = statusResponse.result?.result_id;
+              if (resultId) {
+                cleanupPolling();
+                
+                try {
+                  // 获取完整结果（包含所有图片URL和结构化数据）
+                  const savedResult = await fetchVisualAnalysisResult(resultId);
+                  setSavedResultId(resultId);
+                  savedResultIdRef.current = resultId;
+                  
+                  // 处理URL并加载完整结果（包括基础分析结果）
+                  if (loadResultWithGrayscaleLevelsRef.current) {
+                    await loadResultWithGrayscaleLevelsRef.current(savedResult);
+                  }
+                  
+                  // 设置 savedResultData（已处理URL）
+                  const processedSavedResult = processSavedResultUrls(savedResult);
+                  setSavedResultData(processedSavedResult);
+                  
+                  // comprehensive_analysis 已经在 loadResultWithGrayscaleLevels 中设置了
+                  // 但为了确保一致，这里再设置一次
+                  if (savedResult.comprehensive_analysis) {
+                    setComprehensiveResults(savedResult.comprehensive_analysis);
+                  }
+                  
+                  setComprehensiveLoading(false);
+                  setComprehensiveProgress(100);
+                  setIsViewMode(true);
+                  console.log("[图像分析] 任务完成，结果已加载", {
+                    resultId,
+                    hasImages: !!savedResult.step1_binary,
+                    hasComprehensiveAnalysis: !!savedResult.comprehensive_analysis,
+                  });
+                } catch (err) {
+                  console.error("[VisualAnalysis] 加载结果失败:", err);
+                  setError("分析完成，但加载结果失败，请刷新页面重试");
+                  setComprehensiveLoading(false);
+                }
+              } else {
+                console.warn("[图像分析] 任务状态为success但没有result_id，继续等待...");
+                // 如果状态是success但没有result_id，可能是数据库更新延迟，继续等待
+              }
+            }
+            // 任务失败
+            else if (statusResponse.status === "failure") {
+              cleanupPolling();
+              setComprehensiveLoading(false);
+              const errorMsg = statusResponse.error || "未知错误";
+              setError(`图像分析失败: ${errorMsg}`);
+              console.error("[图像分析] 任务失败:", errorMsg);
+            }
+            // 任务仍在进行中，继续轮询
+            // status === "pending" 或 "started" 时继续等待
+            else if (statusResponse.status === "pending" || statusResponse.status === "started") {
+              // 如果超过2分钟还是pending，可能是worker没有运行
+              if (pollCount > 60 && statusResponse.status === "pending") {
+                console.warn("[图像分析] 任务已创建2分钟但仍未开始，可能 Celery worker 未运行");
+                // 显示警告但继续等待
+                setError("任务正在等待处理中...如果长时间无响应，请检查 Celery worker 是否运行");
+              }
+            }
+          } catch (err) {
+            console.error("查询任务状态失败:", err);
+            cleanupPolling();
+            setComprehensiveLoading(false);
+            setError(`查询任务状态失败: ${err instanceof Error ? err.message : "未知错误"}`);
+          }
+        }, 2000); // 每2秒轮询一次
+      } 
+      // 如果返回的是直接结果（同步模式，向后兼容）
+      else if ((taskResponse as any).step1 || (taskResponse as any).step2 || (taskResponse as any).step3) {
+        setComprehensiveResults(taskResponse);
+        setComprehensiveLoading(false);
+        setComprehensiveProgress(100);
+        
+        // 更新服务器上的结果
+        await updateComprehensiveResultsToServer(taskResponse);
+      }
+      else {
+        throw new Error("未知的响应格式");
+      }
+    } catch (err) {
+      console.error("图像分析失败:", err);
+      const errorMessage = err instanceof Error ? err.message : "未知错误";
+      setError(`图像分析失败: ${errorMessage}`);
+      setComprehensiveLoading(false);
+      setShowComprehensive(true); // 确保显示错误信息
+    }
+  };
+
+  // 用户点击确认按钮后开始处理
+  const handleConfirmAndProcess = useCallback(async () => {
+    if (!imagePreview || !imageFile) {
+      setError("请先上传图片");
+      return;
+    }
+    
+    // 清除之前的状态，开始新的分析
+    setResults(null);
+    setComprehensiveResults(null);
+    setShowComprehensive(true); // 直接显示分析结果区域
+    setComprehensiveLoading(true);
+    setComprehensiveProgress(0);
+    setSavedResultId(null);
+    savedResultIdRef.current = null;
+    setCurrentTaskId(null);
+    setIsViewMode(false);
+    setError(null);
+    
+    // 清理之前的轮询
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+    
+    try {
+      // 使用 useImageUpload Hook 的压缩功能
+      const { file: compressedFile, dataUrl: compressedDataUrl } = await handleImageConfirm();
+      
+      // 设置原始图片
+      setOriginalImage(compressedDataUrl);
+      
+      // 直接调用后端分析API（固定5步流程）- 使用文件而不是 base64
+      await handleComprehensiveAnalysis(compressedFile);
+    } catch (err) {
+      console.error("图片处理失败:", err);
+      // 错误已经在 useImageUpload Hook 中处理
+      // 如果压缩失败，尝试使用原始文件继续处理
+      if (imageFile) {
+        try {
+          const originalDataUrl = await fileToDataURL(imageFile);
+          setOriginalImage(originalDataUrl);
+          await handleComprehensiveAnalysis(imageFile);
+        } catch (fallbackErr) {
+          console.error("使用原始文件也失败:", fallbackErr);
+          setError("图片处理失败，请重新上传");
+        }
+      }
+    }
+  }, [imagePreview, imageFile, handleImageConfirm, handleComprehensiveAnalysis]);
+  
+  // 组件卸载时清理轮询和内存
+  useEffect(() => {
+    return () => {
+      // 清理轮询定时器
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+      // 清理大型图片数据，释放内存
+      setOriginalImage(null);
+      clearUpload();
+      setResults(null);
+      setComprehensiveResults(null);
+      setSavedResultData(null);
+    };
+  }, []);
+
+  const handleDelete = useCallback(async () => {
+    const idToDelete = resultId || savedResultId;
+    if (!idToDelete || isDeleting) return;
+    
+    setIsDeleting(true);
+    try {
+      await deleteVisualAnalysisResult(idToDelete);
+      handleCloseDeleteConfirm();
+      
+      // 清除所有状态，回到上传页面
+      setOriginalImage(null);
+      clearUpload();
+      setResults(null);
+      setComprehensiveResults(null);
+      setShowComprehensive(false);
+      setComprehensiveLoading(false);
+      setComprehensiveProgress(0);
+      setSavedResultId(null);
+      savedResultIdRef.current = null;
+      setCurrentTaskId(null);
+      setIsViewMode(false);
+      setError(null);
+      setCheckingExistingResult(false);
+      
+      // 清理轮询
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+
+      // 清除上传状态（已经由 useImageUpload Hook 处理）
+
+      // 清除API缓存（如果使用了缓存）
+      try {
+        const { clearCache } = await import("@/utils/apiCache");
+        // 清除所有视觉分析相关的缓存
+        clearCache("/visual-analysis/");
+      } catch (err) {
+        // 忽略缓存清除错误
+        console.warn("[VisualAnalysis] 清除缓存失败:", err);
+      }
+    } catch (err) {
+      console.error("[VisualAnalysis] Failed to delete result:", err);
+      if (typeof window !== "undefined" && typeof window.alert === "function") {
+        window.alert("删除失败，请稍后重试");
+      }
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [resultId, savedResultId, isDeleting, handleCloseDeleteConfirm]);
+
+  const topNavActions = useMemo<TopNavAction[]>(
+    () => resultId ? [
+      {
+        icon: "more_vert",
+        label: "更多操作",
+        onClick: handleToggleMenu,
+        className: "visual-analysis-menu__trigger",
+      },
+    ] : [],
+    [handleToggleMenu, resultId],
+  );
+
+  return (
+    <div className="visual-analysis">
+      <div className="visual-analysis__topbar">
+        <TopNav
+          className="top-nav--fixed top-nav--flush"
+          leadingAction={{
+            icon: "arrow_back",
+            label: "返回",
+            onClick: onBack,
+          }}
+          title="视觉分析"
+          subtitle="Visual Analysis"
+          trailingActions={topNavActions}
+          trailingSlot={
+            results && !isViewMode && !resultId && (
+              <button
+                type="button"
+                className="visual-analysis__save-button"
+                onClick={handleSave}
+                aria-label="保存结果"
+                title="保存结果"
+              >
+                <MaterialIcon name="save" />
+              </button>
+            )
+          }
+        />
+        {resultId && (
+          <VisualAnalysisMenu
+            open={menuOpen}
+            onDelete={handleOpenDeleteConfirm}
+          />
+        )}
+      </div>
+
+      <main className="visual-analysis__content">
+        {checkingExistingResult ? (
+          <div className="visual-analysis__loading">
+            <MaterialIcon name="hourglass_empty" className="visual-analysis__loading-icon" />
+            <p>正在检查已有分析...</p>
+          </div>
+        ) : loadingSavedResult ? (
+          <div className="visual-analysis__loading">
+            <MaterialIcon name="hourglass_empty" className="visual-analysis__loading-icon" />
+            <p>正在加载保存的结果...</p>
+          </div>
+        ) : !originalImage && !results && !loadingSavedResult ? (
+          <ImageUploadArea
+            onFileSelect={handleFileSelectWrapped}
+            preview={imagePreview}
+            onConfirm={handleConfirmAndProcess}
+            onCancel={clearUpload}
+            opencvReady={opencvReady}
+            loading={loading}
+            compressing={isCompressing}
+          />
+        ) : (
+          <>
+            {error && (
+              <div className="visual-analysis__error" role="alert">
+                {error}
+              </div>
+            )}
+
+            {loading && (
+              <div className="visual-analysis__loading">
+                <MaterialIcon name="hourglass_empty" className="visual-analysis__loading-icon" />
+                <p>正在处理图像（基础分析）...</p>
+              </div>
+            )}
+
+            {/* 专业分析结果 */}
+            {(showComprehensive || comprehensiveLoading || (isViewMode && (comprehensiveResults || results))) && (
+              <div style={{ marginTop: "2rem" }}>
+                {comprehensiveLoading ? (
+                  <div className="visual-analysis__loading">
+                    <MaterialIcon name="hourglass_empty" className="visual-analysis__loading-icon" />
+                    <p>正在进行专业分析，请稍候...</p>
+                    {comprehensiveProgress > 0 && (
+                      <div style={{ marginTop: "1rem", width: "100%", maxWidth: "400px" }}>
+                        <div style={{ 
+                          width: "100%", 
+                          height: "8px", 
+                          backgroundColor: "rgba(255, 255, 255, 0.1)", 
+                          borderRadius: "4px",
+                          overflow: "hidden"
+                        }}>
+                          <div style={{
+                            width: `${comprehensiveProgress}%`,
+                            height: "100%",
+                            backgroundColor: "#98dbc6",
+                            transition: "width 0.3s ease"
+                          }} />
+                        </div>
+                        <p style={{ marginTop: "0.5rem", fontSize: "0.9rem", color: "rgba(239, 234, 231, 0.7)" }}>
+                          {comprehensiveProgress}%
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ) : (comprehensiveResults || results) ? (
+                  <VisualAnalysisComprehensive 
+                    results={comprehensiveResults}
+                    basicResults={results}
+                    savedResult={savedResultData}
+                    selectedThreshold={selectedThreshold}
+                    onThresholdChange={handleThresholdChange}
+                    onDeleteAndRestart={handleOpenDeleteConfirm}
+                  />
+                ) : isViewMode && results ? (
+                  <div style={{ marginTop: "2rem" }}>
+                    <div className="visual-analysis__error" role="alert" style={{ marginBottom: "1rem" }}>
+                      此报告没有专业分析结果。只显示基础分析数据。
+                    </div>
+                    {/* 即使没有专业分析，也显示基础分析结果 */}
+                    {(() => {
+                      const basicResults = results as Partial<VisualAnalysisResult>;
+                      return basicResults.originalImage && (
+                      <div style={{ 
+                        display: "grid", 
+                        gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", 
+                        gap: "1.5rem",
+                        marginTop: "1rem"
+                      }}>
+                        <div>
+                          <h3 style={{ marginBottom: "0.5rem", color: "rgba(239, 234, 231, 0.8)" }}>原图</h3>
+                            <img src={basicResults.originalImage} alt="原图" style={{ width: "100%", borderRadius: "0.5rem" }} />
+                        </div>
+                          {basicResults.step1Binary && (
+                          <div>
+                            <h3 style={{ marginBottom: "0.5rem", color: "rgba(239, 234, 231, 0.8)" }}>二值化</h3>
+                              <img src={basicResults.step1Binary} alt="二值化" style={{ width: "100%", borderRadius: "0.5rem" }} />
+                          </div>
+                        )}
+                          {basicResults.step2Grayscale && (
+                          <div>
+                            <h3 style={{ marginBottom: "0.5rem", color: "rgba(239, 234, 231, 0.8)" }}>灰度</h3>
+                              <img src={basicResults.step2Grayscale} alt="灰度" style={{ width: "100%", borderRadius: "0.5rem" }} />
+                          </div>
+                        )}
+                          {basicResults.step3LabL && (
+                          <div>
+                            <h3 style={{ marginBottom: "0.5rem", color: "rgba(239, 234, 231, 0.8)" }}>LAB L通道</h3>
+                              <img src={basicResults.step3LabL} alt="LAB L" style={{ width: "100%", borderRadius: "0.5rem" }} />
+                          </div>
+                        )}
+                          {basicResults.step4HlsS && (
+                          <div>
+                            <h3 style={{ marginBottom: "0.5rem", color: "rgba(239, 234, 231, 0.8)" }}>HLS饱和度</h3>
+                              <img src={basicResults.step4HlsS} alt="HLS S" style={{ width: "100%", borderRadius: "0.5rem" }} />
+                          </div>
+                        )}
+                          {basicResults.step5Hue && (
+                          <div>
+                            <h3 style={{ marginBottom: "0.5rem", color: "rgba(239, 234, 231, 0.8)" }}>色相</h3>
+                              <img src={basicResults.step5Hue} alt="色相" style={{ width: "100%", borderRadius: "0.5rem" }} />
+                          </div>
+                        )}
+                      </div>
+                      );
+                    })()}
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </>
+        )}
+      </main>
+
+      <DeleteConfirmModal
+        open={showDeleteConfirm && !!(resultId || savedResultId)}
+        isDeleting={isDeleting}
+        onConfirm={handleDelete}
+        onCancel={handleCloseDeleteConfirm}
+      />
+    </div>
+  );
+}
+
+export default VisualAnalysis;
+
+

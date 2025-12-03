@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <meta name="theme-color" content="#000000" />
+    <meta name="description" content="Echo - 您的创作与目标管理应用" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Echo" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <link rel="apple-touch-startup-image" href="/icon-512.png" />
+    <title>Echo</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // 注册 Service Worker
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js', { scope: '/' })
+            .then((registration) => {
+              console.log('✅ Service Worker 注册成功:', registration.scope);
+              // 检查更新
+              registration.update();
+            })
+            .catch((registrationError) => {
+              console.error('❌ Service Worker 注册失败:', registrationError);
+              console.error('请检查:');
+              console.error('1. sw.js 文件是否存在于 public 目录');
+              console.error('2. 文件路径是否正确 (/sw.js)');
+              console.error('3. 服务器是否正确提供该文件');
+            });
+        });
+      } else {
+        console.warn('⚠️ 浏览器不支持 Service Worker');
+      }
+    </script>
+  </body>
+</html>

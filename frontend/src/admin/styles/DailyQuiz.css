@@ -1,0 +1,312 @@
+.daily-quiz-page {
+  padding: 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+  color: #f5f7ff;
+}
+
+.daily-quiz-page__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.daily-quiz-page__title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.daily-quiz-page__create-button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: #98dbc6;
+  color: #221b1b;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+
+.daily-quiz-page__create-button:hover:not(:disabled) {
+  background: #87d7d8;
+}
+
+.daily-quiz-page__create-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.daily-quiz-page__error {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  background: #ffebee;
+  color: #c62828;
+  border-radius: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.daily-quiz-page__form {
+  background: rgba(20, 24, 40, 0.6);
+  padding: 1.5rem;
+  border-radius: 0.5rem;
+  margin-bottom: 2rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.daily-quiz-page__form-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0 0 1.5rem 0;
+}
+
+.daily-quiz-page__form-section {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: rgba(14, 18, 34, 0.8);
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.daily-quiz-page__form-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 1rem;
+}
+
+.daily-quiz-page__form-section-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.daily-quiz-page__form-row {
+  margin-bottom: 1rem;
+}
+
+.daily-quiz-page__form-label {
+  display: block;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+
+.daily-quiz-page__form-required {
+  color: #c62828;
+}
+
+.daily-quiz-page__form-input,
+.daily-quiz-page__form-textarea,
+.daily-quiz-page__form-select {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.25rem;
+  font-size: 1rem;
+  font-family: inherit;
+  background: rgba(9, 10, 20, 0.6);
+  color: #f5f7ff;
+}
+
+.daily-quiz-page__form-input::placeholder,
+.daily-quiz-page__form-textarea::placeholder {
+  color: rgba(245, 247, 255, 0.4);
+}
+
+.daily-quiz-page__form-textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.daily-quiz-page__form-actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.daily-quiz-page__form-button {
+  padding: 0.5rem 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.5rem;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s;
+  background: rgba(14, 18, 34, 0.8);
+  color: #f5f7ff;
+}
+
+.daily-quiz-page__form-button--primary {
+  background: #7b8cff;
+  color: #f5f7ff;
+  border-color: #7b8cff;
+}
+
+.daily-quiz-page__form-button--primary:hover:not(:disabled) {
+  background: #6b7eff;
+}
+
+.daily-quiz-page__form-button:hover:not(:disabled) {
+  background: rgba(20, 24, 40, 0.8);
+}
+
+.daily-quiz-page__form-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.daily-quiz-page__option-card {
+  background: rgba(9, 10, 20, 0.6);
+  padding: 1rem;
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.daily-quiz-page__option-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.daily-quiz-page__option-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.daily-quiz-page__option-remove {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  background: #ffebee;
+  color: #c62828;
+  border: 1px solid #c62828;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+}
+
+.daily-quiz-page__option-remove:hover {
+  background: #ffcdd2;
+}
+
+.daily-quiz-page__image-preview {
+  margin-top: 0.5rem;
+  max-width: 300px;
+}
+
+.daily-quiz-page__image-preview img {
+  width: 100%;
+  height: auto;
+  border-radius: 0.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.daily-quiz-page__loading {
+  text-align: center;
+  padding: 2rem;
+}
+
+.daily-quiz-page__list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.daily-quiz-page__item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 1.5rem;
+  background: rgba(14, 18, 34, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.5rem;
+  transition: box-shadow 0.2s;
+}
+
+.daily-quiz-page__item:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.daily-quiz-page__item-content {
+  flex: 1;
+}
+
+.daily-quiz-page__item-header {
+  margin-bottom: 0.5rem;
+}
+
+.daily-quiz-page__item-date {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0;
+  color: #7b8cff;
+}
+
+.daily-quiz-page__item-question {
+  color: rgba(245, 247, 255, 0.7);
+  font-size: 0.875rem;
+  margin: 0.5rem 0;
+}
+
+.daily-quiz-page__item-meta {
+  display: flex;
+  gap: 1rem;
+  color: rgba(245, 247, 255, 0.5);
+  font-size: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.daily-quiz-page__item-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-left: 1rem;
+}
+
+.daily-quiz-page__item-button {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.5rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+  background: rgba(14, 18, 34, 0.8);
+  color: #f5f7ff;
+}
+
+.daily-quiz-page__item-button:hover:not(:disabled) {
+  background: rgba(20, 24, 40, 0.8);
+}
+
+.daily-quiz-page__item-button--danger {
+  color: #c62828;
+  border-color: #c62828;
+}
+
+.daily-quiz-page__item-button--danger:hover:not(:disabled) {
+  background: #ffebee;
+}
+
+.daily-quiz-page__item-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.daily-quiz-page__empty {
+  text-align: center;
+  padding: 3rem;
+  color: rgba(245, 247, 255, 0.5);
+}
+

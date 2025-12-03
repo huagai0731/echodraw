@@ -1,0 +1,175 @@
+.check-in-card {
+  position: relative;
+}
+
+.check-in-card__button {
+  position: relative;
+  display: flex;
+  gap: 1rem;
+  padding: 1.25rem;
+  border-radius: 1rem;
+  background: rgba(74, 63, 58, 0.5);
+  border: 1px solid rgba(152, 219, 198, 0.25);
+  backdrop-filter: blur(16px);
+  color: inherit;
+  cursor: pointer;
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease,
+    border-color 0.25s ease;
+  text-align: left;
+  width: 100%;
+  overflow: hidden;
+}
+
+.check-in-card__button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(152, 219, 198, 0.45);
+}
+
+.check-in-card__button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.check-in-card__button:focus-visible {
+  outline: 2px solid rgba(152, 219, 198, 0.6);
+  outline-offset: 2px;
+}
+
+.check-in-card__button:disabled {
+  cursor: not-allowed;
+  opacity: 0.8;
+}
+
+.check-in-card__button--checked {
+  border-color: rgba(152, 219, 198, 0.6);
+  box-shadow: 0 0 42px rgba(152, 219, 198, 0.28);
+}
+
+.check-in-card__button--checked:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 0 52px rgba(152, 219, 198, 0.35);
+}
+
+.check-in-card__button--loading {
+  pointer-events: none;
+}
+
+.check-in-card__icon {
+  font-size: 2rem;
+  color: #98dbc6;
+  flex-shrink: 0;
+  transition: transform 0.3s ease;
+}
+
+.check-in-card__button--checked .check-in-card__icon {
+  animation: checkInSuccess 0.6s ease-out;
+}
+
+@keyframes checkInSuccess {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.2) rotate(5deg);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.check-in-card__spinner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.check-in-card__spinner-icon {
+  font-size: 1.5rem;
+  color: rgba(152, 219, 198, 0.8);
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.check-in-card__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.check-in-card__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 500;
+  color: #ffffff;
+}
+
+.check-in-card__description {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 300;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.check-in-card__error {
+  margin-top: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.check-in-card__error-text {
+  margin: 0;
+  font-size: 0.875rem;
+  color: rgba(239, 68, 68, 0.9);
+  flex: 1;
+}
+
+.check-in-card__retry-button {
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.375rem;
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: rgba(239, 68, 68, 0.9);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.check-in-card__retry-button:hover {
+  background: rgba(239, 68, 68, 0.3);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.check-in-card__retry-button:active {
+  transform: scale(0.98);
+}
+
+.check-in-card__retry-button:focus-visible {
+  outline: 2px solid rgba(239, 68, 68, 0.5);
+  outline-offset: 2px;
+}
+

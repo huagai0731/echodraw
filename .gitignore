@@ -1,0 +1,83 @@
+# Node
+frontend/node_modules/
+frontend/dist/
+npm-debug.log
+*.log
+
+# Python
+backend/.env
+backend/.env.local
+backend/.env.development
+frontend/.env
+frontend/.env.local
+.env
+.env.local
+.env.development
+backend/.venv/
+backend/__pycache__/
+*.pyc
+backend/db.sqlite3
+backend/data.json
+backend/logs/
+backend/media/
+backend/static/
+
+# 旧项目目录（不应该提交）
+echodraw-master/
+
+# 字体文件（如果已经在仓库中，考虑使用 CDN 或子模块）
+*.ttf
+*.otf
+*.woff
+*.woff2
+
+# 但允许前端 public 目录中的字体文件（项目资源）
+!frontend/public/**/*.ttf
+!frontend/public/**/*.otf
+!frontend/public/**/*.woff
+!frontend/public/**/*.woff2
+
+# 大文件（排除 src/assets 和 public 中的资源文件）
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.gif
+*.mp4
+*.mov
+*.avi
+
+# 但允许前端资源文件
+!frontend/src/assets/*.jpg
+!frontend/src/assets/*.png
+!frontend/src/assets/*.webp
+!frontend/public/**/*.jpg
+!frontend/public/**/*.png
+!frontend/public/**/*.webp
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# 临时文件
+*.tmp
+*.temp
+*~
+
+# 本地数据文件
+local_data.json
+
+# 临时脚本/调试文件
+backend/delete
+backend/qc
+backend/query
+backend/stop
+
+# Git 备份目录
+.git_backup/
+.git_backup_final/
+.git_backup_before_cleanup/
+.git_backup_before_filter/

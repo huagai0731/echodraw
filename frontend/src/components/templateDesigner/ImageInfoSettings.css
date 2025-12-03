@@ -1,0 +1,28 @@
+.image-info-settings__size-options {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.image-info-settings__size-option {
+  padding: 0.5rem 1rem;
+  border: 1px solid rgba(239, 234, 231, 0.2);
+  background: rgba(239, 234, 231, 0.05);
+  color: rgba(239, 234, 231, 0.8);
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.image-info-settings__size-option:hover {
+  background: rgba(239, 234, 231, 0.1);
+  border-color: rgba(152, 219, 198, 0.4);
+}
+
+.image-info-settings__size-option--active {
+  background: rgba(152, 219, 198, 0.2);
+  border-color: #98dbc6;
+  color: #98dbc6;
+  font-weight: 500;
+}
+
