@@ -1031,7 +1031,7 @@ function Goals() {
         saveCachedLongTermGoal(updatedGoal);
       } catch (error) {
         console.error("Failed to update checkpoint showcase", error);
-        setError("更新检查点展示图片失败，请稍后重试");
+        setLongTermError("更新检查点展示图片失败，请稍后重试");
       }
     },
     [longTermGoal, activeLongTermGoal],
@@ -1052,7 +1052,7 @@ function Goals() {
         saveCachedLongTermGoal(updatedGoal);
       } catch (error) {
         console.error("Failed to update checkpoint message", error);
-        setError("更新检查点留言失败，请稍后重试");
+        setLongTermError("更新检查点留言失败，请稍后重试");
       }
     },
     [longTermGoal, activeLongTermGoal],
@@ -1078,11 +1078,11 @@ function Goals() {
         
         // 关闭弹窗，打开详情页，并设置自动滚动标志
         setShowFinalCheckpointImageModal(false);
-        setActiveLongTermGoal({ ...updatedGoal, _scrollToLastCheckpoint: true });
+        setActiveLongTermGoal({ ...updatedGoal, _scrollToLastCheckpoint: true } as LongTermGoal & { _scrollToLastCheckpoint?: boolean });
         setCompletingGoal(null);
       } catch (error) {
         console.error("Failed to update final checkpoint showcase", error);
-        setError("更新最后检查点图片失败，请稍后重试");
+        setLongTermError("更新最后检查点图片失败，请稍后重试");
       }
     },
     [completingGoal],

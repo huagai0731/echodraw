@@ -253,3 +253,4 @@ CMD ["sh", "-c", "python manage.py migrate --noinput && python ensure_migrations
 3. 检查迁移文件历史
 4. 联系技术支持
 
+

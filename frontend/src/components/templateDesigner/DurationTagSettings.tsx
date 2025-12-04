@@ -15,7 +15,7 @@ type DurationTagSettingsProps = {
 export function DurationTagSettings({ state, onChange }: DurationTagSettingsProps) {
   const [collapsed, setCollapsed] = useState(false);
 
-  const handleChange = (key: keyof DurationTagSettingsState, value: boolean | number) => {
+  const handleChange = (key: keyof DurationTagSettingsState, value: boolean) => {
     onChange({ ...state, [key]: value });
   };
 

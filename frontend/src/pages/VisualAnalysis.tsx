@@ -38,7 +38,7 @@ import {
   processSavedResultUrls,
   type VisualAnalysisProps,
   type VisualAnalysisResult,
-} from "./visualAnalysis";
+} from "./visualAnalysis/index";
 
 function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
   // ==================== 基础状态 ====================
@@ -122,7 +122,7 @@ function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
   // ==================== 已有结果检查 ====================
   useExistingResultCheck(resultId, {
     onLoadResult: loadResultWithGrayscaleLevels,
-    onSetSavedResultId: (id) => {
+    onSetSavedResultId: (id: number) => {
       setSavedResultId(id);
       savedResultIdRef.current = id;
     },
@@ -135,18 +135,20 @@ function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
     onSetError: setError,
     onSetLoadingSavedResult: setLoadingSavedResult,
     onSetCheckingExistingResult: setCheckingExistingResult,
-    onStartPolling: (taskId, progress) => {
+    onStartPolling: (taskId: string, progress: number) => {
       setCurrentTaskId(taskId);
       setComprehensiveProgress(progress);
       startPolling(taskId, {
-        onProgress: setComprehensiveProgress,
-        onSuccess: async (result) => {
+        onProgress: (progress: number) => {
+          setComprehensiveProgress(progress);
+        },
+        onSuccess: async (result: import("./visualAnalysis/index").SavedResultData) => {
           await loadResultWithGrayscaleLevels(result);
           setComprehensiveLoading(false);
           setComprehensiveProgress(100);
           setIsViewMode(true);
         },
-        onError: (err) => {
+        onError: (err: string) => {
           setError(err);
           setComprehensiveLoading(false);
         },
@@ -234,10 +236,10 @@ function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
 
         // 使用模块化的轮询
         startPolling(taskId, {
-          onProgress: (progress) => {
+          onProgress: (progress: number) => {
             setComprehensiveProgress(progress);
           },
-          onSuccess: async (result) => {
+          onSuccess: async (result: import("./visualAnalysis/index").SavedResultData) => {
             setSavedResultId(result.id);
             savedResultIdRef.current = result.id;
             await loadResultWithGrayscaleLevels(result);
@@ -250,7 +252,7 @@ function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
             setIsViewMode(true);
             console.log("[图像分析] 任务完成，结果已加载");
           },
-          onError: (err) => {
+          onError: (err: string) => {
             setError(err);
             setComprehensiveLoading(false);
           },
@@ -576,7 +578,7 @@ function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
                     savedResult={savedResultData}
                     selectedThreshold={selectedThreshold}
                     onThresholdChange={handleThresholdChange}
-                    onDeleteAndRestart={() => setShowDeleteConfirm(true)}
+                    onDeleteAndRestart={handleOpenDeleteConfirm}
                   />
                 ) : isViewMode && results ? (
                   <div style={{ marginTop: "2rem" }}>

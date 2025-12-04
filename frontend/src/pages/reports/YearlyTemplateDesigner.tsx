@@ -497,7 +497,7 @@ function YearlyTemplateDesigner({ open, artworks, onClose }: YearlyTemplateDesig
 
       // 创建一个新的 canvas 用于导出，避免污染原始 canvas
       const exportCanvas = document.createElement("canvas");
-      const exportCanvasHeight = imageSizePreset === "square" ? CANVAS_HEIGHT_SQUARE : CANVAS_HEIGHT_RECTANGLE;
+      const exportCanvasHeight = imageInfoSettings.imageSizePreset === "square" ? CANVAS_HEIGHT_SQUARE : CANVAS_HEIGHT_RECTANGLE;
       exportCanvas.width = CANVAS_WIDTH;
       exportCanvas.height = exportCanvasHeight;
       const exportContext = exportCanvas.getContext("2d");
@@ -517,7 +517,7 @@ function YearlyTemplateDesigner({ open, artworks, onClose }: YearlyTemplateDesig
           });
         } else {
           setTimeout(() => {
-            drawTemplate(exportContext, CANVAS_WIDTH, exportCanvasHeight, templateData, reloadedGridImages, artworks, selectedYear, imageSizePreset);
+            drawTemplate(exportContext, CANVAS_WIDTH, exportCanvasHeight, templateData, reloadedGridImages, artworks, selectedYear, imageInfoSettings.imageSizePreset);
             resolve();
           }, 150);
         }

@@ -1,5 +1,5 @@
 // 表单管理 Hook - 处理表单字段、验证和提交
-import { useState, useCallback, useMemo, ChangeEvent } from "react";
+import { useState, useCallback, useMemo, type ChangeEvent } from "react";
 
 type FormField<T> = {
   value: T;

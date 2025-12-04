@@ -6,7 +6,6 @@ import TopNav from "@/components/TopNav";
 import type { LongTermGoal, LongTermGoalCheckpoint } from "@/services/api";
 import type { Artwork } from "@/types/artwork";
 import { loadStoredArtworks, USER_ARTWORKS_CHANGED_EVENT } from "@/services/artworkStorage";
-import type { Artwork } from "@/types/artwork";
 import { replaceLocalhostInUrl } from "@/utils/urlUtils";
 import html2canvas from "html2canvas";
 
@@ -280,7 +279,7 @@ function LongTermGoalDetails({
         // 查找对应的画作序号
         const artworkIndex = sortedArtworks.findIndex(art => {
           const numericId = art.id.replace(/^art-/, "");
-          return Number.parseInt(numericId, 10) === checkpoint.upload.id;
+          return checkpoint.upload && Number.parseInt(numericId, 10) === checkpoint.upload.id;
         });
         const displayIndex = artworkIndex >= 0 ? artworkIndex + 1 : 0;
         
@@ -1754,7 +1753,7 @@ function NineGridModal({ imageUrl, goal, onClose, onConfirm }: NineGridModalProp
   const startDate = goal.startedAt ? new Date(goal.startedAt) : null;
   const endDate = goal.checkpoints && goal.checkpoints.length > 0
     ? goal.checkpoints[goal.checkpoints.length - 1]?.reachedAt
-      ? new Date(goal.checkpoints[goal.checkpoints.length - 1].reachedAt)
+      ? new Date(goal.checkpoints[goal.checkpoints.length - 1].reachedAt!)
       : new Date()
     : new Date();
   const days = startDate ? Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) : 0;
