@@ -359,6 +359,7 @@ function Profile({
 
     let cancelled = false;
     let requestAbortController: AbortController | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
     const loadPreferences = async () => {
       // 取消之前的请求
@@ -376,6 +377,14 @@ function Profile({
         setDisplayName(stored.displayName);
         setSignature(stored.signature);
       }
+
+      // 设置超时，在500ms后显示按钮（即使API还没完成）
+      // 这样可以避免在云服务器上因为API响应慢而导致按钮长时间不显示
+      timeoutId = setTimeout(() => {
+        if (!cancelled && !requestAbortController?.signal.aborted) {
+          setMembershipTierLoading(false);
+        }
+      }, 500);
 
       try {
         const preferences = await fetchProfilePreferences();
@@ -408,6 +417,11 @@ function Profile({
           }
           // 加载完成，设置加载状态为false
           setMembershipTierLoading(false);
+          // 清除超时，因为已经完成了
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = null;
+          }
         }
       } catch (error) {
         if (!cancelled && !requestAbortController.signal.aborted) {
@@ -417,12 +431,21 @@ function Profile({
             if (httpError.response?.status === 401) {
               // Token过期，不更新状态，让上层处理
               setMembershipTierLoading(false);
+              if (timeoutId) {
+                clearTimeout(timeoutId);
+                timeoutId = null;
+              }
               return;
             }
           }
           console.warn("[Echo] Failed to load profile preferences:", error);
           // 加载失败，也设置加载状态为false
           setMembershipTierLoading(false);
+          // 清除超时
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = null;
+          }
           // 只有在没有本地缓存时才使用默认值
           const hasStored = loadStoredPreferences(userEmail);
           if (!hasStored) {
@@ -444,6 +467,9 @@ function Profile({
       cancelled = true;
       if (requestAbortController) {
         requestAbortController.abort();
+      }
+      if (timeoutId) {
+        clearTimeout(timeoutId);
       }
     };
   }, [userEmail]);
