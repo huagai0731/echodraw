@@ -1404,6 +1404,9 @@ export type UpdateUserUploadInput = {
   moodId?: number | null; // 使用ID而不是字符串
   selfRating?: number;
   durationMinutes?: number;
+  collectionId?: string | null;
+  collectionName?: string | null;
+  collectionIndex?: number | null;
 };
 
 export async function updateUserUpload(id: number, input: UpdateUserUploadInput) {

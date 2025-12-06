@@ -13,6 +13,10 @@ export type Artwork = {
   uploadedAt?: string | null;
   uploadedDate?: string | null;
   durationMinutes?: number | null;
+  collectionId?: string | null;
+  collectionName?: string | null;
+  collectionIndex?: number | null;
+  incrementalDurationMinutes?: number | null;
 };
 
 

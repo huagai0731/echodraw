@@ -9,6 +9,8 @@ export type UploadState = {
   rating: number;
   durationHours: number;
   durationMinutes: number;
+  collectionId?: string | null;
+  collectionName?: string | null;
 };
 
 export type ValidationError = {

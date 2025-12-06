@@ -26,7 +26,11 @@ export function useTagManager() {
       setSelectedTags((prev) => {
         const optionIds = new Set(options.map((option) => option.id));
         // 只保留已经选择的tag
-        const retained = prev.filter((id) => optionIds.has(id));
+        const retained = prev.filter((id) => {
+          // 确保类型匹配：optionIds 是 Set<number>，需要将 id 转换为 number 进行比较
+          const numId = typeof id === 'string' ? Number(id) : id;
+          return typeof numId === 'number' && optionIds.has(numId);
+        });
         
         // 如果是首次加载且没有已选择的标签，自动选中defaultActive为true的标签
         if (isInitialLoadRef.current && retained.length === 0) {

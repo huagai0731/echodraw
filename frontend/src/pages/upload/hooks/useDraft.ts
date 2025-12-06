@@ -51,8 +51,8 @@ export function useDraft(
           rating: uploadState.rating,
           durationHours: uploadState.durationHours,
           durationMinutes: uploadState.durationMinutes,
-          collectionId: uploadState.collectionId,
-          collectionName: uploadState.collectionName,
+          collectionId: uploadState.collectionId ?? null,
+          collectionName: uploadState.collectionName ?? null,
           imageInfo: uploadState.file
             ? {
                 name: uploadState.file.name,

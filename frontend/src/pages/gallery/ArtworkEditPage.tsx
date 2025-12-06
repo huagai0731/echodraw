@@ -325,7 +325,6 @@ export function ArtworkEditPage({ artwork, onBack, onSave }: ArtworkEditPageProp
               minutes={durationMinutes}
               totalMinutes={durationTotalMinutes}
               formattedDuration={formattedDuration}
-              incrementalDuration={null}
               onChange={(hours, minutes) => {
                 setDurationHours(hours);
                 setDurationMinutes(minutes);

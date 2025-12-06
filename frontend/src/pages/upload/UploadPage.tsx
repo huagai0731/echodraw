@@ -29,6 +29,10 @@ export type UploadResult = {
   rating: number;
   durationMinutes: number;
   previewDataUrl: string | null;
+  collectionId?: string | null;
+  collectionName?: string | null;
+  collectionIndex?: number | null;
+  incrementalDurationMinutes?: number | null;
 };
 
 type UploadPageProps = {
