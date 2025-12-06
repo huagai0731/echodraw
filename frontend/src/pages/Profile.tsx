@@ -320,9 +320,17 @@ function Profile({
   }, [forcedLogoutVersion, handledForcedLogoutVersion, auth]);
 
   const handleAuthSuccess = useCallback(async (payload: AuthPayload) => {
+    // 清除旧的缓存，确保新用户不会看到之前用户的数据
+    // 注意：必须在设置 auth 之前清除，避免清除刚保存的登录状态
+    clearAllUserCache();
+    
     // 立即设置 token，确保数据加载时 token 已经可用
     setAuthToken(payload.token);
     setAuth(payload);
+    // 立即保存登录状态到 localStorage，避免被清除
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    }
     setCachedEmail(payload.user.email);
     // 注册成功后跳转到首页，而不是我的页面
     // 触发事件通知UserApp跳转到首页
@@ -330,8 +338,6 @@ function Profile({
       window.dispatchEvent(new CustomEvent("echodraw-navigate-to-home"));
     }
     setView("dashboard");
-    // 清除旧的缓存，确保新用户不会看到之前用户的数据
-    clearAllUserCache();
     
     // 从服务器加载展示作品列表
     try {
