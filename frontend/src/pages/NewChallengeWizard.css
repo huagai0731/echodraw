@@ -221,8 +221,37 @@
   background: #98dbc6;
 }
 
-.wizard-duration__hint {
+.wizard-duration__hint-wrapper {
   margin-top: 1.5rem;
+}
+
+.wizard-duration__hint-button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid rgba(239, 234, 231, 0.2);
+  border-radius: 0.5rem;
+  background: rgba(74, 63, 58, 0.2);
+  color: rgba(239, 234, 231, 0.8);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 100%;
+  justify-content: center;
+}
+
+.wizard-duration__hint-button:hover {
+  background: rgba(74, 63, 58, 0.35);
+  border-color: rgba(239, 234, 231, 0.3);
+}
+
+.wizard-duration__hint-button:active {
+  background: rgba(74, 63, 58, 0.4);
+}
+
+.wizard-duration__hint {
+  margin-top: 1rem;
   padding: 1.2rem 1.4rem;
   border-radius: 1rem;
   background: rgba(74, 63, 58, 0.25);

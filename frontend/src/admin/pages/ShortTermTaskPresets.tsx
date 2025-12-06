@@ -172,7 +172,7 @@ function ShortTermTaskPresetsPage() {
       <header className="admin-task-presets__header">
         <div>
           <h2>短期任务预设</h2>
-          <p>为用户配置创建短期挑战时可选的任务模板。</p>
+          <p>为用户配置创建短期目标时可选的任务模板。</p>
         </div>
         <button
           type="button"

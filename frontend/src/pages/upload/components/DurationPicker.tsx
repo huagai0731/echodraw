@@ -6,7 +6,6 @@ type DurationPickerProps = {
   minutes: number;
   totalMinutes: number;
   formattedDuration: string;
-  incrementalDuration: string | null;
   onChange: (hours: number, minutes: number) => void;
 };
 
@@ -114,7 +113,6 @@ export function DurationPicker({
   minutes,
   totalMinutes: _totalMinutes,
   formattedDuration,
-  incrementalDuration,
   onChange,
 }: DurationPickerProps) {
   const handleHourChange = (next: number) => {
@@ -186,18 +184,6 @@ export function DurationPicker({
       <p className="upload-duration__hint">
         支持 5 分钟刻度
       </p>
-      {incrementalDuration && (
-        <p
-          className="upload-duration__incremental"
-          style={{
-            color: "#98dbc6",
-            fontSize: "0.9rem",
-            marginTop: "0.5rem",
-          }}
-        >
-          本次新增：{incrementalDuration}
-        </p>
-      )}
     </section>
   );
 }

@@ -154,16 +154,65 @@ export function setAuthToken(token: string | null) {
       delete api.defaults.headers.common.Authorization;
       delete longTimeoutApi.defaults.headers.common.Authorization;
       currentAuthToken = null;
+      // 清除localStorage中的token
+      try {
+        if (typeof window !== "undefined") {
+          const raw = window.localStorage.getItem(AUTH_STORAGE_KEY);
+          if (raw) {
+            const payload = JSON.parse(raw) as { token?: string | null; user?: { email?: string } };
+            if (payload?.user?.email) {
+              // 保留user信息，只清除token
+              window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ ...payload, token: null }));
+            } else {
+              window.localStorage.removeItem(AUTH_STORAGE_KEY);
+            }
+          }
+        }
+      } catch (error) {
+        console.warn("[Echo] Failed to clear stored auth token:", error);
+      }
       emitAuthChanged();
       return;
     }
     api.defaults.headers.common.Authorization = `Token ${trimmed}`;
     longTimeoutApi.defaults.headers.common.Authorization = `Token ${trimmed}`;
     currentAuthToken = trimmed;
+    // 更新localStorage中的token（如果已存在auth payload）
+    try {
+      if (typeof window !== "undefined") {
+        const raw = window.localStorage.getItem(AUTH_STORAGE_KEY);
+        if (raw) {
+          const payload = JSON.parse(raw) as { token?: string | null; user?: { email?: string } };
+          if (payload?.user?.email) {
+            // 更新token，保留user信息
+            window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ ...payload, token: trimmed }));
+          }
+        }
+      }
+    } catch (error) {
+      console.warn("[Echo] Failed to update stored auth token:", error);
+    }
   } else {
     delete api.defaults.headers.common.Authorization;
     delete longTimeoutApi.defaults.headers.common.Authorization;
     currentAuthToken = null;
+    // 清除localStorage中的token
+    try {
+      if (typeof window !== "undefined") {
+        const raw = window.localStorage.getItem(AUTH_STORAGE_KEY);
+        if (raw) {
+          const payload = JSON.parse(raw) as { token?: string | null; user?: { email?: string } };
+          if (payload?.user?.email) {
+            // 保留user信息，只清除token
+            window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ ...payload, token: null }));
+          } else {
+            window.localStorage.removeItem(AUTH_STORAGE_KEY);
+          }
+        }
+      }
+    } catch (error) {
+      console.warn("[Echo] Failed to clear stored auth token:", error);
+    }
   }
   emitAuthChanged();
 }
@@ -231,6 +280,8 @@ export type ProfilePreferenceResponse = {
   signature: string;
   default_display_name: string;
   updated_at: string;
+  is_member: boolean;
+  membership_expires: string | null;
 };
 
 export type ProfilePreferences = {
@@ -238,6 +289,8 @@ export type ProfilePreferences = {
   signature: string;
   defaultDisplayName: string;
   updatedAt: string;
+  isMember: boolean;
+  membershipExpires: string | null;
 };
 
 export type UpdateProfilePreferencesInput = {
@@ -304,6 +357,32 @@ export async function fetchProfilePreferences(): Promise<ProfilePreferences> {
   return mapProfilePreferences(response.data);
 }
 
+export async function fetchFeaturedArtworkIds(): Promise<string[]> {
+  try {
+    const response = await api.get<{ featured_artwork_ids: string[] }>(
+      "/profile/featured-artworks/"
+    );
+    return response.data.featured_artwork_ids || [];
+  } catch (error) {
+    console.warn("[Echo] Failed to fetch featured artwork IDs:", error);
+    // 如果请求失败，返回空数组
+    return [];
+  }
+}
+
+export async function updateFeaturedArtworkIds(ids: string[]): Promise<string[]> {
+  try {
+    const response = await api.put<{ featured_artwork_ids: string[] }>(
+      "/profile/featured-artworks/",
+      { featured_artwork_ids: ids }
+    );
+    return response.data.featured_artwork_ids || [];
+  } catch (error) {
+    console.error("[Echo] Failed to update featured artwork IDs:", error);
+    throw error;
+  }
+}
+
 export async function updateProfilePreferences(
   input: UpdateProfilePreferencesInput,
 ): Promise<ProfilePreferences> {
@@ -322,6 +401,32 @@ export async function updateProfilePreferences(
     payload,
   );
   return mapProfilePreferences(response.data);
+}
+
+export type MembershipSubscriptionInput = {
+  tier: "premium";
+  expiresAt: string; // ISO格式日期字符串 "YYYY-MM-DD"
+};
+
+export type MembershipSubscriptionResponse = {
+  is_member: boolean;
+  membership_expires: string | null;
+};
+
+export async function subscribeMembership(
+  input: MembershipSubscriptionInput,
+): Promise<MembershipSubscriptionResponse> {
+  if (!hasAuthToken()) {
+    throw createUnauthorizedError();
+  }
+  const response = await api.post<MembershipSubscriptionResponse>(
+    "/membership/subscribe/",
+    {
+      tier: input.tier,
+      expires_at: input.expiresAt,
+    },
+  );
+  return response.data;
 }
 
 export type GoalsCalendarDay = {
@@ -415,9 +520,6 @@ type CreateUserUploadInput = {
   moodId: number | null; // 使用ID而不是字符串
   selfRating: number;
   durationMinutes: number;
-  collectionId?: string | null; // 套图ID
-  collectionName?: string | null; // 套图名称
-  collectionIndex?: number | null; // 在套图中的序号
   uploadedAt?: string; // 上传日期，格式：YYYY-MM-DD
 };
 
@@ -456,6 +558,8 @@ function mapProfilePreferences(payload: ProfilePreferenceResponse): ProfilePrefe
     signature: payload.signature ?? "",
     defaultDisplayName: payload.default_display_name ?? "",
     updatedAt: payload.updated_at ?? "",
+    isMember: payload.is_member ?? false,
+    membershipExpires: payload.membership_expires ?? null,
   };
 }
 
@@ -1199,17 +1303,6 @@ export async function createUserUpload(input: CreateUserUploadInput) {
     formData.append("uploaded_at", input.uploadedAt);
   }
   
-  // 套图相关字段
-  if (input.collectionId) {
-    formData.append("collection_id", input.collectionId);
-  }
-  if (input.collectionName) {
-    formData.append("collection_name", input.collectionName);
-  }
-  if (input.collectionIndex !== null && input.collectionIndex !== undefined) {
-    formData.append("collection_index", String(input.collectionIndex));
-  }
-  
   // 支持标签ID数组（新格式）或标签名称数组（旧格式兼容）
   let tagIds: number[] = [];
   if (Array.isArray(input.tags) && input.tags.length > 0) {
@@ -1293,8 +1386,8 @@ export async function deleteUserUpload(id: number) {
 }
 
 export type UploadLimitInfo = {
-  today_count: number;
-  max_daily_uploads: number;
+  monthly_count: number;
+  max_monthly_uploads: number;
   remaining: number;
   can_upload: boolean;
 };
@@ -1311,9 +1404,6 @@ export type UpdateUserUploadInput = {
   moodId?: number | null; // 使用ID而不是字符串
   selfRating?: number;
   durationMinutes?: number;
-  collectionId?: string | null; // 套图ID
-  collectionName?: string | null; // 套图名称
-  collectionIndex?: number | null; // 在套图中的序号
 };
 
 export async function updateUserUpload(id: number, input: UpdateUserUploadInput) {
@@ -1350,15 +1440,6 @@ export async function updateUserUpload(id: number, input: UpdateUserUploadInput)
   }
   
   // 套图相关字段
-  if (input.collectionId !== undefined) {
-    formData.append("collection_id", input.collectionId || "");
-  }
-  if (input.collectionName !== undefined) {
-    formData.append("collection_name", input.collectionName || "");
-  }
-  if (input.collectionIndex !== undefined) {
-    formData.append("collection_index", input.collectionIndex !== null ? String(input.collectionIndex) : "");
-  }
   
   // 支持标签ID数组
   if (input.tags !== undefined && Array.isArray(input.tags) && input.tags.length > 0) {
@@ -1385,267 +1466,6 @@ export async function updateUserUpload(id: number, input: UpdateUserUploadInput)
   return response.data;
 }
 
-/**
- * 更新套图首图（通过批量更新作品实现）
- * 将选中的作品设置为 collection_index: 1，并调整其他作品的索引
- */
-export async function updateCollectionThumbnail(
-  collectionId: string,
-  thumbnailArtworkId: string,
-  allArtworks: Array<{ id: string; collectionId?: string | null; collectionIndex?: number | null; collectionName?: string | null }>,
-) {
-  if (!hasAuthToken()) {
-    throw createUnauthorizedError();
-  }
-  
-  // 获取套图内的所有作品
-  const collectionArtworks = allArtworks.filter(
-    (a) => a.collectionId === collectionId
-  );
-  
-  if (collectionArtworks.length === 0) {
-    throw new Error("套图中没有作品");
-  }
-  
-  // 找到要设置为首图的作品
-  const thumbnailArtwork = collectionArtworks.find((a) => a.id === thumbnailArtworkId);
-  if (!thumbnailArtwork) {
-    throw new Error("找不到指定的作品");
-  }
-  
-  // 构建更新列表：将选中的作品设置为索引1，其他作品按原顺序调整
-  const otherArtworks = collectionArtworks.filter((a) => a.id !== thumbnailArtworkId);
-  // 按当前索引排序（如果有的话）
-  otherArtworks.sort((a, b) => {
-    const indexA = a.collectionIndex ?? 0;
-    const indexB = b.collectionIndex ?? 0;
-    return indexA - indexB;
-  });
-  
-  // 批量更新：首图设置为1，其他作品从2开始
-  const updatePromises: Promise<UserUploadRecord>[] = [];
-  
-  // 从 "art-{id}" 格式中提取数字ID
-  const extractNumericId = (artworkId: string): number => {
-    const numericId = artworkId.replace(/^art-/, "");
-    const id = Number.parseInt(numericId, 10);
-    if (!Number.isFinite(id) || id <= 0) {
-      throw new Error(`无效的作品ID: ${artworkId}`);
-    }
-    return id;
-  };
-  
-  // 获取套图名称（从第一个作品获取，所有作品应该共享同一个 collectionName）
-  const firstArtwork = collectionArtworks[0];
-  const collectionName = firstArtwork?.collectionName || null;
-  
-  // 仅在开发环境输出调试信息
-  if (import.meta.env.DEV) {
-    console.log("[updateCollectionThumbnail] 开始更新套图首图:", {
-      collectionId,
-      thumbnailArtworkId,
-      collectionArtworksCount: collectionArtworks.length,
-      collectionName,
-    });
-  }
-  
-  // 更新首图（保留 collectionId 和 collectionName）
-  updatePromises.push(
-    updateUserUpload(extractNumericId(thumbnailArtworkId), {
-      collectionId,
-      collectionName,
-      collectionIndex: 1,
-    })
-  );
-  
-  // 更新其他作品（保留 collectionId 和 collectionName）
-  otherArtworks.forEach((artwork, index) => {
-    updatePromises.push(
-      updateUserUpload(extractNumericId(artwork.id), {
-        collectionId,
-        collectionName,
-        collectionIndex: index + 2,
-      })
-    );
-  });
-  
-  const results = await Promise.all(updatePromises);
-  // 仅在开发环境输出调试信息
-  if (import.meta.env.DEV) {
-    console.log("[updateCollectionThumbnail] 更新完成，更新了", results.length, "个作品");
-  }
-  return { success: true };
-}
-
-/**
- * 更新套图名称（通过批量更新作品实现）
- */
-export async function updateCollectionName(
-  collectionId: string,
-  collectionName: string,
-  allArtworks: Array<{ id: string; collectionId?: string | null; collectionIndex?: number | null; collectionName?: string | null; title?: string | null }>,
-) {
-  if (!hasAuthToken()) {
-    throw createUnauthorizedError();
-  }
-  
-  // 获取套图内的所有作品
-  const collectionArtworks = allArtworks.filter(
-    (a) => a.collectionId === collectionId
-  );
-  
-  if (collectionArtworks.length === 0) {
-    throw new Error("套图中没有作品");
-  }
-  
-  // 从 "art-{id}" 格式中提取数字ID
-  const extractNumericId = (artworkId: string): number => {
-    const numericId = artworkId.replace(/^art-/, "");
-    const id = Number.parseInt(numericId, 10);
-    if (!Number.isFinite(id) || id <= 0) {
-      throw new Error(`无效的作品ID: ${artworkId}`);
-    }
-    return id;
-  };
-  
-  // 验证 collectionId（所有作品应该共享同一个 collectionId）
-  const firstArtwork = collectionArtworks[0];
-  if (!firstArtwork) {
-    throw new Error("套图中没有作品");
-  }
-  if (!firstArtwork.collectionId || firstArtwork.collectionId !== collectionId) {
-    throw new Error("作品没有 collectionId 或 collectionId 不匹配");
-  }
-  
-  // 仅在开发环境输出调试信息
-  if (import.meta.env.DEV) {
-    console.log("[updateCollectionName] 开始更新套图名称:", {
-      collectionId,
-      collectionName,
-      collectionArtworksCount: collectionArtworks.length,
-    });
-  }
-  
-  // 批量更新所有作品的 collection_name（保留 collectionId 和 collectionIndex）
-  // 同时需要更新 title：从 title 中移除旧的套图名，添加新的套图名
-  const updatePromises = collectionArtworks.map((artwork) => {
-    const numericId = extractNumericId(artwork.id);
-    
-    // 获取旧的套图名（从第一个作品获取，所有作品应该共享）
-    const oldCollectionName = artwork.collectionName || null;
-    
-    // 更新 title：如果 title 包含旧的套图名，需要替换为新的套图名
-    // title 格式可能是："旧套图名·作品标题" 或 "作品标题"
-    let updatedTitle = artwork.title || "";
-    if (oldCollectionName && updatedTitle) {
-      // 如果 title 以旧套图名开头（格式：旧套图名·作品标题），需要替换
-      const oldPrefix = `${oldCollectionName}·`;
-      if (updatedTitle.startsWith(oldPrefix)) {
-        // 移除旧的套图名前缀
-        updatedTitle = updatedTitle.slice(oldPrefix.length);
-      } else if (updatedTitle === oldCollectionName) {
-        // 如果 title 就是旧的套图名，直接替换
-        updatedTitle = "";
-      }
-      
-      // 添加新的套图名（如果有作品标题）
-      if (updatedTitle.trim()) {
-        updatedTitle = `${collectionName}·${updatedTitle.trim()}`;
-      } else {
-        updatedTitle = collectionName;
-      }
-    } else if (updatedTitle && !updatedTitle.includes(collectionName)) {
-      // 如果 title 不包含新的套图名，添加它
-      updatedTitle = `${collectionName}·${updatedTitle.trim()}`;
-    } else if (!updatedTitle) {
-      // 如果 title 为空，使用套图名
-      updatedTitle = collectionName;
-    }
-    
-    return updateUserUpload(numericId, {
-      collectionId,
-      collectionName,
-      collectionIndex: artwork.collectionIndex ?? null,
-      title: updatedTitle,
-    });
-  });
-  
-  const results = await Promise.all(updatePromises);
-  // 仅在开发环境输出调试信息
-  if (import.meta.env.DEV) {
-    console.log("[updateCollectionName] 更新完成，更新了", results.length, "个作品");
-  }
-  return { success: true };
-}
-
-/**
- * 更新套图顺序（通过批量更新作品实现）
- */
-export async function updateCollectionOrder(
-  collectionId: string,
-  artworkIds: string[],
-  allArtworks: Array<{ id: string; collectionId?: string | null; collectionIndex?: number | null; collectionName?: string | null }>,
-) {
-  if (!hasAuthToken()) {
-    throw createUnauthorizedError();
-  }
-  
-  // 验证所有作品都属于同一个套图
-  const collectionArtworks = allArtworks.filter(
-    (a) => a.collectionId === collectionId && artworkIds.includes(a.id)
-  );
-  
-  if (collectionArtworks.length !== artworkIds.length) {
-    throw new Error("部分作品不属于该套图");
-  }
-  
-  // 从 "art-{id}" 格式中提取数字ID
-  const extractNumericId = (artworkId: string): number => {
-    const numericId = artworkId.replace(/^art-/, "");
-    const id = Number.parseInt(numericId, 10);
-    if (!Number.isFinite(id) || id <= 0) {
-      throw new Error(`无效的作品ID: ${artworkId}`);
-    }
-    return id;
-  };
-  
-  // 获取第一个作品的 collectionName（所有作品应该共享）
-  const firstArtwork = collectionArtworks[0];
-  if (!firstArtwork) {
-    throw new Error("套图中没有作品");
-  }
-  if (!firstArtwork.collectionId || firstArtwork.collectionId !== collectionId) {
-    throw new Error("作品没有 collectionId 或 collectionId 不匹配");
-  }
-  const collectionName = firstArtwork.collectionName || null;
-  
-  // 仅在开发环境输出调试信息
-  if (import.meta.env.DEV) {
-    console.log("[updateCollectionOrder] 开始更新套图顺序:", {
-      collectionId,
-      collectionName,
-      artworkIdsCount: artworkIds.length,
-      artworkIds,
-    });
-  }
-  
-  // 批量更新所有作品的 collection_index（保留 collectionId 和 collectionName）
-  const updatePromises = artworkIds.map((artworkId, index) => {
-    const numericId = extractNumericId(artworkId);
-    return updateUserUpload(numericId, {
-      collectionId,
-      collectionName,
-      collectionIndex: index + 1,
-    });
-  });
-  
-  const results = await Promise.all(updatePromises);
-  // 仅在开发环境输出调试信息
-  if (import.meta.env.DEV) {
-    console.log("[updateCollectionOrder] 更新完成，更新了", results.length, "个作品");
-  }
-  return { success: true };
-}
 
 // 请求重试配置
 const MAX_RETRIES = 2; // 最多重试2次
@@ -1797,134 +1617,6 @@ longTimeoutApi.interceptors.response.use(
   },
 );
 
-export type Notification = {
-  id: number;
-  title: string;
-  summary: string;
-  content: string;
-  created_at: string;
-  read?: boolean; // 可选字段，后端可能返回或前端管理
-};
-
-export async function fetchNotifications(): Promise<Notification[]> {
-  if (!hasAuthToken()) {
-    throw createUnauthorizedError();
-  }
-  const response = await api.get<Notification[]>("/notifications/");
-  return response.data;
-}
-
-export async function fetchNotificationDetail(id: number): Promise<Notification> {
-  if (!hasAuthToken()) {
-    throw createUnauthorizedError();
-  }
-  const response = await api.get<Notification>(`/notifications/${id}/`);
-  return response.data;
-}
-
-/**
- * 删除通知
- */
-export async function deleteNotification(id: number): Promise<void> {
-  if (!hasAuthToken()) {
-    throw createUnauthorizedError();
-  }
-  await api.delete(`/notifications/${id}/`);
-}
-
-// 通知已读状态管理（使用 localStorage）
-const NOTIFICATION_READ_STORAGE_KEY = "echo-notification-read-ids";
-
-/**
- * 获取已读通知 ID 集合
- */
-function getReadNotificationIds(): Set<number> {
-  if (typeof window === "undefined") {
-    return new Set();
-  }
-  try {
-    const raw = window.localStorage.getItem(NOTIFICATION_READ_STORAGE_KEY);
-    if (!raw) {
-      return new Set();
-    }
-    const ids = JSON.parse(raw) as number[];
-    return new Set(ids);
-  } catch {
-    return new Set();
-  }
-}
-
-/**
- * 标记通知为已读
- */
-export function markNotificationAsRead(notificationId: number): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-  try {
-    const readIds = getReadNotificationIds();
-    readIds.add(notificationId);
-    window.localStorage.setItem(
-      NOTIFICATION_READ_STORAGE_KEY,
-      JSON.stringify(Array.from(readIds)),
-    );
-  } catch (error) {
-    console.warn("Failed to mark notification as read", error);
-  }
-}
-
-/**
- * 检查通知是否已读
- */
-export function isNotificationRead(notificationId: number): boolean {
-  const readIds = getReadNotificationIds();
-  return readIds.has(notificationId);
-}
-
-/**
- * 为通知列表添加已读状态
- */
-export function enrichNotificationsWithReadStatus(
-  notifications: Notification[],
-): Notification[] {
-  const readIds = getReadNotificationIds();
-  return notifications.map((notification) => ({
-    ...notification,
-    read: readIds.has(notification.id),
-  }));
-}
-
-/**
- * 获取未读通知数量
- */
-export function getUnreadNotificationCount(notifications: Notification[]): number {
-  const readIds = getReadNotificationIds();
-  return notifications.filter((notification) => !readIds.has(notification.id)).length;
-}
-
-/**
- * 获取击掌按钮点击总数
- */
-export async function getHighFiveCount(): Promise<number> {
-  const response = await api.get<{ count: number }>("/high-five/count/");
-  return response.data.count;
-}
-
-/**
- * 增加击掌按钮点击计数
- */
-export async function incrementHighFiveCount(): Promise<{ count: number; success: boolean; message?: string; clicked_at?: string }> {
-  const response = await api.post<{ count: number; success: boolean; message?: string; clicked_at?: string }>("/high-five/increment/");
-  return response.data;
-}
-
-/**
- * 检查当前用户是否已经点击过
- */
-export async function hasHighFiveClicked(): Promise<{ has_clicked: boolean; clicked_at?: string }> {
-  const response = await api.get<{ has_clicked: boolean; clicked_at?: string }>("/high-five/has-clicked/");
-  return response.data;
-}
 
 // ==================== 用户测试 API ====================
 
@@ -2089,12 +1781,12 @@ export type Tag = {
 
 export type CreateTagInput = {
   name: string;
-  isHidden?: boolean;
+  isHidden?: boolean; // 保留字段以兼容，但不再使用
 };
 
 export type UpdateTagInput = {
   name?: string;
-  isHidden?: boolean;
+  isHidden?: boolean; // 保留字段以兼容，但不再使用
 };
 
 /**
@@ -2128,7 +1820,7 @@ export async function createTag(input: CreateTagInput): Promise<Tag> {
   }
   const payload = {
     name: input.name.trim(),
-    is_hidden: input.isHidden ?? false,
+    is_hidden: false, // 不再支持隐藏功能
   };
   const response = await api.post<TagResponse>("/tags/manage/", payload);
   return mapTag(response.data);
@@ -2145,9 +1837,7 @@ export async function updateTag(id: number, input: UpdateTagInput): Promise<Tag>
   if (input.name !== undefined) {
     payload.name = input.name.trim();
   }
-  if (input.isHidden !== undefined) {
-    payload.is_hidden = input.isHidden;
-  }
+  // 不再支持isHidden字段
   const response = await api.patch<TagResponse>(`/tags/manage/${id}/`, payload);
   return mapTag(response.data);
 }
@@ -2360,8 +2050,27 @@ export async function fetchVisualAnalysisResults(): Promise<VisualAnalysisResult
     throw createUnauthorizedError();
   }
 
-  const response = await api.get<VisualAnalysisResultRecord[]>("/visual-analysis/");
-  return response.data;
+  const response = await api.get<{
+    count: number;
+    next: string | null;
+    previous: string | null;
+    results: VisualAnalysisResultRecord[];
+  } | VisualAnalysisResultRecord[]>("/visual-analysis/");
+  
+  // 处理分页响应：如果返回的是分页对象，提取 results 数组；否则直接返回数组
+  if (response.data && typeof response.data === 'object' && 'results' in response.data && Array.isArray(response.data.results)) {
+    console.log("[fetchVisualAnalysisResults] 检测到分页响应，总数:", response.data.count, "当前页结果数:", response.data.results.length);
+    return response.data.results;
+  }
+  
+  // 如果不是分页响应，直接返回数组
+  if (Array.isArray(response.data)) {
+    console.log("[fetchVisualAnalysisResults] 返回数组响应，结果数:", response.data.length);
+    return response.data;
+  }
+  
+  console.warn("[fetchVisualAnalysisResults] 意外的响应格式:", response.data);
+  return [];
 }
 
 /**
@@ -2456,6 +2165,30 @@ export async function getPendingImageAnalysisTask(): Promise<{
   }
 
   const response = await api.get(`/visual-analysis/task/pending/`);
+  return response.data;
+}
+
+/**
+ * 获取用户视觉分析额度信息
+ */
+export type VisualAnalysisQuota = {
+  is_member: boolean;
+  free_quota: number;
+  used_free_quota: number;
+  remaining_free_quota: number;
+  monthly_quota: number;
+  used_monthly_quota: number;
+  remaining_monthly_quota: number;
+  total_remaining_quota: number;
+  current_month: string;
+};
+
+export async function getVisualAnalysisQuota(): Promise<VisualAnalysisQuota> {
+  if (!hasAuthToken()) {
+    throw createUnauthorizedError();
+  }
+
+  const response = await api.get<VisualAnalysisQuota>("/visual-analysis/quota/");
   return response.data;
 }
 

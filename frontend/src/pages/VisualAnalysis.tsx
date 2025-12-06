@@ -11,10 +11,13 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import MaterialIcon from "@/components/MaterialIcon";
 import TopNav, { type TopNavAction } from "@/components/TopNav";
+import { ArtisticLoader } from "@/components/ArtisticLoader";
 import {
   fetchVisualAnalysisResult,
   analyzeImageComprehensive,
   deleteVisualAnalysisResult,
+  getVisualAnalysisQuota,
+  type VisualAnalysisQuota,
 } from "@/services/api";
 import VisualAnalysisComprehensive from "./VisualAnalysisComprehensive";
 import { compressImageToSize, fileToDataURL } from "@/utils/imageCompression";
@@ -23,6 +26,9 @@ import { VisualAnalysisMenu } from "./visualAnalysis/components/VisualAnalysisMe
 import { ImageUploadArea } from "./visualAnalysis/components/ImageUploadArea";
 import { useMenuActions } from "./visualAnalysis/hooks/useMenuActions";
 import { useImageUpload } from "./visualAnalysis/hooks/useImageUpload";
+import { checkOpencvReady } from "./visualAnalysis/utils/opencvUtils";
+import { ToastContainer } from "@/components/Toast";
+import { useToast } from "@/hooks/useToast";
 import "./VisualAnalysis.css";
 import "./ArtworkDetails.css";
 
@@ -56,6 +62,11 @@ function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
   const [checkingExistingResult, setCheckingExistingResult] = useState(true);
   const isMountedRef = useRef(true);
+  const [quota, setQuota] = useState<VisualAnalysisQuota | null>(null);
+  const [loadingQuota, setLoadingQuota] = useState(false);
+  
+  // 使用 Toast Hook
+  const { toasts, showToast, removeToast } = useToast();
   
   // 使用图片上传 Hook
   const {
@@ -119,6 +130,27 @@ function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
     savedResultIdRef.current = savedResultId;
   }, [savedResultId]);
 
+  // ==================== 获取视觉分析额度 ====================
+  useEffect(() => {
+    const fetchQuota = async () => {
+      try {
+        setLoadingQuota(true);
+        const quotaData = await getVisualAnalysisQuota();
+        setQuota(quotaData);
+      } catch (err) {
+        console.error("获取视觉分析额度失败:", err);
+        // 不显示错误，因为这不是关键功能
+      } finally {
+        setLoadingQuota(false);
+      }
+    };
+    
+    if (!resultId) {
+      // 只在非查看模式下获取额度
+      fetchQuota();
+    }
+  }, [resultId]);
+
   // ==================== 已有结果检查 ====================
   useExistingResultCheck(resultId, {
     onLoadResult: loadResultWithGrayscaleLevels,
@@ -155,6 +187,7 @@ function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
       }, isMountedRef);
     },
     onSetCurrentTaskId: setCurrentTaskId,
+    onSetOriginalImage: setOriginalImage,
   });
 
   // ==================== 如果提供了 resultId，加载已保存的结果 ====================
@@ -187,6 +220,7 @@ function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
   // ==================== 文件处理 ====================
   // 处理文件选择（包装 useImageUpload 的 handleFileSelectDirect）
   const handleFileSelectWrapped = useCallback((file: File) => {
+    // 允许用户选择文件，限制检查在确认时进行
     handleFileSelectDirect(file);
     // 清除之前的错误
     if (uploadError) {
@@ -251,6 +285,13 @@ function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
             setComprehensiveProgress(100);
             setIsViewMode(true);
             console.log("[图像分析] 任务完成，结果已加载");
+            // 刷新额度信息
+            try {
+              const quotaData = await getVisualAnalysisQuota();
+              setQuota(quotaData);
+            } catch (err) {
+              console.error("刷新额度信息失败:", err);
+            }
           },
           onError: (err: string) => {
             setError(err);
@@ -274,8 +315,21 @@ function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
       }
     } catch (err) {
       console.error("图像分析失败:", err);
-      const errorMessage = err instanceof Error ? err.message : "未知错误";
-      setError(`图像分析失败: ${errorMessage}`);
+      let errorMessage = "未知错误";
+      if (err instanceof Error) {
+        errorMessage = err.message;
+      } else if (err && typeof err === 'object' && 'response' in err) {
+        // 处理axios错误响应
+        const axiosError = err as any;
+        if (axiosError.response?.data?.detail) {
+          errorMessage = axiosError.response.data.detail;
+        } else if (axiosError.response?.data?.message) {
+          errorMessage = axiosError.response.data.message;
+        } else {
+          errorMessage = axiosError.message || "图像分析失败";
+        }
+      }
+      setError(errorMessage);
       setComprehensiveLoading(false);
       setShowComprehensive(true);
     }
@@ -284,7 +338,7 @@ function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
   // ==================== 图片处理（使用模块化的工具函数） ====================
   const processImage = async (imageDataUrl: string, _file?: File) => {
     if (!opencvReady) {
-      setError("OpenCV 库尚未加载完成，请稍候");
+      // 静默等待，不显示错误提示
       return;
     }
 
@@ -321,11 +375,25 @@ function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
     }
   };
 
-  // ==================== 用户点击确认按钮后开始处理 ====================
-  const handleConfirmAndProcess = useCallback(async () => {
+  // ==================== 实际执行上传和分析的函数 ====================
+  const executeUploadAndAnalysis = useCallback(async () => {
     if (!imagePreview || !imageFile) {
       setError("请先上传图片");
       return;
+    }
+
+    // 如果OpenCV还没加载完成，等待它加载完成（用于后续的结果显示）
+    // 注意：后端分析不依赖OpenCV，但结果加载时需要OpenCV
+    if (!opencvReady) {
+      // 等待OpenCV加载完成，最多等待10秒
+      let waitCount = 0;
+      const maxWait = 100; // 100次 * 100ms = 10秒
+      
+      while (!checkOpencvReady() && waitCount < maxWait) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        waitCount++;
+      }
+      // 即使超时也继续执行（因为后端分析不依赖OpenCV）
     }
 
     // 清除之前的状态，开始新的分析
@@ -367,7 +435,18 @@ function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
         }
       }
     }
-  }, [imagePreview, imageFile, handleImageConfirm, handleComprehensiveAnalysis, stopPolling]);
+  }, [imagePreview, imageFile, handleImageConfirm, handleComprehensiveAnalysis, stopPolling, opencvReady]);
+
+  // ==================== 用户点击确认按钮后开始处理 ====================
+  const handleConfirmAndProcess = useCallback(async () => {
+    if (!imagePreview || !imageFile) {
+      setError("请先上传图片");
+      return;
+    }
+
+    // 直接执行上传和分析，配额检查由后端统一处理
+    await executeUploadAndAnalysis();
+  }, [imagePreview, imageFile, executeUploadAndAnalysis]);
 
   // ==================== 阈值变更处理 ====================
   const handleThresholdChange = (threshold: number) => {
@@ -458,6 +537,10 @@ function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
   // ==================== 渲染 ====================
   return (
     <div className="visual-analysis">
+      <ToastContainer
+        toasts={toasts}
+        onRemove={removeToast}
+      />
       <div className="visual-analysis__topbar">
         <TopNav
           className="top-nav--fixed top-nav--flush"
@@ -494,24 +577,98 @@ function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
       <main className="visual-analysis__content">
         {checkingExistingResult ? (
           <div className="visual-analysis__loading">
-            <MaterialIcon name="hourglass_empty" className="visual-analysis__loading-icon" />
-            <p>正在检查已有分析...</p>
+            <ArtisticLoader size="medium" text="正在检查已有分析..." />
           </div>
         ) : loadingSavedResult ? (
           <div className="visual-analysis__loading">
-            <MaterialIcon name="hourglass_empty" className="visual-analysis__loading-icon" />
-            <p>正在加载保存的结果...</p>
+            <ArtisticLoader size="medium" text="正在加载保存的结果..." />
           </div>
-        ) : !originalImage && !results && !loadingSavedResult ? (
-          <ImageUploadArea
-            onFileSelect={handleFileSelectWrapped}
-            preview={imagePreview}
-            onConfirm={handleConfirmAndProcess}
-            onCancel={clearUpload}
-            opencvReady={opencvReady}
-            loading={loading}
-            compressing={isCompressing}
-          />
+        ) : comprehensiveLoading && showComprehensive && !originalImage && !results ? (
+          // 如果有进行中的任务但没有基础结果，显示进度条
+          <div style={{ marginTop: "2rem" }}>
+            <div className="visual-analysis__loading">
+              <ArtisticLoader size="medium" text="正在进行专业分析，请稍候..." />
+              {comprehensiveProgress > 0 && (
+                <div style={{ marginTop: "1rem", width: "100%", maxWidth: "400px" }}>
+                  <div
+                    style={{
+                      width: "100%",
+                      height: "8px",
+                      backgroundColor: "rgba(255, 255, 255, 0.1)",
+                      borderRadius: "4px",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: `${comprehensiveProgress}%`,
+                        height: "100%",
+                        backgroundColor: "#98dbc6",
+                        transition: "width 0.3s ease",
+                      }}
+                    />
+                  </div>
+                  <p
+                    style={{
+                      marginTop: "0.5rem",
+                      fontSize: "0.9rem",
+                      color: "rgba(239, 234, 231, 0.7)",
+                    }}
+                  >
+                    {comprehensiveProgress}%
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : !originalImage && !results && !loadingSavedResult && !isViewMode && !savedResultId ? (
+          <>
+            {quota && (
+              <div
+                style={{
+                  padding: "1rem",
+                  marginBottom: "1.5rem",
+                  background: "rgba(152, 219, 198, 0.1)",
+                  border: "1px solid rgba(152, 219, 198, 0.3)",
+                  borderRadius: "0.5rem",
+                  color: "rgba(239, 234, 231, 0.9)",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
+                  <MaterialIcon name="info" style={{ fontSize: "1.2rem" }} />
+                  <strong style={{ fontSize: "0.95rem" }}>视觉分析剩余次数</strong>
+                </div>
+                <div style={{ fontSize: "0.9rem", lineHeight: "1.6" }}>
+                  {quota.is_member ? (
+                    <>
+                      <div>会员月度额度：{quota.remaining_monthly_quota} / {quota.monthly_quota} 次</div>
+                      {quota.remaining_free_quota > 0 && (
+                        <div style={{ marginTop: "0.25rem", opacity: 0.8 }}>
+                          赠送额度：{quota.remaining_free_quota} 次
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <div>剩余次数：{quota.total_remaining_quota} 次（赠送额度）</div>
+                      <div style={{ marginTop: "0.5rem", fontSize: "0.85rem", opacity: 0.8 }}>
+                        加入EchoDraw会员可享受每月60次额度
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+            <ImageUploadArea
+              onFileSelect={handleFileSelectWrapped}
+              preview={imagePreview}
+              onConfirm={handleConfirmAndProcess}
+              onCancel={clearUpload}
+              opencvReady={opencvReady}
+              loading={loading}
+              compressing={isCompressing}
+            />
+          </>
         ) : (
           <>
             {error && (
@@ -522,23 +679,19 @@ function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
 
             {loading && (
               <div className="visual-analysis__loading">
-                <MaterialIcon name="hourglass_empty" className="visual-analysis__loading-icon" />
-                <p>正在处理图像（基础分析）...</p>
+                <ArtisticLoader size="medium" text="正在处理图像（基础分析）..." />
               </div>
             )}
 
             {/* 专业分析结果 */}
             {(showComprehensive ||
               comprehensiveLoading ||
-              (isViewMode && (comprehensiveResults || results))) && (
+              isViewMode ||
+              (comprehensiveResults || results)) && (
               <div style={{ marginTop: "2rem" }}>
                 {comprehensiveLoading ? (
                   <div className="visual-analysis__loading">
-                    <MaterialIcon
-                      name="hourglass_empty"
-                      className="visual-analysis__loading-icon"
-                    />
-                    <p>正在进行专业分析，请稍候...</p>
+                    <ArtisticLoader size="medium" text="正在进行专业分析，请稍候..." />
                     {comprehensiveProgress > 0 && (
                       <div style={{ marginTop: "1rem", width: "100%", maxWidth: "400px" }}>
                         <div

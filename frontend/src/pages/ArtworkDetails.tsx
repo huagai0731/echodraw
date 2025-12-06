@@ -120,35 +120,6 @@ function formatDateTime(uploadedAt: string | null | undefined): string {
   }
 }
 
-// 格式化套图标题
-function formatCollectionTitle(artwork: ArtworkDetailsProps["artwork"]): string {
-  if (artwork.collectionName && artwork.collectionIndex) {
-    const romanNumeral = toRomanNumeral(artwork.collectionIndex);
-    
-    // 从 title 中提取纯作品标题（移除可能包含的套图名）
-    // title 格式可能是："套图名·作品标题" 或 "作品标题"
-    let pureTitle = artwork.title || "";
-    if (artwork.collectionName && pureTitle) {
-      // 如果 title 以套图名开头（格式：套图名·作品标题），移除套图名部分
-      const collectionPrefix = `${artwork.collectionName}·`;
-      if (pureTitle.startsWith(collectionPrefix)) {
-        pureTitle = pureTitle.slice(collectionPrefix.length);
-      } else if (pureTitle === artwork.collectionName) {
-        // 如果 title 就是套图名，清空
-        pureTitle = "";
-      }
-    }
-    
-    // 格式为：套图名 + 罗马数字序号 · 纯作品标题
-    // 例如：套图名是"猫"，纯作品标题是"狗"，在套图中是第二张，则显示为"猫II·狗"
-    if (pureTitle && pureTitle.trim()) {
-      return `${artwork.collectionName}${romanNumeral}·${pureTitle.trim()}`;
-    }
-    // 如果画作没有标题，只显示套图名和序号
-    return `${artwork.collectionName}${romanNumeral}`;
-  }
-  return artwork.title || "";
-}
 
 type ArtworkDetailsProps = {
   artwork: {
@@ -162,14 +133,9 @@ type ArtworkDetailsProps = {
     mood: string;
     rating: string;
     tags: string[];
-    collectionId?: string | null;
-    collectionName?: string | null;
-    collectionIndex?: number | null;
-    incrementalDurationMinutes?: number | null;
     uploadedAt?: string | null;
     durationMinutes?: number | null;
   };
-  collectionArtworks?: ArtworkDetailsProps["artwork"][];
   onBack: () => void;
   onShare?: (artwork: ArtworkDetailsProps["artwork"]) => void;
   onDelete?: (artwork: ArtworkDetailsProps["artwork"]) => void;
@@ -177,8 +143,6 @@ type ArtworkDetailsProps = {
   onSetAsFeatured?: (artwork: ArtworkDetailsProps["artwork"]) => void;
   onRemoveFromFeatured?: (artwork: ArtworkDetailsProps["artwork"]) => void;
   onNavigate?: (direction: "prev" | "next") => void;
-  onUpdateCollectionThumbnail?: (collectionId: string, thumbnailArtworkId: string) => void;
-  onUpdateCollectionName?: (collectionId: string, collectionName: string) => void;
   onUpdateArtwork?: (artwork: ArtworkDetailsProps["artwork"]) => void;
   hasPrev?: boolean;
   hasNext?: boolean;
@@ -186,7 +150,6 @@ type ArtworkDetailsProps = {
 
 function ArtworkDetails({
   artwork,
-  collectionArtworks = [],
   onBack,
   onShare: _onShare,
   onDelete,
@@ -194,8 +157,6 @@ function ArtworkDetails({
   onSetAsFeatured,
   onRemoveFromFeatured,
   onNavigate,
-  onUpdateCollectionThumbnail,
-  onUpdateCollectionName,
   onUpdateArtwork: _onUpdateArtwork,
   hasPrev = false,
   hasNext = false,
@@ -218,9 +179,6 @@ function ArtworkDetails({
   const [tagOptions, setTagOptions] = useState<Array<{ id: string | number; name: string }>>([]);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showInfo, setShowInfo] = useState(true);
-  const [showThumbnailPicker, setShowThumbnailPicker] = useState(false);
-  const [editCollectionTab, setEditCollectionTab] = useState<"thumbnail" | "name">("thumbnail");
-  const [collectionNameEdit, setCollectionNameEdit] = useState("");
 
   // 当 artwork.id 改变时，更新 isFeatured 状态
   useEffect(() => {
@@ -493,9 +451,9 @@ function ArtworkDetails({
           )}
           
           <div className="artwork-details-screen__title-block">
-            {formatCollectionTitle(artwork) && (
+            {artwork.title && (
               <h1 className="artwork-details-screen__title">
-                {formatCollectionTitle(artwork)}
+                {artwork.title}
               </h1>
             )}
             <p className="artwork-details-screen__date">
@@ -636,150 +594,7 @@ function ArtworkDetails({
           )}
         </div>
 
-        {/* 编辑套图按钮（仅在套图时显示） */}
-        {artwork.collectionId && collectionArtworks && collectionArtworks.length > 0 && (
-          <div className="artwork-details-screen__change-thumbnail">
-            <button
-              type="button"
-              className="artwork-details-screen__change-thumbnail-button"
-              onClick={() => setShowThumbnailPicker(true)}
-            >
-              编辑套图
-            </button>
-          </div>
-        )}
-
       </main>
-
-      {/* 编辑套图弹窗 */}
-      {showThumbnailPicker && artwork.collectionId && collectionArtworks.length > 0 && (
-        <div className="artwork-thumbnail-picker-overlay" onClick={() => setShowThumbnailPicker(false)}>
-          <div className="artwork-thumbnail-picker-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="artwork-thumbnail-picker-header">
-              <h2 className="artwork-thumbnail-picker-title">编辑套图</h2>
-              <button
-                type="button"
-                className="artwork-thumbnail-picker-close"
-                onClick={() => setShowThumbnailPicker(false)}
-                aria-label="关闭"
-              >
-                <MaterialIcon name="close" />
-              </button>
-            </div>
-            <div className="artwork-thumbnail-picker-content">
-              {/* 标签页 */}
-              <div className="artwork-thumbnail-picker-tabs">
-                <button
-                  type="button"
-                  className={`artwork-thumbnail-picker-tab ${editCollectionTab === "thumbnail" ? "artwork-thumbnail-picker-tab--active" : ""}`}
-                  onClick={() => {
-                    setEditCollectionTab("thumbnail");
-                    if (!collectionNameEdit && artwork.collectionName) {
-                      setCollectionNameEdit(artwork.collectionName);
-                    }
-                  }}
-                >
-                  选择首图
-                </button>
-                <button
-                  type="button"
-                  className={`artwork-thumbnail-picker-tab ${editCollectionTab === "name" ? "artwork-thumbnail-picker-tab--active" : ""}`}
-                  onClick={() => {
-                    setEditCollectionTab("name");
-                    if (!collectionNameEdit && artwork.collectionName) {
-                      setCollectionNameEdit(artwork.collectionName);
-                    }
-                  }}
-                >
-                  编辑名称
-                </button>
-              </div>
-
-              {/* 选择首图标签页 */}
-              {editCollectionTab === "thumbnail" && (
-                <div className="artwork-thumbnail-picker-tab-content">
-                  <p className="artwork-thumbnail-picker-hint">选择一张图片作为套图的首图</p>
-                  <div className="artwork-thumbnail-picker-grid">
-                    {collectionArtworks.map((item) => {
-                      const isSelected = item.id === artwork.id;
-                      const itemImageSrc = item.imageSrc || "";
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          className={`artwork-thumbnail-picker-item ${isSelected ? "artwork-thumbnail-picker-item--selected" : ""}`}
-                          onClick={() => {
-                            if (artwork.collectionId && onUpdateCollectionThumbnail) {
-                              onUpdateCollectionThumbnail(artwork.collectionId, item.id);
-                            }
-                            setShowThumbnailPicker(false);
-                          }}
-                        >
-                          {itemImageSrc && isValidImageUrl(itemImageSrc) ? (
-                            <img
-                              src={itemImageSrc}
-                              alt={item.title || "作品图片"}
-                              className="artwork-thumbnail-picker-image"
-                            />
-                          ) : (
-                            <div className="artwork-thumbnail-picker-placeholder">
-                              <MaterialIcon name="image" />
-                            </div>
-                          )}
-                          {isSelected && (
-                            <div className="artwork-thumbnail-picker-check">
-                              <MaterialIcon name="check_circle" filled />
-                            </div>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* 编辑名称标签页 */}
-              {editCollectionTab === "name" && (
-                <div className="artwork-thumbnail-picker-tab-content">
-                  <p className="artwork-thumbnail-picker-hint">编辑套图名称</p>
-                  <input
-                    type="text"
-                    className="artwork-thumbnail-picker-name-input"
-                    value={collectionNameEdit}
-                    onChange={(e) => setCollectionNameEdit(e.target.value)}
-                    placeholder="输入套图名称"
-                    autoFocus
-                  />
-                  <div className="artwork-thumbnail-picker-actions">
-                    <button
-                      type="button"
-                      className="artwork-thumbnail-picker-button artwork-thumbnail-picker-button--secondary"
-                      onClick={() => {
-                        setCollectionNameEdit(artwork.collectionName || "");
-                      }}
-                    >
-                      重置
-                    </button>
-                    <button
-                      type="button"
-                      className="artwork-thumbnail-picker-button artwork-thumbnail-picker-button--primary"
-                      onClick={() => {
-                        if (artwork.collectionId && onUpdateCollectionName && collectionNameEdit.trim()) {
-                          onUpdateCollectionName(artwork.collectionId, collectionNameEdit.trim());
-                          // API 会更新所有套图作品的名称，不需要手动更新
-                        }
-                        setShowThumbnailPicker(false);
-                      }}
-                    >
-                      保存
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {showDeleteConfirm ? (
         <div className="artwork-delete-confirm-overlay" onClick={() => setShowDeleteConfirm(false)}>
@@ -843,10 +658,6 @@ function ArtworkDetails({
             mood: artwork.mood,
             rating: artwork.rating,
             tags: artwork.tags,
-            collectionId: artwork.collectionId,
-            collectionName: artwork.collectionName,
-            collectionIndex: artwork.collectionIndex,
-            incrementalDurationMinutes: artwork.incrementalDurationMinutes,
             uploadedAt: artwork.uploadedAt,
             durationMinutes: artwork.durationMinutes,
           } as Artwork,

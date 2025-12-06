@@ -7,8 +7,6 @@ from core.models import (
     DailyQuiz,
     DailyQuizOption,
     EncouragementMessage,
-    HighFiveClick,
-    HighFiveCounter,
     HolidayMessage,
     MonthlyReport,
     MonthlyReportTemplate,
@@ -589,27 +587,6 @@ class DailyQuizOptionAdmin(admin.ModelAdmin):
         return bool(obj.image)
 
 
-@admin.register(HighFiveCounter)
-class HighFiveCounterAdmin(admin.ModelAdmin):
-    list_display = ("count", "updated_at")
-    readonly_fields = ("count", "updated_at")
-    
-    def has_add_permission(self, request):
-        # 只允许有一个实例
-        return not HighFiveCounter.objects.exists()
-    
-    def has_delete_permission(self, request, obj=None):
-        # 不允许删除
-        return False
-
-
-@admin.register(HighFiveClick)
-class HighFiveClickAdmin(admin.ModelAdmin):
-    list_display = ("user", "session_key", "created_at")
-    list_filter = ("created_at",)
-    search_fields = ("user__email", "session_key")
-    readonly_fields = ("created_at",)
-    ordering = ("-created_at",)
 
 
 @admin.register(MonthlyReport)

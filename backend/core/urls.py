@@ -11,7 +11,6 @@ from core.admin_views import (
     HolidayMessageAdminViewSet,
     LongTermPlanCopyAdminViewSet,
     MonthlyReportTemplateAdminViewSet,
-    NotificationAdminViewSet,
     ShortTermTaskPresetAdminViewSet,
     TestAccountCheckInDetailView,
     TestAccountCheckInListCreateView,
@@ -113,11 +112,6 @@ router.register(
     DailyQuizOptionAdminViewSet,
     basename="admin-daily-quiz-options",
 )
-router.register(
-    r"admin/notifications",
-    NotificationAdminViewSet,
-    basename="admin-notifications",
-)
 
 urlpatterns = [
     path("health/", views.health_check, name="health-check"),
@@ -132,16 +126,21 @@ urlpatterns = [
         views.ProfilePreferenceView.as_view(),
         name="profile-preferences",
     ),
+    path(
+        "profile/featured-artworks/",
+        views.FeaturedArtworksView.as_view(),
+        name="profile-featured-artworks",
+    ),
+    path(
+        "membership/subscribe/",
+        views.MembershipSubscriptionView.as_view(),
+        name="membership-subscribe",
+    ),
     path("uploads/", views.UserUploadListCreateView.as_view(), name="user-uploads"),
     path("uploads/check-limit/", views.check_upload_limit, name="user-uploads-check-limit"),
     path("uploads/<int:pk>/", views.UserUploadDetailView.as_view(), name="user-upload-detail"),
     path("uploads/<int:pk>/image/", views.UserUploadImageView.as_view(), name="user-upload-image"),
     path("homepage/messages/", views.homepage_messages, name="homepage-messages"),
-    path("notifications/", views.notifications_list, name="notifications-list"),
-    path("notifications/<int:notification_id>/", views.notification_detail, name="notification-detail"),
-    path("high-five/count/", views.high_five_count, name="high-five-count"),
-    path("high-five/increment/", views.high_five_increment, name="high-five-increment"),
-    path("high-five/has-clicked/", views.high_five_has_clicked, name="high-five-has-clicked"),
     path("goals/calendar/", views.goals_calendar, name="goals-calendar"),
     path("goals/check-in/", views.check_in, name="goals-check-in"),
     path(
@@ -239,6 +238,7 @@ urlpatterns = [
     path("visual-analysis/comprehensive/", views.analyze_image_comprehensive, name="visual-analysis-comprehensive"),
     path("visual-analysis/task/<str:task_id>/status/", views.get_image_analysis_task_status, name="visual-analysis-task-status"),
     path("visual-analysis/task/pending/", views.get_pending_image_analysis_task, name="visual-analysis-task-pending"),
+    path("visual-analysis/quota/", views.get_visual_analysis_quota, name="visual-analysis-quota"),
     path("visual-analysis/proxy-image/", views.proxy_visual_analysis_image, name="visual-analysis-proxy-image"),
     # 后台管理 API
     path("admin/users/", views.admin_users_list, name="admin-users-list"),

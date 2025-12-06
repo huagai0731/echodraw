@@ -1,20 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState, startTransition } from "react";
 import TopNav from "@/components/TopNav";
+import MaterialIcon from "@/components/MaterialIcon";
 import { ImageUploader } from "./components/ImageUploader";
 import { TagManager } from "./components/TagManager";
 import { MoodSelector } from "./components/MoodSelector";
 import { DurationPicker } from "./components/DurationPicker";
 import { ScoreSlider } from "./components/ScoreSlider";
 import { ArtworkInfoEditor } from "./components/ArtworkInfoEditor";
-import { GroupSelectorModal } from "./components/GroupSelectorModal";
-import { UploadActions } from "./components/UploadActions";
 import { useUploadState } from "./hooks/useUploadState";
 import { useImageProcessing } from "./hooks/useImageProcessing";
 import { useTagManager } from "./hooks/useTagManager";
 import { useDuration } from "./hooks/useDuration";
 import { useMood } from "./hooks/useMood";
-import { useGroupManager } from "./hooks/useGroupManager";
 import { useDraft } from "./hooks/useDraft";
+import { UploadLimitConfirmModal } from "../visualAnalysis/components/UploadLimitConfirmModal";
+import type { Artwork } from "../Gallery";
 
 import "../Upload.css";
 
@@ -29,26 +29,25 @@ export type UploadResult = {
   rating: number;
   durationMinutes: number;
   previewDataUrl: string | null;
-  // 套图相关字段
-  collectionId?: string | null;
-  collectionName?: string | null;
-  collectionIndex?: number | null;
-  incrementalDurationMinutes?: number | null; // 增量时长（分钟）
 };
 
 type UploadPageProps = {
   onClose: () => void;
   onSave: (result: UploadResult) => void | Promise<void>;
+  userArtworks?: Artwork[];
+  isMember?: boolean;
+  onJoinMembership?: () => void;
 };
 
-export function UploadPage({ onClose, onSave }: UploadPageProps) {
+export function UploadPage({ onClose, onSave, userArtworks = [], isMember = true, onJoinMembership }: UploadPageProps) {
   const [showRating, setShowRating] = useState(false);
-  const [groupModalMode, setGroupModalMode] = useState<"create" | "select" | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [showUploadLimitConfirm, setShowUploadLimitConfirm] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const hasUnsavedChangesRef = useRef(false);
+  const pendingSaveRef = useRef<(() => Promise<void>) | null>(null);
 
   const {
     state,
@@ -90,58 +89,6 @@ export function UploadPage({ onClose, onSave }: UploadPageProps) {
     updateState({ durationHours: hours, durationMinutes: minutes });
   });
 
-  const {
-    collections,
-    getCollectionMaxDuration,
-    getNextCollectionIndex,
-    generateCollectionId,
-    refreshCollections,
-  } = useGroupManager();
-
-  // 计算增量时长
-  const incrementalDurationMinutes = useMemo(() => {
-    if (
-      state.collectionMaxDurationMinutes !== null &&
-      totalMinutes >= state.collectionMaxDurationMinutes
-    ) {
-      return totalMinutes - state.collectionMaxDurationMinutes;
-    }
-    return null;
-  }, [state.collectionMaxDurationMinutes, totalMinutes]);
-
-  const formattedIncrementalDuration = useMemo(() => {
-    if (incrementalDurationMinutes === null || incrementalDurationMinutes <= 0) {
-      return null;
-    }
-    const hours = Math.floor(incrementalDurationMinutes / 60);
-    const minutes = incrementalDurationMinutes % 60;
-    if (hours > 0 && minutes > 0) {
-      return `${hours} 小时 ${minutes} 分钟`;
-    }
-    if (hours > 0) {
-      return `${hours} 小时`;
-    }
-    return `${minutes} 分钟`;
-  }, [incrementalDurationMinutes]);
-
-  // 限制画布时长不能小于套图最大时长
-  useEffect(() => {
-    if (
-      state.collectionMaxDurationMinutes !== null &&
-      totalMinutes < state.collectionMaxDurationMinutes
-    ) {
-      const requiredHours = Math.floor(state.collectionMaxDurationMinutes / 60);
-      const requiredMinutes = state.collectionMaxDurationMinutes % 60;
-      
-      // 只有当当前时长确实小于要求时才更新，避免循环
-      if (
-        state.durationHours !== requiredHours ||
-        state.durationMinutes !== requiredMinutes
-      ) {
-        updateState({ durationHours: requiredHours, durationMinutes: requiredMinutes });
-      }
-    }
-  }, [state.collectionMaxDurationMinutes, state.durationHours, state.durationMinutes, totalMinutes, updateState]);
 
   // 草稿管理
   const { clearDraft } = useDraft(state, (draft) => {
@@ -193,81 +140,10 @@ export function UploadPage({ onClose, onSave }: UploadPageProps) {
     [validateFile, updateState, processImage]
   );
 
-  // 处理套图选择
-  const handleSelectCollection = useCallback(
-    (collectionId: string) => {
-      const collection = collections.find((c) => c.id === collectionId);
-      if (!collection) {
-        return;
-      }
 
-      const maxDuration = getCollectionMaxDuration(collectionId);
-      updateState({
-        collectionId: collectionId,
-        collectionName: null,
-        collectionMaxDurationMinutes: maxDuration,
-      });
-
-      // 更新标题格式
-      if (state.title.trim() && !state.title.includes(collection.name)) {
-        updateState({ title: `${collection.name}·${state.title}` });
-      }
-
-      // 如果当前时长小于套图最大时长，自动调整
-      if (totalMinutes < maxDuration) {
-        const hours = Math.floor(maxDuration / 60);
-        const minutes = maxDuration % 60;
-        updateState({ durationHours: hours, durationMinutes: minutes });
-      }
-    },
-    [
-      collections,
-      getCollectionMaxDuration,
-      updateState,
-      state.title,
-      totalMinutes,
-    ]
-  );
-
-  const handleCreateCollection = useCallback(
-    (name: string) => {
-      updateState({
-        collectionName: name,
-        collectionId: null,
-        collectionMaxDurationMinutes: null,
-      });
-    },
-    [updateState]
-  );
-
-  const handleClearCollection = useCallback(() => {
-    updateState({
-      collectionId: null,
-      collectionName: null,
-      collectionMaxDurationMinutes: null,
-    });
-  }, [updateState]);
-
-  // 处理保存
-  const handleSave = useCallback(async () => {
-    if (!processedFile || isUploading) {
-      if (!processedFile) {
-        // 触发文件选择
-        const input = document.querySelector<HTMLInputElement>(
-          'input[type="file"]'
-        );
-        input?.click();
-      }
-      return;
-    }
-
-    // 验证所有数据
-    const errors = validateAll();
-    if (errors.length > 0) {
-      const errorMessages = errors.map((e) => e.message).join("\n");
-      window.alert(errorMessages);
-      return;
-    }
+  // 实际执行保存的函数
+  const executeSave = useCallback(async () => {
+    if (!processedFile) return;
 
     setIsUploading(true);
     setUploadError(null);
@@ -278,57 +154,18 @@ export function UploadPage({ onClose, onSave }: UploadPageProps) {
     abortControllerRef.current = abortController;
 
     try {
-      // 处理套图逻辑
-      let finalCollectionId: string | null = null;
-      let finalCollectionName: string | null = null;
-      let finalCollectionIndex: number | null = null;
-      let finalTitle = state.title.trim();
-
-      if (state.collectionId) {
-        const collection = collections.find(
-          (c) => c.id === state.collectionId
-        );
-        if (collection) {
-          finalCollectionId = state.collectionId;
-          finalCollectionName = collection.name;
-          finalCollectionIndex = getNextCollectionIndex(state.collectionId);
-          if (finalTitle && !finalTitle.includes(collection.name)) {
-            finalTitle = `${collection.name}·${finalTitle}`;
-          } else if (!finalTitle) {
-            finalTitle = collection.name;
-          }
-        }
-      } else if (state.collectionName?.trim()) {
-        const newCollectionId = generateCollectionId();
-        finalCollectionId = newCollectionId;
-        finalCollectionName = state.collectionName.trim();
-        finalCollectionIndex = 1;
-        const baseTitle = state.title.trim();
-        if (baseTitle && !baseTitle.includes(finalCollectionName)) {
-          finalTitle = `${finalCollectionName}·${baseTitle}`;
-        } else if (baseTitle) {
-          finalTitle = baseTitle;
-        } else {
-          finalTitle = finalCollectionName;
-        }
-      }
-
       // 创建预览 URL（用于保存）
       const previewDataUrl = previewUrl;
 
       const result: UploadResult = {
         file: processedFile,
-        title: finalTitle,
+        title: state.title.trim(),
         description: state.description.trim(),
         tags: selectedTags,
         moodId: state.mood,
         rating: state.rating,
         durationMinutes: totalMinutes,
         previewDataUrl,
-        collectionId: finalCollectionId,
-        collectionName: finalCollectionName,
-        collectionIndex: finalCollectionIndex,
-        incrementalDurationMinutes: incrementalDurationMinutes,
       };
 
       // 模拟上传进度（实际应该从 onSave 中获取）
@@ -351,13 +188,27 @@ export function UploadPage({ onClose, onSave }: UploadPageProps) {
         clearDraft().catch(console.warn);
         resetState();
         clearImage();
-        setGroupModalMode(null);
       });
     } catch (error) {
       console.warn("[UploadPage] Save failed:", error);
-      setUploadError(
-        error instanceof Error ? error.message : "上传失败，请重试"
-      );
+      let errorMessage = "上传失败，请重试";
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (error && typeof error === 'object' && 'response' in error) {
+        // 处理axios错误响应
+        const axiosError = error as any;
+        if (axiosError.response?.data?.detail) {
+          errorMessage = axiosError.response.data.detail;
+        } else if (axiosError.response?.data?.message) {
+          errorMessage = axiosError.response.data.message;
+        } else if (Array.isArray(axiosError.response?.data)) {
+          // 处理字段级错误数组
+          errorMessage = axiosError.response.data.map((e: any) => e.message || e).join("\n");
+        } else {
+          errorMessage = axiosError.message || "上传失败，请重试";
+        }
+      }
+      setUploadError(errorMessage);
       // 上传失败时不清除状态，保留所有输入
     } finally {
       setIsUploading(false);
@@ -366,21 +217,85 @@ export function UploadPage({ onClose, onSave }: UploadPageProps) {
     }
   }, [
     processedFile,
-    isUploading,
     validateAll,
     state,
-    collections,
-    getNextCollectionIndex,
-    generateCollectionId,
     previewUrl,
     selectedTags,
     totalMinutes,
-    incrementalDurationMinutes,
     onSave,
     clearDraft,
     resetState,
     clearImage,
   ]);
+
+  // 处理保存（添加限制检查）
+  const handleSave = useCallback(async () => {
+    if (!processedFile || isUploading) {
+      if (!processedFile) {
+        // 触发文件选择
+        const input = document.querySelector<HTMLInputElement>(
+          'input[type="file"]'
+        );
+        input?.click();
+      }
+      return;
+    }
+
+    // 验证所有数据
+    const errors = validateAll();
+    if (errors.length > 0) {
+      const errorMessages = errors.map((e) => e.message).join("\n");
+      window.alert(errorMessages);
+      return;
+    }
+
+    // 检查非会员用户是否已经有作品
+    const hasExistingArtworks = userArtworks.length > 0;
+    const isNonMember = !isMember;
+
+    if (hasExistingArtworks && isNonMember) {
+      // 显示限制确认弹窗
+      setShowUploadLimitConfirm(true);
+      // 保存待执行的保存函数
+      pendingSaveRef.current = executeSave;
+      return;
+    }
+
+    // 否则直接执行保存
+    await executeSave();
+  }, [
+    processedFile,
+    isUploading,
+    validateAll,
+    userArtworks.length,
+    isMember,
+    executeSave,
+  ]);
+
+  // 确认按钮：关闭弹窗，其他什么都不变
+  const handleConfirmUploadLimit = useCallback(() => {
+    setShowUploadLimitConfirm(false);
+    pendingSaveRef.current = null;
+  }, []);
+
+  // 取消上传限制弹窗（点击遮罩层关闭）
+  const handleCancelUploadLimit = useCallback(() => {
+    setShowUploadLimitConfirm(false);
+    pendingSaveRef.current = null;
+    // 清除上传状态并关闭上传页面
+    resetState();
+    clearImage();
+    onClose();
+  }, [resetState, clearImage, onClose]);
+  
+  // 前往加入会员
+  const handleJoinMembership = useCallback(() => {
+    setShowUploadLimitConfirm(false);
+    pendingSaveRef.current = null;
+    if (onJoinMembership) {
+      onJoinMembership();
+    }
+  }, [onJoinMembership]);
 
   const handleCancelUpload = useCallback(() => {
     if (abortControllerRef.current) {
@@ -410,7 +325,7 @@ export function UploadPage({ onClose, onSave }: UploadPageProps) {
           label: "返回",
           onClick: onClose,
         }}
-        title="Upload"
+        title="新的画作"
         subtitle="New Work"
       />
 
@@ -475,11 +390,35 @@ export function UploadPage({ onClose, onSave }: UploadPageProps) {
           minutes={state.durationMinutes}
           totalMinutes={durationTotalMinutes}
           formattedDuration={formattedDuration}
-          incrementalDuration={formattedIncrementalDuration}
           onChange={(hours, minutes) => {
             updateState({ durationHours: hours, durationMinutes: minutes });
           }}
         />
+
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "0.75rem",
+          margin: "1.5rem 0",
+          padding: "0 0.5rem"
+        }}>
+          <div style={{
+            flex: 1,
+            height: "1px",
+            background: "rgba(239, 234, 231, 0.15)"
+          }} />
+          <span style={{
+            fontSize: "0.7rem",
+            color: "rgba(239, 234, 231, 0.4)",
+            letterSpacing: "0.05em",
+            whiteSpace: "nowrap"
+          }}>可选填</span>
+          <div style={{
+            flex: 1,
+            height: "1px",
+            background: "rgba(239, 234, 231, 0.15)"
+          }} />
+        </div>
 
         <TagManager
           tagOptions={tagOptions}
@@ -510,29 +449,48 @@ export function UploadPage({ onClose, onSave }: UploadPageProps) {
           onDescriptionChange={(description) => updateState({ description })}
         />
 
-        <UploadActions
-          collectionId={state.collectionId}
-          collectionName={state.collectionName}
-          collections={collections}
-          isUploading={isUploading}
-          uploadProgress={uploadProgress}
-          canSave={canSave}
-          onCreateCollection={() => setGroupModalMode("create")}
-          onSelectCollection={() => setGroupModalMode("select")}
-          onClearCollection={handleClearCollection}
-          onSave={handleSave}
-          onCancel={isUploading ? handleCancelUpload : undefined}
-        />
-
-        <GroupSelectorModal
-          mode={groupModalMode}
-          collections={collections}
-          onClose={() => setGroupModalMode(null)}
-          onSelectCollection={handleSelectCollection}
-          onCreateCollection={handleCreateCollection}
-          onRefreshCollections={refreshCollections}
-        />
+        <section className="upload-section">
+          {isUploading && handleCancelUpload && (
+            <button
+              type="button"
+              className="upload-save"
+              onClick={handleCancelUpload}
+              style={{
+                background: "rgba(239, 234, 231, 0.1)",
+                color: "rgba(239, 234, 231, 0.85)",
+                marginBottom: "0.5rem",
+              }}
+            >
+              <MaterialIcon name="cancel" />
+              取消上传
+            </button>
+          )}
+          <button
+            type="button"
+            className="upload-save"
+            onClick={handleSave}
+            disabled={!canSave || isUploading}
+          >
+            {isUploading ? (
+              <>
+                <MaterialIcon name="sync" />
+                {uploadProgress !== null
+                  ? `上传中... ${uploadProgress}%`
+                  : "上传中..."}
+              </>
+            ) : (
+              "保存"
+            )}
+          </button>
+        </section>
       </main>
+
+      <UploadLimitConfirmModal
+        open={showUploadLimitConfirm}
+        onConfirm={handleConfirmUploadLimit}
+        onCancel={handleCancelUploadLimit}
+        onJoinMembership={onJoinMembership ? handleJoinMembership : undefined}
+      />
     </div>
   );
 }

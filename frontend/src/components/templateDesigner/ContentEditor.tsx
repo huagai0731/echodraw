@@ -24,6 +24,7 @@ type ContentEditorProps = {
   onStateChange: (state: ContentEditorState) => void;
   getDateLabel?: (artwork: Artwork) => string;
   getDurationLabel?: (artwork: Artwork) => string;
+  showAddSuffix?: boolean; // 控制是否显示"增加后缀"选项
 };
 
 export function ContentEditor({
@@ -34,6 +35,7 @@ export function ContentEditor({
   onStateChange,
   getDateLabel,
   getDurationLabel,
+  showAddSuffix = true, // 默认显示，保持向后兼容
 }: ContentEditorProps) {
   const renderToggle = (active: boolean, onToggle: () => void, label: string) => (
     <button
@@ -92,29 +94,31 @@ export function ContentEditor({
         </label>
         {renderToggle(state.showUsername, () => handleChange("showUsername", !state.showUsername), "署名")}
       </div>
-      <div className="content-editor__field-row content-editor__field-row--inline" style={{ marginTop: 8, position: "relative" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <span>增加后缀</span>
-          <button
-            ref={suffixIconRef}
-            type="button"
-            className="content-editor__help-icon"
-            onClick={() => setShowSuffixTooltip(!showSuffixTooltip)}
-            aria-label="关于增加后缀"
-          >
-            <MaterialIcon name="help" />
-          </button>
-          {showSuffixTooltip && (
-            <div
-              ref={suffixTooltipRef}
-              className="content-editor__tooltip"
+      {showAddSuffix && (
+        <div className="content-editor__field-row content-editor__field-row--inline" style={{ marginTop: 8, position: "relative" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <span>增加后缀</span>
+            <button
+              ref={suffixIconRef}
+              type="button"
+              className="content-editor__help-icon"
+              onClick={() => setShowSuffixTooltip(!showSuffixTooltip)}
+              aria-label="关于增加后缀"
             >
-              <p>如果愿意通过此方法让更多人了解到EchoDraw的话，可以开启，非常感谢&gt;&lt;</p>
-            </div>
-          )}
+              <MaterialIcon name="help" />
+            </button>
+            {showSuffixTooltip && (
+              <div
+                ref={suffixTooltipRef}
+                className="content-editor__tooltip"
+              >
+                <p>如果愿意通过此方法让更多人了解到EchoDraw的话，可以开启，非常感谢&gt;&lt;</p>
+              </div>
+            )}
+          </div>
+          {renderToggle(state.addSuffix, () => handleChange("addSuffix", !state.addSuffix), "增加后缀")}
         </div>
-        {renderToggle(state.addSuffix, () => handleChange("addSuffix", !state.addSuffix), "增加后缀")}
-      </div>
+      )}
     </div>
   );
 }

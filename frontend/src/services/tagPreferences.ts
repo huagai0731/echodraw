@@ -1,23 +1,22 @@
-import { PRESET_TAGS, type TagPreset } from "@/constants/tagPresets";
 import { fetchTags, type Tag } from "@/services/api";
 import { hasAuthToken } from "@/services/api";
 
 export type CustomTag = {
-  id: number; // 改为数字ID（后端Tag的ID）
+  id: number; // 后端Tag的ID
   name: string;
-  hidden?: boolean;
+  hidden?: boolean; // 保留字段以兼容旧代码，但不再使用
 };
 
 export type TagPreferences = {
-  hiddenPresetTagIds: string[]; // 预设标签的ID（字符串，来自PRESET_TAGS）
-  hiddenCustomTagIds: number[]; // 自定义标签的ID（数字，来自后端）
-  customTags: CustomTag[]; // 自定义标签列表（从后端获取）
+  hiddenPresetTagIds: string[]; // 保留字段以兼容旧代码，但不再使用
+  hiddenCustomTagIds: number[]; // 保留字段以兼容旧代码，但不再使用
+  customTags: CustomTag[]; // 所有标签列表（从后端获取）
 };
 
 export type TagOption = {
-  id: string | number; // 预设标签用字符串ID，自定义标签用数字ID
+  id: number; // 统一使用数字ID
   name: string;
-  isCustom: boolean;
+  isCustom: boolean; // 保留字段以兼容旧代码，现在都是true
   defaultActive: boolean;
 };
 
@@ -39,52 +38,44 @@ export function getDefaultTagPreferences(): TagPreferences {
 }
 
 // 标签缓存（避免频繁请求后端）
-let tagsCache: { presetTags: Tag[]; customTags: Tag[]; timestamp: number } | null = null;
+let tagsCache: { tags: Tag[]; timestamp: number } | null = null;
 const TAGS_CACHE_DURATION = 5 * 60 * 1000; // 5分钟缓存
 
 /**
  * 从后端获取标签
  */
-export async function loadTagsFromAPI(): Promise<{ presetTags: Tag[]; customTags: Tag[] }> {
+export async function loadTagsFromAPI(): Promise<{ tags: Tag[] }> {
   if (!hasAuthToken()) {
-    return { presetTags: [], customTags: [] };
+    return { tags: [] };
   }
 
   // 检查缓存
   if (tagsCache && Date.now() - tagsCache.timestamp < TAGS_CACHE_DURATION) {
-    return { presetTags: tagsCache.presetTags, customTags: tagsCache.customTags };
+    return { tags: tagsCache.tags };
   }
 
   try {
     const response = await fetchTags();
-    const presetTags = response.preset_tags.map(tag => ({
+    // 统一处理所有标签（不再区分预设和自定义）
+    const tags = response.custom_tags.map(tag => ({
       id: tag.id,
       name: tag.name,
-      isPreset: tag.is_preset,
-      isHidden: tag.is_hidden,
-      displayOrder: tag.display_order,
-      createdAt: tag.created_at,
-      updatedAt: tag.updated_at,
-    }));
-    const customTags = response.custom_tags.map(tag => ({
-      id: tag.id,
-      name: tag.name,
-      isPreset: tag.is_preset,
-      isHidden: tag.is_hidden,
+      isPreset: false, // 统一为false
+      isHidden: false, // 不再支持隐藏
       displayOrder: tag.display_order,
       createdAt: tag.created_at,
       updatedAt: tag.updated_at,
     }));
 
-    tagsCache = { presetTags, customTags, timestamp: Date.now() };
-    return { presetTags, customTags };
+    tagsCache = { tags, timestamp: Date.now() };
+    return { tags };
   } catch (error) {
     console.warn("[Echo] Failed to load tags from API:", error);
     // 如果API失败，返回空数组（或使用缓存）
     if (tagsCache) {
-      return { presetTags: tagsCache.presetTags, customTags: tagsCache.customTags };
+      return { tags: tagsCache.tags };
     }
-    return { presetTags: [], customTags: [] };
+    return { tags: [] };
   }
 }
 
@@ -102,21 +93,18 @@ export function getStorageKey(email?: string | null) {
 
 export async function loadTagPreferencesAsync(email?: string | null): Promise<TagPreferences> {
   // 从后端获取标签
-  const { customTags } = await loadTagsFromAPI();
+  const { tags } = await loadTagsFromAPI();
   
-  // 从localStorage加载隐藏偏好
-  const hiddenPrefs = loadHiddenPreferences(email);
-  
-  // 构建自定义标签列表
-  const customTagsList: CustomTag[] = customTags.map(tag => ({
+  // 构建标签列表（不再支持隐藏功能）
+  const customTagsList: CustomTag[] = tags.map(tag => ({
     id: tag.id,
     name: tag.name,
-    hidden: hiddenPrefs.hiddenCustomTagIds.includes(tag.id),
+    hidden: false, // 不再支持隐藏
   }));
 
   return {
-    hiddenPresetTagIds: hiddenPrefs.hiddenPresetTagIds,
-    hiddenCustomTagIds: hiddenPrefs.hiddenCustomTagIds,
+    hiddenPresetTagIds: [], // 不再使用
+    hiddenCustomTagIds: [], // 不再使用
     customTags: customTagsList,
   };
 }
@@ -171,98 +159,43 @@ function loadHiddenPreferences(email?: string | null): {
 }
 
 export function saveTagPreferences(email: string | null, preferences: TagPreferences) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  const normalized = normalizePreferences(preferences);
-
-  try {
-    // 只保存隐藏偏好，不保存标签列表（标签列表从后端获取）
-    const prefsToSave: TagPreferences = {
-      hiddenPresetTagIds: normalized.hiddenPresetTagIds,
-      hiddenCustomTagIds: normalized.hiddenCustomTagIds,
-      customTags: [], // 不再保存标签列表到localStorage
-    };
-    window.localStorage.setItem(getStorageKey(email), JSON.stringify(prefsToSave));
-  } catch (error) {
-    console.warn("[Echo] Failed to save tag preferences:", error);
-  }
-
-  try {
-    const event = new CustomEvent(TAG_PREFERENCES_CHANGED_EVENT, {
-      detail: {
-        email: email ?? null,
-        preferences: normalized,
-      },
-    });
-    window.dispatchEvent(event);
-  } catch (error) {
-    console.warn("[Echo] Failed to dispatch tag preferences changed event:", error);
-  }
+  // 不再需要保存偏好到localStorage（标签管理通过后端API完成）
+  // 保留函数以兼容旧代码，但不执行任何操作
 }
 
 export async function buildTagOptionsAsync(preferences: TagPreferences): Promise<TagOption[]> {
   // 从后端获取标签
-  const { presetTags, customTags } = await loadTagsFromAPI();
+  const { tags } = await loadTagsFromAPI();
   
-  const hiddenPresetSet = new Set(preferences.hiddenPresetTagIds);
-  const hiddenCustomSet = new Set(preferences.hiddenCustomTagIds);
-
-  // 构建预设标签选项（使用后端返回的数字ID，而不是PRESET_TAGS的字符串ID）
-  // 通过名称匹配PRESET_TAGS和后端返回的预设标签
-  const presetOptions: TagOption[] = presetTags
-    .filter((tag) => {
-      // 通过名称匹配找到对应的PRESET_TAGS项
-      const preset = PRESET_TAGS.find((p) => p.name === tag.name);
-      if (!preset) return false;
-      // 检查是否被隐藏（使用PRESET_TAGS的字符串ID检查）
-      return !hiddenPresetSet.has(preset.id);
-    })
-    .map((tag) => {
-      const preset = PRESET_TAGS.find((p) => p.name === tag.name);
-      return {
-        id: tag.id, // 使用后端返回的数字ID
-        name: tag.name,
-        isCustom: false,
-        defaultActive: preset ? preset.defaultActive && !hiddenPresetSet.has(preset.id) : false,
-      };
-    });
-
-  // 构建自定义标签选项（从后端获取）
-  const customOptions: TagOption[] = customTags
-    .filter((tag) => !hiddenCustomSet.has(tag.id))
-    .map((tag) => ({
-      id: tag.id, // 使用数字ID
+  // 导入预设标签配置
+  const { PRESET_TAGS } = await import("@/constants/tagPresets");
+  
+  // 构建标签选项（统一处理，不再区分预设和自定义）
+  // 根据预设标签的defaultActive属性设置标签选项的defaultActive
+  const options: TagOption[] = tags.map((tag) => {
+    // 通过名称匹配预设标签
+    const presetTag = PRESET_TAGS.find((preset) => preset.name === tag.name);
+    return {
+      id: tag.id,
       name: tag.name,
-      isCustom: true,
-      defaultActive: false,
-    }));
+      isCustom: true, // 现在都是自定义标签
+      defaultActive: presetTag?.defaultActive ?? false,
+    };
+  });
 
-  return [...presetOptions, ...customOptions];
+  return options;
 }
 
 export function buildTagOptions(preferences: TagPreferences): TagOption[] {
-  const hiddenPresetSet = new Set(preferences.hiddenPresetTagIds);
-  const hiddenCustomSet = new Set(preferences.hiddenCustomTagIds);
-  
-  const presetOptions: TagOption[] = PRESET_TAGS.map((preset) => ({
-    id: preset.id,
-    name: preset.name,
-    isCustom: false,
-    defaultActive: preset.defaultActive && !hiddenPresetSet.has(preset.id),
-  })).filter((item) => !hiddenPresetSet.has(item.id));
+  // 统一处理所有标签（不再区分预设和自定义，不再支持隐藏）
+  const options: TagOption[] = preferences.customTags.map((tag) => ({
+    id: tag.id,
+    name: tag.name,
+    isCustom: true, // 现在都是自定义标签
+    defaultActive: false,
+  }));
 
-  const customOptions: TagOption[] = preferences.customTags
-    .filter((tag) => !hiddenCustomSet.has(tag.id))
-    .map((tag) => ({
-      id: tag.id,
-      name: tag.name,
-      isCustom: true,
-      defaultActive: false,
-    }));
-
-  return [...presetOptions, ...customOptions];
+  return options;
 }
 
 export function createCustomTag(name: string): CustomTag {
@@ -281,18 +214,6 @@ export function normalizePreferences(input?: Partial<TagPreferences> | TagPrefer
     return getDefaultTagPreferences();
   }
 
-  const hiddenPresetTagIds = Array.isArray(input.hiddenPresetTagIds)
-    ? input.hiddenPresetTagIds
-        .filter((value): value is string => typeof value === "string")
-        .map((value) => value.trim())
-        .filter((value): value is string => value.length > 0 && !!findPresetById(value))
-    : [];
-
-  const hiddenCustomTagIds = Array.isArray(input.hiddenCustomTagIds)
-    ? input.hiddenCustomTagIds
-        .filter((value): value is number => typeof value === "number")
-    : [];
-
   const customTags = Array.isArray(input.customTags)
     ? input.customTags
         .map((item) => {
@@ -309,25 +230,17 @@ export function normalizePreferences(input?: Partial<TagPreferences> | TagPrefer
           if (id === null || !name) {
             return null;
           }
-          const hiddenValue =
-            typeof (item as { hidden?: unknown }).hidden === "boolean"
-              ? Boolean((item as { hidden?: boolean }).hidden)
-              : false;
-          const normalized: CustomTag = { id, name, hidden: hiddenValue };
+          const normalized: CustomTag = { id, name, hidden: false }; // 不再支持隐藏
           return normalized;
         })
         .filter((item): item is CustomTag => item !== null)
     : [];
 
   return {
-    hiddenPresetTagIds,
-    hiddenCustomTagIds,
+    hiddenPresetTagIds: [], // 不再使用
+    hiddenCustomTagIds: [], // 不再使用
     customTags,
   };
-}
-
-function findPresetById(id: string): TagPreset | undefined {
-  return PRESET_TAGS.find((preset) => preset.id === id);
 }
 
 

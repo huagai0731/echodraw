@@ -35,7 +35,7 @@ export function getProxiedImageUrl(url: string): string {
   }
   
   // 如果已经是代理URL，直接返回（避免重复转换）
-  if (url.includes('/visual-analysis/proxy-image/')) {
+  if (url.includes('/visual-analysis/proxy-image/') || (url.includes('/api/uploads/') && url.includes('/image/'))) {
     return url;
   }
   

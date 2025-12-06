@@ -3,27 +3,21 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 
 import MaterialIcon from "@/components/MaterialIcon";
 import TopNav, { type TopNavAction } from "@/components/TopNav";
+import { ArtisticLoader } from "@/components/ArtisticLoader";
 import type { Artwork } from "@/types/artwork";
 import WeeklySingleTemplateDesigner from "@/pages/reports/WeeklySingleTemplateDesigner";
 import WeeklyDoubleTemplateDesigner from "@/pages/reports/WeeklyDoubleTemplateDesigner";
 import MonthlySingleTemplateDesigner from "@/pages/reports/MonthlySingleTemplateDesigner";
 import FourImageTemplateDesigner from "@/pages/reports/FourImageTemplateDesigner";
-import CollageTemplateDesigner from "@/pages/reports/CollageTemplateDesigner";
 import YearlyTemplateDesigner from "@/pages/reports/YearlyTemplateDesigner";
-import TimeJumpComparisonTemplateDesigner from "@/pages/reports/TimeJumpComparisonTemplateDesigner";
-import LinearProgressTimelineTemplateDesigner from "@/pages/reports/LinearProgressTimelineTemplateDesigner";
 import {
   fetchUserTestResults,
-  fetchNotifications,
-  deleteNotification,
   deleteUserTestResult,
   deleteVisualAnalysisResult,
-  // Removed unused: getUnreadNotificationCount
   hasAuthToken,
   fetchGoalsCalendar,
   fetchVisualAnalysisResults,
   type UserTestResult,
-  type Notification,
   type GoalsCalendarDay,
   type VisualAnalysisResultRecord,
 } from "@/services/api";
@@ -42,7 +36,7 @@ import "./Reports.css";
 import "./Goals.css";
 import "./ArtworkDetails.css";
 
-type TemplateAction = "weekly-single" | "weekly-double" | "monthly-single" | "four-image" | "collage" | "yearly" | "time-jump-comparison" | "linear-progress-timeline";
+type TemplateAction = "weekly-single" | "weekly-double" | "monthly-single" | "four-image" | "yearly";
 
 type TemplateItem = {
   id: string;
@@ -57,7 +51,6 @@ type ReportItem = {
   subtitle: string;
   glow: number;
   testResultId?: number;
-  notificationId?: number;
   visualAnalysisResultId?: number;
   timestamp?: number;
 };
@@ -68,16 +61,13 @@ const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const MONTHLY_CHART_WIDTH = 310;
 const MONTHLY_CHART_HEIGHT = 192;
 
-// 八个可滑动的模版卡片
+// 五个可滑动的模版卡片
 const TEMPLATE_CARDS: TemplateItem[] = [
   { id: "weekly-single", icon: "view_week", label: "单周模板", action: "weekly-single" as TemplateAction },
   { id: "weekly-double", icon: "view_week", label: "双周模板", action: "weekly-double" as TemplateAction },
   { id: "monthly-single", icon: "calendar_month", label: "单月模板", action: "monthly-single" as TemplateAction },
   { id: "four-image", icon: "grid_view", label: "四图模板", action: "four-image" as TemplateAction },
-  { id: "collage", icon: "apps", label: "套图模板", action: "collage" as TemplateAction },
   { id: "yearly", icon: "calendar_today", label: "全年模板", action: "yearly" as TemplateAction },
-  { id: "time-jump-comparison", icon: "compare_arrows", label: "时间跳点对比", action: "time-jump-comparison" as TemplateAction },
-  { id: "linear-progress-timeline", icon: "timeline", label: "线性进步轨迹", action: "linear-progress-timeline" as TemplateAction },
 ];
 
 type WeeklyStat = {
@@ -293,15 +283,11 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
   const [weeklyDoubleTemplateOpen, setWeeklyDoubleTemplateOpen] = useState(false);
   const [monthlySingleTemplateOpen, setMonthlySingleTemplateOpen] = useState(false);
   const [fourImageTemplateOpen, setFourImageTemplateOpen] = useState(false);
-  const [collageTemplateOpen, setCollageTemplateOpen] = useState(false);
   const [yearlyTemplateOpen, setYearlyTemplateOpen] = useState(false);
-  const [timeJumpComparisonTemplateOpen, setTimeJumpComparisonTemplateOpen] = useState(false);
-  const [linearProgressTimelineTemplateOpen, setLinearProgressTimelineTemplateOpen] = useState(false);
   const [templatesPageOpen, setTemplatesPageOpen] = useState(false);
   const [reportsPageOpen, setReportsPageOpen] = useState(false);
 
   // 报告相关状态
-  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [testResults, setTestResults] = useState<UserTestResult[]>([]);
   const [visualAnalysisResults, setVisualAnalysisResults] = useState<VisualAnalysisResultRecord[]>([]);
   const [reportsLoading, setReportsLoading] = useState(true);
@@ -333,12 +319,11 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
 
   const { checkInDates: localUploadDates } = useCheckInDates();
 
-  // 加载通知、测试结果和视觉分析结果
+  // 加载测试结果和视觉分析结果
   useEffect(() => {
     const loadData = async () => {
       setReportsLoading(true);
       if (!hasAuthToken()) {
-        setNotifications([]);
         setTestResults([]);
         setVisualAnalysisResults([]);
         setReportsLoading(false);
@@ -346,19 +331,10 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
       }
 
       // 并行加载所有数据，提高速度
-      const [notifs, results, visualResults] = await Promise.allSettled([
-        fetchNotifications(),
+      const [results, visualResults] = await Promise.allSettled([
         fetchUserTestResults(),
         fetchVisualAnalysisResults(),
       ]);
-
-      // 处理通知
-      if (notifs.status === 'fulfilled') {
-        setNotifications(notifs.value);
-      } else {
-        console.warn("[Reports] Failed to load notifications:", notifs.reason);
-        setNotifications([]);
-      }
 
       // 处理测试结果
       if (results.status === 'fulfilled') {
@@ -397,7 +373,6 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
           const { data, timestamp } = JSON.parse(cached);
           const cacheAge = Date.now() - timestamp;
           if (cacheAge < CACHE_MAX_AGE) {
-            setNotifications(data.notifications || []);
             setTestResults(data.testResults || []);
             setVisualAnalysisResults(data.visualAnalysisResults || []);
             setReportsLoading(false);
@@ -412,12 +387,11 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
   
   // 当数据加载成功后，更新缓存
   useEffect(() => {
-    if (!reportsLoading && (notifications.length > 0 || testResults.length > 0 || visualAnalysisResults.length > 0)) {
+    if (!reportsLoading && (testResults.length > 0 || visualAnalysisResults.length > 0)) {
       if (typeof window !== 'undefined') {
         try {
           localStorage.setItem(reportsCacheKey, JSON.stringify({
             data: {
-              notifications,
               testResults,
               visualAnalysisResults,
             },
@@ -428,7 +402,7 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
         }
       }
     }
-  }, [reportsLoading, notifications, testResults, visualAnalysisResults]);
+  }, [reportsLoading, testResults, visualAnalysisResults]);
 
   // 加载上传数据
   useEffect(() => {
@@ -512,20 +486,8 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
         setFourImageTemplateOpen(true);
         return;
       }
-      if (action === "collage") {
-        setCollageTemplateOpen(true);
-        return;
-      }
       if (action === "yearly") {
         setYearlyTemplateOpen(true);
-        return;
-      }
-      if (action === "time-jump-comparison") {
-        setTimeJumpComparisonTemplateOpen(true);
-        return;
-      }
-      if (action === "linear-progress-timeline") {
-        setLinearProgressTimelineTemplateOpen(true);
         return;
       }
     },
@@ -706,21 +668,6 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
   // 构建报告列表
   const reportItems = useMemo<ReportItem[]>(() => {
     const items: ReportItem[] = [];
-    
-    // 从通知中提取报告
-    notifications.forEach((notif, index) => {
-      // 根据标题判断是否是报告
-      if (notif.title?.includes("报告") || notif.title?.includes("月报") || notif.title?.includes("周报")) {
-        items.push({
-          id: `notification-${notif.id}`,
-          title: notif.title || "报告",
-          subtitle: notif.created_at ? new Date(notif.created_at).toLocaleDateString("zh-CN") : "",
-          glow: (index % 7) + 1,
-          notificationId: notif.id,
-          timestamp: notif.created_at ? new Date(notif.created_at).getTime() : 0,
-        });
-      }
-    });
 
     // 从测试结果中提取
     testResults.forEach((result, index) => {
@@ -735,7 +682,7 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
         id: `test-result-${result.id}`,
         title: result.test_name,
         subtitle: `${year}年${month}月${day}日 ${hours}:${minutes}`,
-        glow: ((notifications.length + index) % 7) + 1,
+        glow: (index % 7) + 1,
         testResultId: result.id,
         timestamp: date.getTime(),
       });
@@ -755,7 +702,7 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
     //     id: `visual-analysis-${result.id}`,
     //     title: "视觉分析",
     //     subtitle: `${year}年${month}月${day}日 ${hours}:${minutes}`,
-    //     glow: ((notifications.length + testResults.length + index) % 7) + 1,
+    //     glow: ((testResults.length + index) % 7) + 1,
     //     visualAnalysisResultId: result.id,
     //     timestamp: date.getTime(),
     //   });
@@ -763,26 +710,12 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
 
     // 按时间戳排序，最新的在前
     return items.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-  }, [notifications, testResults, visualAnalysisResults]);
+  }, [testResults, visualAnalysisResults]);
 
   const unreadReports = useMemo(() => {
     if (!hasAuthToken()) return [];
-    const readIds = new Set<number>();
-    try {
-      const stored = localStorage.getItem("echo-read-notifications");
-      if (stored) {
-        const ids = JSON.parse(stored) as number[];
-        ids.forEach((id) => readIds.add(id));
-      }
-    } catch {
-      // ignore
-    }
-    return reportItems.filter((item) => {
-      if (item.notificationId) {
-        return !readIds.has(item.notificationId);
-      }
-      return true; // 测试结果默认算作未读
-    });
+    // 测试结果默认算作未读
+    return reportItems;
   }, [reportItems]);
 
   const hasUnreadReports = unreadReports.length > 0;
@@ -793,10 +726,7 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
     
     setIsDeleting(true);
     try {
-      if (item.notificationId !== undefined) {
-        await deleteNotification(item.notificationId);
-        setNotifications((prev) => prev.filter((n) => n.id !== item.notificationId));
-      } else if (item.testResultId !== undefined) {
+      if (item.testResultId !== undefined) {
         await deleteUserTestResult(item.testResultId);
         setTestResults((prev) => prev.filter((r) => r.id !== item.testResultId));
       } else if (item.visualAnalysisResultId !== undefined) {
@@ -922,8 +852,7 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
           <div className="reports-screen__list">
             {reportsLoading ? (
               <div className="reports-loading">
-                <MaterialIcon name="hourglass_empty" className="reports-loading-icon" />
-                <p>正在加载报告...</p>
+                <ArtisticLoader size="medium" text="正在加载报告..." />
               </div>
             ) : reportItems.length > 0 ? (
               reportItems.map((item) => (
@@ -1000,7 +929,7 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
   // 处理模版页（原来的templates tab）
   if (templatesPageOpen) {
     // 检查是否有模版设计器打开
-    const anyTemplateOpen = weeklySingleTemplateOpen || weeklyDoubleTemplateOpen || monthlySingleTemplateOpen || fourImageTemplateOpen || collageTemplateOpen || yearlyTemplateOpen || timeJumpComparisonTemplateOpen || linearProgressTimelineTemplateOpen;
+    const anyTemplateOpen = weeklySingleTemplateOpen || weeklyDoubleTemplateOpen || monthlySingleTemplateOpen || fourImageTemplateOpen || yearlyTemplateOpen;
     
     return (
       <div className="reports-screen">
@@ -1039,16 +968,13 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
         <WeeklyDoubleTemplateDesigner open={weeklyDoubleTemplateOpen} artworks={artworks} onClose={() => setWeeklyDoubleTemplateOpen(false)} />
         <MonthlySingleTemplateDesigner open={monthlySingleTemplateOpen} artworks={artworks} onClose={() => setMonthlySingleTemplateOpen(false)} />
         <FourImageTemplateDesigner open={fourImageTemplateOpen} artworks={artworks} onClose={() => setFourImageTemplateOpen(false)} />
-        <CollageTemplateDesigner open={collageTemplateOpen} artworks={artworks} onClose={() => setCollageTemplateOpen(false)} />
         <YearlyTemplateDesigner open={yearlyTemplateOpen} artworks={artworks} onClose={() => setYearlyTemplateOpen(false)} />
-        <TimeJumpComparisonTemplateDesigner open={timeJumpComparisonTemplateOpen} artworks={artworks} onClose={() => setTimeJumpComparisonTemplateOpen(false)} />
-        <LinearProgressTimelineTemplateDesigner open={linearProgressTimelineTemplateOpen} artworks={artworks} onClose={() => setLinearProgressTimelineTemplateOpen(false)} />
       </div>
     );
   }
 
   // 检查是否有模版设计器打开
-  const anyTemplateOpen = weeklySingleTemplateOpen || weeklyDoubleTemplateOpen || monthlySingleTemplateOpen || fourImageTemplateOpen || collageTemplateOpen || yearlyTemplateOpen || timeJumpComparisonTemplateOpen;
+  const anyTemplateOpen = weeklySingleTemplateOpen || weeklyDoubleTemplateOpen || monthlySingleTemplateOpen || fourImageTemplateOpen || yearlyTemplateOpen;
 
   return (
     <div className="reports-screen">
@@ -1363,9 +1289,7 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
       <WeeklyDoubleTemplateDesigner open={weeklyDoubleTemplateOpen} artworks={artworks} onClose={() => setWeeklyDoubleTemplateOpen(false)} />
       <MonthlySingleTemplateDesigner open={monthlySingleTemplateOpen} artworks={artworks} onClose={() => setMonthlySingleTemplateOpen(false)} />
       <FourImageTemplateDesigner open={fourImageTemplateOpen} artworks={artworks} onClose={() => setFourImageTemplateOpen(false)} />
-      <CollageTemplateDesigner open={collageTemplateOpen} artworks={artworks} onClose={() => setCollageTemplateOpen(false)} />
       <YearlyTemplateDesigner open={yearlyTemplateOpen} artworks={artworks} onClose={() => setYearlyTemplateOpen(false)} />
-      <TimeJumpComparisonTemplateDesigner open={timeJumpComparisonTemplateOpen} artworks={artworks} onClose={() => setTimeJumpComparisonTemplateOpen(false)} />
     </div>
   );
 }

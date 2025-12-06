@@ -15,7 +15,7 @@ from django.core.mail import send_mail
 from django.core.validators import validate_email
 from django.db import transaction, IntegrityError, models
 from django.db.models import Max
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import generics, status, serializers
@@ -82,6 +82,50 @@ def get_today_shanghai() -> date:
             shanghai_time = timezone.localtime(now)
         return shanghai_time.date()
 
+
+def get_current_month_range_shanghai() -> tuple[date, date]:
+    """
+    获取中国时区（Asia/Shanghai）的当前月份的开始和结束日期。
+    返回 (month_start, month_end) 元组。
+    """
+    today = get_today_shanghai()
+    month_start = date(today.year, today.month, 1)
+    # 获取当月最后一天
+    if today.month == 12:
+        month_end = date(today.year + 1, 1, 1) - timedelta(days=1)
+    else:
+        month_end = date(today.year, today.month + 1, 1) - timedelta(days=1)
+    return (month_start, month_end)
+
+
+def is_valid_member(profile) -> bool:
+    """
+    检查用户是否为有效会员。
+    
+    会员有效的条件：
+    1. profile.is_member 为 True
+    2. membership_expires 为 None（永久会员）或 membership_expires > 当前时间（未过期）
+    
+    Args:
+        profile: UserProfile 实例，如果为 None 则返回 False
+        
+    Returns:
+        bool: 如果用户是有效会员返回 True，否则返回 False
+    """
+    if not profile:
+        return False
+    
+    if not profile.is_member:
+        return False
+    
+    # 如果 membership_expires 为 None，表示永久会员
+    if profile.membership_expires is None:
+        return True
+    
+    # 检查会员是否过期
+    now = timezone.now()
+    return profile.membership_expires > now
+
 from core.models import (
     AuthToken,
     ConditionalMessage,
@@ -96,7 +140,6 @@ from core.models import (
     LongTermPlanCopy,
     Mood,
     MonthlyReport,
-    Notification,
     ShortTermGoal,
     ShortTermGoalTaskCompletion,
     ShortTermTaskPreset,
@@ -116,7 +159,6 @@ from core.serializers import (
     LongTermGoalSerializer,
     LongTermGoalSetupSerializer,
     LongTermPlanCopyPublicSerializer,
-    NotificationPublicSerializer,
     ShortTermGoalSerializer,
     ShortTermTaskPresetPublicSerializer,
     MoodSerializer,
@@ -141,6 +183,8 @@ ALLOWED_CODE_PURPOSES = {
 
 
 def _normalize_email(value: str) -> str:
+    if not isinstance(value, str):
+        value = str(value) if value is not None else ""
     return value.strip().lower()
 
 
@@ -569,6 +613,14 @@ def register(request):
         
         # 创建用户资料
         UserProfile.objects.create(user=user)
+        
+        # 创建视觉分析额度记录，赠送10次免费额度
+        from core.models import VisualAnalysisQuota
+        VisualAnalysisQuota.objects.create(
+            user=user,
+            free_quota=10,  # 新用户赠送10次
+            used_free_quota=0,
+        )
 
     token_key = AuthToken.issue_for_user(user)
 
@@ -686,8 +738,33 @@ def reset_password(request):
 @authentication_classes([])
 @throttle_classes([])  # 禁用默认节流，因为登录视图已有自己的失败次数限制逻辑
 def login(request):
-    email = _normalize_email(request.data.get("email", ""))
-    password = request.data.get("password", "")
+    # 添加调试日志（仅在DEBUG模式下）
+    if settings.DEBUG:
+        logger.debug(f"[Login] Request method: {request.method}")
+        logger.debug(f"[Login] Content-Type: {request.content_type}")
+        logger.debug(f"[Login] request.data type: {type(request.data)}")
+        logger.debug(f"[Login] request.data: {request.data}")
+    
+    # 安全地获取email和password
+    try:
+        email_raw = request.data.get("email", "")
+        password_raw = request.data.get("password", "")
+    except Exception as e:
+        logger.warning(f"[Login] Failed to parse request.data: {e}")
+        return Response(
+            {"detail": "请求格式错误，请检查请求体"}, status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # 确保email是字符串
+    if not isinstance(email_raw, str):
+        email_raw = str(email_raw) if email_raw is not None else ""
+    
+    # 确保password是字符串
+    if not isinstance(password_raw, str):
+        password_raw = str(password_raw) if password_raw is not None else ""
+    
+    email = _normalize_email(email_raw)
+    password = password_raw
 
     if not email or not password:
         return Response(
@@ -814,13 +891,18 @@ class ProfilePreferenceView(APIView):
         return profile
 
     def _augment_payload(self, data: dict, user):
+        profile = self._get_profile(user)
         display_name = (data.get("display_name") or "").strip()
         signature = (data.get("signature") or "").strip()
+        # 使用 is_valid_member 检查会员是否真的有效（包括检查是否过期）
+        is_member = is_valid_member(profile)
         return {
             "display_name": display_name,
             "signature": signature,
             "default_display_name": self._resolve_default_display_name(user),
             "updated_at": data.get("updated_at"),
+            "is_member": is_member,
+            "membership_expires": profile.membership_expires.isoformat() if profile.membership_expires else None,
         }
 
     @staticmethod
@@ -830,6 +912,126 @@ class ProfilePreferenceView(APIView):
         if not local_part:
             return "回声艺术家"
         return local_part[:1].upper() + local_part[1:]
+
+
+class MembershipSubscriptionView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        """
+        创建或更新会员订阅。
+        请求体：
+        {
+            "tier": "premium",
+            "expires_at": "2025-12-31"  # ISO格式日期字符串
+        }
+        """
+        tier = request.data.get("tier")
+        expires_at_str = request.data.get("expires_at")
+        
+        if not tier or tier not in ["premium"]:
+            return Response(
+                {"detail": "无效的会员等级"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not expires_at_str:
+            return Response(
+                {"detail": "必须提供到期时间"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # 解析日期字符串，支持 "YYYY-MM-DD" 格式
+            expires_at = datetime.strptime(expires_at_str, "%Y-%m-%d").date()
+            # 转换为 datetime，设置为当天的 23:59:59
+            expires_at_datetime = timezone.make_aware(
+                datetime.combine(expires_at, datetime.max.time())
+            )
+        except ValueError:
+            return Response(
+                {"detail": "日期格式无效，请使用 YYYY-MM-DD 格式"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        profile, _ = UserProfile.objects.get_or_create(user=request.user)
+        
+        # 如果用户之前不是会员，或者会员已过期，记录新的开通时间
+        was_member = profile.is_member and profile.membership_expires and profile.membership_expires > timezone.now()
+        if not was_member:
+            # 记录新的开通时间
+            profile.membership_started_at = timezone.now()
+            # 如果用户有视觉分析额度记录，需要重置月度额度周期
+            # 因为开通时间变了，周期应该重新计算
+            try:
+                from core.models import VisualAnalysisQuota
+                quota = VisualAnalysisQuota.objects.filter(user=request.user).first()
+                if quota:
+                    # 清空 current_month，让下次使用时基于新的开通时间重新计算
+                    quota.current_month = ""
+                    quota.save(update_fields=["current_month"])
+            except Exception:
+                # 如果出错，不影响会员开通流程
+                pass
+        
+        profile.is_member = True
+        profile.membership_expires = expires_at_datetime
+        profile.save(update_fields=["is_member", "membership_expires", "membership_started_at", "updated_at"])
+        
+        return Response({
+            "is_member": profile.is_member,
+            "membership_expires": profile.membership_expires.isoformat() if profile.membership_expires else None,
+        })
+
+
+class FeaturedArtworksView(APIView):
+    """管理用户个人页展示的作品列表"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """获取用户的展示作品ID列表"""
+        profile, _ = UserProfile.objects.get_or_create(user=request.user)
+        # 确保返回的是列表，且所有元素都是字符串
+        featured_ids = profile.featured_artwork_ids or []
+        if not isinstance(featured_ids, list):
+            featured_ids = []
+        # 过滤掉非字符串的元素
+        featured_ids = [str(id) for id in featured_ids if id]
+        return Response({"featured_artwork_ids": featured_ids})
+
+    def put(self, request):
+        """更新用户的展示作品ID列表"""
+        featured_ids = request.data.get("featured_artwork_ids", [])
+        
+        # 验证输入
+        if not isinstance(featured_ids, list):
+            return Response(
+                {"detail": "featured_artwork_ids 必须是数组"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 验证所有元素都是字符串或数字，并转换为字符串
+        try:
+            validated_ids = []
+            for id_value in featured_ids:
+                if id_value is None:
+                    continue
+                # 转换为字符串
+                id_str = str(id_value).strip()
+                if id_str:
+                    validated_ids.append(id_str)
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "featured_artwork_ids 中的元素格式不正确"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 保存到数据库
+        profile, _ = UserProfile.objects.get_or_create(user=request.user)
+        profile.featured_artwork_ids = validated_ids
+        profile.save(update_fields=["featured_artwork_ids", "updated_at"])
+        
+        return Response({"featured_artwork_ids": validated_ids})
 
 
 class UserUploadListCreateView(generics.ListCreateAPIView):
@@ -862,18 +1064,33 @@ class UserUploadListCreateView(generics.ListCreateAPIView):
 
     @transaction.atomic
     def perform_create(self, serializer: UserUploadSerializer):
-        # 检查每日上传限制（10张）
-        # 使用 created_at 字段检查今天实际上传的数量，而不是 uploaded_at（用户可能设置为过去的日期）
-        today = get_today_shanghai()
-        today_uploads_count = UserUpload.objects.filter(
-            user=self.request.user,
-            created_at__date=today
+        # 检查用户是否为有效会员（包括检查会员是否过期）
+        user = self.request.user
+        profile = getattr(user, 'profile', None)
+        is_member = is_valid_member(profile)
+        
+        # 非会员用户只能上传1张图片
+        # 注意：这里检查的是总上传数量，不会删除已有图片
+        if not is_member:
+            total_uploads_count = UserUpload.objects.filter(user=user).count()
+            if total_uploads_count >= 1:
+                raise serializers.ValidationError(
+                    "非会员用户只能上传1张图片。加入EchoDraw会员可享受无限制上传。"
+                )
+        
+        # 会员用户检查每月上传限制（150张）
+        # 使用 created_at 字段检查本月实际上传的数量，而不是 uploaded_at（用户可能设置为过去的日期）
+        month_start, month_end = get_current_month_range_shanghai()
+        monthly_uploads_count = UserUpload.objects.filter(
+            user=user,
+            created_at__date__gte=month_start,
+            created_at__date__lte=month_end
         ).count()
         
-        MAX_DAILY_UPLOADS = 10
-        if today_uploads_count >= MAX_DAILY_UPLOADS:
+        MAX_MONTHLY_UPLOADS = 150
+        if is_member and monthly_uploads_count >= MAX_MONTHLY_UPLOADS:
             raise serializers.ValidationError(
-                f"今日已上传 {today_uploads_count} 张图片，已达到每日上限 {MAX_DAILY_UPLOADS} 张。"
+                f"本月已上传 {monthly_uploads_count} 张图片，已达到每月上限 {MAX_MONTHLY_UPLOADS} 张。"
             )
         
         try:
@@ -1007,28 +1224,29 @@ class UserUploadListCreateView(generics.ListCreateAPIView):
 @permission_classes([IsAuthenticated])
 def check_upload_limit(request):
     """
-    检查用户当天上传数量限制
+    检查用户本月上传数量限制
     返回：{
-        "today_count": 今天已上传数量,
-        "max_daily_uploads": 每日最大上传数,
+        "monthly_count": 本月已上传数量,
+        "max_monthly_uploads": 每月最大上传数,
         "remaining": 剩余可上传数量,
         "can_upload": 是否可以继续上传
     }
     """
-    # 使用 created_at 字段检查今天实际上传的数量，而不是 uploaded_at（用户可能设置为过去的日期）
-    today = get_today_shanghai()
-    today_uploads_count = UserUpload.objects.filter(
+    # 使用 created_at 字段检查本月实际上传的数量，而不是 uploaded_at（用户可能设置为过去的日期）
+    month_start, month_end = get_current_month_range_shanghai()
+    monthly_uploads_count = UserUpload.objects.filter(
         user=request.user,
-        created_at__date=today
+        created_at__date__gte=month_start,
+        created_at__date__lte=month_end
     ).count()
     
-    MAX_DAILY_UPLOADS = 10
-    remaining = max(0, MAX_DAILY_UPLOADS - today_uploads_count)
-    can_upload = today_uploads_count < MAX_DAILY_UPLOADS
+    MAX_MONTHLY_UPLOADS = 150
+    remaining = max(0, MAX_MONTHLY_UPLOADS - monthly_uploads_count)
+    can_upload = monthly_uploads_count < MAX_MONTHLY_UPLOADS
     
     return Response({
-        "today_count": today_uploads_count,
-        "max_daily_uploads": MAX_DAILY_UPLOADS,
+        "monthly_count": monthly_uploads_count,
+        "max_monthly_uploads": MAX_MONTHLY_UPLOADS,
         "remaining": remaining,
         "can_upload": can_upload,
     })
@@ -1124,13 +1342,93 @@ class UserUploadImageView(APIView):
             raise Http404("图片不存在")
         
         if not upload.image:
-            logger.warning(f"[UserUploadImageView] Upload存在但图片字段为空: pk={pk}, user_id={user.id}")
+            logger.warning(
+                f"[UserUploadImageView] Upload存在但图片字段为空: pk={pk}, user_id={user.id}, "
+                f"upload.user_id={upload.user.id}"
+            )
             raise Http404("图片不存在")
 
+        # 记录图片路径信息用于调试
+        image_name = upload.image.name if upload.image else None
+        logger.debug(
+            f"[UserUploadImageView] 尝试打开图片: pk={pk}, image_name={image_name}, "
+            f"storage={type(upload.image.storage).__name__}"
+        )
+
+        # 如果使用 TOS 存储，通过代理获取图片以支持 CORS
+        # 这样可以避免 CORS 问题，同时保持权限控制
+        if settings.USE_TOS_STORAGE:
+            try:
+                import requests
+                # 获取 TOS 的公开 URL
+                image_url = upload.image.url
+                logger.debug(
+                    f"[UserUploadImageView] 代理 TOS URL: pk={pk}, url={image_url}, "
+                    f"custom_domain={settings.TOS_CUSTOM_DOMAIN or 'N/A'}"
+                )
+                
+                # 从 TOS 获取图片
+                response = requests.get(image_url, timeout=10, stream=True)
+                response.raise_for_status()
+                
+                # 获取 Content-Type
+                content_type = response.headers.get('Content-Type', 'image/png')
+                
+                # 创建 FileResponse
+                file_response = FileResponse(
+                    response.raw,
+                    content_type=content_type,
+                )
+                
+                # 设置缓存头
+                file_response['Cache-Control'] = 'public, max-age=86400'
+                file_response['Cross-Origin-Resource-Policy'] = 'cross-origin'
+                
+                # 设置 CORS 头
+                origin = request.headers.get('Origin')
+                auth_token = request.query_params.get("token")
+                if origin:
+                    if auth_token:
+                        file_response['Access-Control-Allow-Origin'] = origin
+                        file_response['Access-Control-Allow-Credentials'] = 'true'
+                    else:
+                        file_response['Access-Control-Allow-Origin'] = origin
+                    file_response['Vary'] = 'Origin'
+                else:
+                    file_response['Access-Control-Allow-Origin'] = '*'
+                
+                file_response['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+                file_response['Access-Control-Allow-Headers'] = 'Origin, X-Requested-With, Content-Type, Accept, Authorization'
+                
+                return file_response
+            except requests.RequestException as e:
+                logger.error(f"[UserUploadImageView] 从 TOS 获取图片失败: {str(e)}, URL: {image_url}")
+                return Response(
+                    {"detail": f"获取图片失败: {str(e)}"},
+                    status=status.HTTP_502_BAD_GATEWAY,
+                )
+            except Exception as exc:
+                logger.warning(
+                    f"[UserUploadImageView] 无法获取 TOS URL，回退到文件代理: pk={pk}, "
+                    f"error={str(exc)}"
+                )
+                # 如果获取 URL 失败，继续使用文件代理方式
+
+        # 通过 Django 代理文件（用于没有 CDN 域名或需要额外权限控制的情况）
         try:
             file_handle = upload.image.open("rb")
         except FileNotFoundError as exc:
+            logger.error(
+                f"[UserUploadImageView] 图片文件不存在: pk={pk}, image_name={image_name}, "
+                f"user_id={user.id}, error={str(exc)}"
+            )
             raise Http404("图片文件已丢失") from exc
+        except Exception as exc:
+            logger.error(
+                f"[UserUploadImageView] 打开图片文件失败: pk={pk}, image_name={image_name}, "
+                f"user_id={user.id}, error_type={type(exc).__name__}, error={str(exc)}"
+            )
+            raise Http404(f"无法访问图片文件: {str(exc)}") from exc
 
         content_type, _ = mimetypes.guess_type(upload.image.name)
         response = FileResponse(file_handle, content_type=content_type or "application/octet-stream")
@@ -2360,86 +2658,6 @@ def update_checkpoint(request):
     return Response(serializer.data)
 
 
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def notifications_list(request):
-    """获取通知列表"""
-    notifications = Notification.objects.filter(is_active=True).order_by("-created_at")
-    serializer = NotificationPublicSerializer(notifications, many=True)
-    return Response(serializer.data)
-
-
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def notification_detail(request, notification_id):
-    """获取通知详情"""
-    notification = get_object_or_404(Notification, id=notification_id, is_active=True)
-    serializer = NotificationPublicSerializer(notification)
-    return Response(serializer.data)
-
-
-@api_view(["GET"])
-@permission_classes([AllowAny])
-@authentication_classes([])
-def high_five_count(request):
-    """获取击掌按钮点击总数"""
-    from core.models import HighFiveCounter
-    count = HighFiveCounter.get_count()
-    return Response({"count": count})
-
-
-@api_view(["POST"])
-@permission_classes([AllowAny])
-@authentication_classes([])
-def high_five_increment(request):
-    """增加击掌按钮点击计数（每个用户只能点击一次）"""
-    from core.models import HighFiveCounter
-    
-    user = request.user if request.user.is_authenticated else None
-    session_key = request.session.session_key
-    
-    # 如果没有session key，创建一个
-    if not session_key and not user:
-        request.session.create()
-        session_key = request.session.session_key
-    
-    count, success, clicked_at = HighFiveCounter.increment(user=user, session_key=session_key)
-    
-    response_data = {
-        "count": count,
-        "success": success,
-    }
-    
-    if clicked_at:
-        response_data["clicked_at"] = clicked_at.isoformat()
-    
-    if success:
-        return Response(response_data)
-    else:
-        response_data["message"] = "您已经点击过了"
-        return Response(
-            response_data,
-            status=status.HTTP_200_OK
-        )
-
-
-@api_view(["GET"])
-@permission_classes([AllowAny])
-@authentication_classes([])
-def high_five_has_clicked(request):
-    """检查当前用户是否已经点击过"""
-    from core.models import HighFiveCounter
-    
-    user = request.user if request.user.is_authenticated else None
-    session_key = request.session.session_key
-    
-    has_clicked, clicked_at = HighFiveCounter.has_clicked(user=user, session_key=session_key)
-    response_data = {"has_clicked": has_clicked}
-    
-    if clicked_at:
-        response_data["clicked_at"] = clicked_at.isoformat()
-    
-    return Response(response_data)
 
 
 # ==================== 用户测试 API ====================
@@ -2684,14 +2902,12 @@ class TagListCreateView(generics.ListCreateAPIView):
     
     def get_queryset(self):
         user = self.request.user
-        # 返回预设标签和用户自定义标签
-        return Tag.objects.filter(
-            models.Q(is_preset=True, user__isnull=True) | models.Q(user=user, is_preset=False)
-        ).order_by("is_preset", "display_order", "name")
+        # 返回用户的所有标签（统一为自定义标签）
+        return Tag.objects.filter(user=user).order_by("display_order", "name")
     
     def perform_create(self, serializer):
         # 创建时自动设置用户
-        serializer.save(user=self.request.user, is_preset=False)
+        serializer.save(user=self.request.user, is_preset=False, is_hidden=False)
 
 
 class TagDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -2701,22 +2917,23 @@ class TagDetailView(generics.RetrieveUpdateDestroyAPIView):
     
     def get_queryset(self):
         user = self.request.user
-        # 用户只能管理自己的自定义标签，不能修改预设标签
-        return Tag.objects.filter(user=user, is_preset=False)
+        # 用户只能管理自己的标签
+        return Tag.objects.filter(user=user)
     
     def perform_update(self, serializer):
         instance = serializer.instance
-        # 确保不能修改预设标签
-        if instance.is_preset or instance.user != self.request.user:
+        # 确保只能修改自己的标签
+        if instance.user != self.request.user:
             from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied("不能修改预设标签或其他用户的标签。")
-        serializer.save()
+            raise PermissionDenied("不能修改其他用户的标签。")
+        # 更新时确保is_hidden为False（不再支持隐藏功能）
+        serializer.save(is_hidden=False)
     
     def perform_destroy(self, instance):
-        # 确保不能删除预设标签
-        if instance.is_preset or instance.user != self.request.user:
+        # 确保只能删除自己的标签
+        if instance.user != self.request.user:
             from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied("不能删除预设标签或其他用户的标签。")
+            raise PermissionDenied("不能删除其他用户的标签。")
         
         # 检查是否有画作使用此标签
         upload_count = instance.uploads.count()
@@ -2732,21 +2949,18 @@ class TagDetailView(generics.RetrieveUpdateDestroyAPIView):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def tags_list(request):
-    """获取所有可用标签（预设+用户自定义）"""
+    """获取所有可用标签（统一为自定义标签）"""
     user = request.user
     
-    # 获取预设标签
-    preset_tags = Tag.objects.filter(is_preset=True, user__isnull=True).order_by("display_order", "name")
+    # 获取用户的所有标签
+    tags = Tag.objects.filter(user=user).order_by("display_order", "name")
     
-    # 获取用户自定义标签
-    custom_tags = Tag.objects.filter(user=user, is_preset=False).order_by("display_order", "name")
+    serializer = TagSerializer(tags, many=True, context={"request": request})
     
-    serializer = TagSerializer(preset_tags, many=True, context={"request": request})
-    custom_serializer = TagSerializer(custom_tags, many=True, context={"request": request})
-    
+    # 为了向后兼容，保留preset_tags和custom_tags字段，但都返回用户的标签
     return Response({
-        "preset_tags": serializer.data,
-        "custom_tags": custom_serializer.data,
+        "preset_tags": [],
+        "custom_tags": serializer.data,
     })
 
 
@@ -3049,8 +3263,30 @@ def analyze_image_comprehensive(request):
     """
     try:
         from core.tasks import analyze_image_comprehensive_task
-        from core.models import ImageAnalysisTask, VisualAnalysisResult
+        from core.models import ImageAnalysisTask, VisualAnalysisResult, VisualAnalysisQuota
         from django.conf import settings
+        
+        # 检查用户视觉分析使用次数
+        user = request.user
+        profile = getattr(user, 'profile', None)
+        is_member = is_valid_member(profile)
+        
+        # 获取或创建额度记录
+        quota, created = VisualAnalysisQuota.objects.get_or_create(
+            user=user,
+            defaults={
+                'free_quota': 10,  # 如果是新用户（没有记录），默认赠送10次
+                'used_free_quota': 0,
+            }
+        )
+        
+        # 检查是否可以使用额度
+        can_use, error_message = quota.can_use_quota(is_member)
+        if not can_use:
+            return Response(
+                {"detail": error_message},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         
         # 接收图片文件
         image_file = request.FILES.get('image')
@@ -3085,6 +3321,8 @@ def analyze_image_comprehensive(request):
                 result_obj.id,
                 binary_threshold=binary_threshold
             )
+            # 使用一次额度（同步模式下）
+            quota.use_quota(is_member)
             return Response(results, status=status.HTTP_200_OK)
         
         # 创建异步任务，传递结果ID和图片URL
@@ -3102,6 +3340,9 @@ def analyze_image_comprehensive(request):
             status=ImageAnalysisTask.STATUS_PENDING,
             progress=0,
         )
+        
+        # 使用一次额度
+        quota.use_quota(is_member)
         
         return Response(
             {
@@ -3272,6 +3513,52 @@ class VisualAnalysisResultDetailView(generics.RetrieveDestroyAPIView):
         
         # 删除模型实例（会级联删除）
         instance.delete()
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_visual_analysis_quota(request):
+    """
+    获取用户视觉分析额度信息
+    """
+    try:
+        from core.models import VisualAnalysisQuota
+        
+        user = request.user
+        profile = getattr(user, 'profile', None)
+        is_member = is_valid_member(profile)
+        
+        # 获取或创建额度记录
+        quota, created = VisualAnalysisQuota.objects.get_or_create(
+            user=user,
+            defaults={
+                'free_quota': 10,  # 如果是新用户（没有记录），默认赠送10次
+                'used_free_quota': 0,
+            }
+        )
+        
+        # 如果是会员，检查并重置月度额度
+        if is_member:
+            quota.check_and_reset_monthly_quota()
+        
+        return Response({
+            "is_member": is_member,
+            "free_quota": quota.free_quota,
+            "used_free_quota": quota.used_free_quota,
+            "remaining_free_quota": quota.remaining_free_quota,
+            "monthly_quota": quota.monthly_quota,
+            "used_monthly_quota": quota.used_monthly_quota,
+            "remaining_monthly_quota": quota.remaining_monthly_quota,
+            "total_remaining_quota": quota.total_remaining_quota,
+            "current_month": quota.current_month,
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        logger.exception("获取视觉分析额度失败")
+        return Response(
+            {"detail": f"获取额度失败: {str(e)}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
 
 @api_view(['GET', 'OPTIONS'])

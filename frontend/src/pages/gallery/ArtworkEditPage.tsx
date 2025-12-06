@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import TopNav from "@/components/TopNav";
 import MaterialIcon from "@/components/MaterialIcon";
+import { ArtisticLoader } from "@/components/ArtisticLoader";
 import type { Artwork } from "@/types/artwork";
 import { TagManager } from "@/pages/upload/components/TagManager";
 import type { TagOption } from "@/services/tagPreferences";
@@ -12,6 +13,7 @@ import { loadTagPreferencesAsync, buildTagOptionsAsync } from "@/services/tagPre
 import { useMood } from "@/pages/upload/hooks/useMood";
 import { useDuration } from "@/pages/upload/hooks/useDuration";
 
+import "../Upload.css";
 import "./ArtworkEditPage.css";
 
 type ArtworkEditPageProps = {
@@ -21,8 +23,30 @@ type ArtworkEditPageProps = {
 };
 
 export function ArtworkEditPage({ artwork, onBack, onSave }: ArtworkEditPageProps) {
-  const [title, setTitle] = useState(artwork.title);
-  const [description, setDescription] = useState(artwork.description);
+  // 防御性检查：确保 artwork 存在
+  if (!artwork) {
+    console.error("[ArtworkEditPage] artwork is null or undefined");
+    return (
+      <div className="artwork-edit-screen">
+        <div className="artwork-edit-screen__topbar">
+          <TopNav
+            title="编辑画作"
+            subtitle="Edit Artwork"
+            leadingAction={{ icon: "arrow_back", label: "返回", onClick: onBack }}
+            className="top-nav--fixed top-nav--flush"
+          />
+        </div>
+        <main className="artwork-edit-screen__content">
+          <div style={{ padding: "2rem", textAlign: "center", color: "#efeae7" }}>
+            <p>画作数据无效，请返回重试。</p>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  const [title, setTitle] = useState(artwork.title || "");
+  const [description, setDescription] = useState(artwork.description || "");
   const [selectedTags, setSelectedTags] = useState<(string | number)[]>([]);
   const [rating, setRating] = useState(() => {
     // 将字符串评分转换为数字，如果没有评分则默认为0
@@ -33,12 +57,8 @@ export function ArtworkEditPage({ artwork, onBack, onSave }: ArtworkEditPageProp
     return 0;
   });
   const [showRating, setShowRating] = useState(() => {
-    // 如果原来有评分，默认显示评分
-    if (artwork.rating) {
-      const parsed = Number.parseFloat(artwork.rating);
-      return Number.isFinite(parsed) && parsed > 0;
-    }
-    return true; // 默认显示，和上传页面一样
+    // 默认隐藏评分（眼睛按钮关闭）
+    return false;
   });
   const [isSaving, setIsSaving] = useState(false);
   const [tagOptions, setTagOptions] = useState<TagOption[]>([]);
@@ -57,7 +77,7 @@ export function ArtworkEditPage({ artwork, onBack, onSave }: ArtworkEditPageProp
           
           // 将 artwork.tags 转换为标签ID
           const tagIds: (string | number)[] = [];
-          artwork.tags.forEach((tag) => {
+          (artwork.tags || []).forEach((tag) => {
             // 如果标签是数字或数字字符串，直接使用
             if (typeof tag === "number") {
               tagIds.push(tag);
@@ -87,7 +107,7 @@ export function ArtworkEditPage({ artwork, onBack, onSave }: ArtworkEditPageProp
     return () => {
       cancelled = true;
     };
-  }, [artwork.tags]);
+  }, [artwork?.tags]);
 
   // 处理心情选择 - 需要从 mood 字符串转换为 mood ID
   const [selectedMoodId, setSelectedMoodId] = useState<number | null>(null);
@@ -111,24 +131,40 @@ export function ArtworkEditPage({ artwork, onBack, onSave }: ArtworkEditPageProp
     }
   }, [moodsLoading, moodMatrix, artwork.mood]);
 
+  // 处理时长 - 必须在 useEffect 之前定义
+  const [durationHours, setDurationHours] = useState(() => {
+    if (artwork.durationMinutes) {
+      return Math.floor(artwork.durationMinutes / 60);
+    }
+    return 0;
+  });
+
+  const [durationMinutes, setDurationMinutes] = useState(() => {
+    if (artwork.durationMinutes) {
+      return artwork.durationMinutes % 60;
+    }
+    return 0;
+  });
+
   // 当 artwork 改变时，更新所有字段
   useEffect(() => {
-    setTitle(artwork.title);
-    setDescription(artwork.description);
+    if (!artwork) return;
+    setTitle(artwork.title || "");
+    setDescription(artwork.description || "");
     
-    // 更新评分 - 和上传页面一样，默认显示，如果有评分就显示评分值
+    // 更新评分 - 默认隐藏（眼睛按钮关闭），如果原来有评分则显示
     if (artwork.rating) {
       const parsed = Number.parseFloat(artwork.rating);
-      if (Number.isFinite(parsed) && parsed >= 0) {
+      if (Number.isFinite(parsed) && parsed > 0) {
         setRating(parsed);
-        setShowRating(true);
+        setShowRating(true); // 原来有评分，显示评分
       } else {
         setRating(0);
-        setShowRating(true); // 默认显示，和上传页面一样
+        setShowRating(false); // 默认关闭
       }
     } else {
       setRating(0);
-      setShowRating(true); // 默认显示，和上传页面一样
+      setShowRating(false); // 默认关闭
     }
     
     // 更新时长
@@ -143,9 +179,9 @@ export function ArtworkEditPage({ artwork, onBack, onSave }: ArtworkEditPageProp
   
   // 更新标签（当 tagOptions 加载完成后，且 artwork 改变时）
   useEffect(() => {
-    if (tagOptions.length > 0) {
+    if (tagOptions.length > 0 && artwork) {
       const tagIds: (string | number)[] = [];
-      artwork.tags.forEach((tag) => {
+      (artwork.tags || []).forEach((tag) => {
         if (typeof tag === "number") {
           tagIds.push(tag);
         } else if (typeof tag === "string") {
@@ -163,21 +199,6 @@ export function ArtworkEditPage({ artwork, onBack, onSave }: ArtworkEditPageProp
       setSelectedTags(tagIds);
     }
   }, [artwork.id, artwork.tags, tagOptions]);
-
-  // 处理时长
-  const [durationHours, setDurationHours] = useState(() => {
-    if (artwork.durationMinutes) {
-      return Math.floor(artwork.durationMinutes / 60);
-    }
-    return 0;
-  });
-
-  const [durationMinutes, setDurationMinutes] = useState(() => {
-    if (artwork.durationMinutes) {
-      return artwork.durationMinutes % 60;
-    }
-    return 0;
-  });
 
   const { totalMinutes: durationTotalMinutes, formattedDuration } = useDuration(
     durationHours,
@@ -318,12 +339,12 @@ export function ArtworkEditPage({ artwork, onBack, onSave }: ArtworkEditPageProp
               type="button"
               className="artwork-edit-screen__save-button"
               onClick={handleSave}
-              disabled={isSaving || !title.trim()}
+              disabled={isSaving}
             >
               {isSaving ? (
                 <>
-                  <MaterialIcon name="hourglass_empty" className="artwork-edit-screen__save-icon" />
-                  保存中...
+                  <ArtisticLoader size="small" text="" />
+                  <span style={{ marginLeft: "0.5rem" }}>保存中...</span>
                 </>
               ) : (
                 <>

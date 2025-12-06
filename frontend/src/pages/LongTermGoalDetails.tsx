@@ -15,7 +15,6 @@ type LongTermGoalDetailsProps = {
   goal: LongTermGoal;
   onClose: () => void;
   onEdit?: () => void;
-  onExport?: () => void;
   onSelectShowcase?: (checkpoint: LongTermGoalCheckpoint, artworkId?: number) => void;
   onEditCompletionNote?: (checkpoint: LongTermGoalCheckpoint) => void;
   onAddMessage?: (checkpoint: LongTermGoalCheckpoint, message: string) => void;
@@ -26,7 +25,6 @@ function LongTermGoalDetails({
   goal,
   onClose,
   onEdit,
-  onExport,
   onSelectShowcase,
   onEditCompletionNote,
   onAddMessage,
@@ -427,15 +425,6 @@ function LongTermGoalDetails({
                     icon: "edit",
                     label: "调整",
                     onClick: onEdit,
-                  },
-                ]
-              : []),
-            ...(onExport
-              ? [
-                  {
-                    icon: "ios_share",
-                    label: "导出",
-                    onClick: onExport,
                   },
                 ]
               : []),

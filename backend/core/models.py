@@ -249,6 +249,25 @@ class UserProfile(models.Model):
         default=150,
         help_text="用户点数余额，默认150点。",
     )
+    is_member = models.BooleanField(
+        default=False,
+        help_text="是否为EchoDraw会员。",
+    )
+    membership_expires = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="会员到期时间。如果为None，表示非会员或永久会员。",
+    )
+    membership_started_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="会员开通时间。用于计算月度重置周期。",
+    )
+    featured_artwork_ids = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="用户选择在个人页展示的作品ID列表。",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -424,25 +443,6 @@ class UserUpload(models.Model):
         help_text="作品缩略图，用于列表页展示，节省CDN流量。",
         storage=get_default_storage(),  # 使用TOS存储（如果启用）
     )
-    # 套图相关字段
-    collection_id = models.CharField(
-        max_length=64,
-        blank=True,
-        null=True,
-        db_index=True,
-        help_text="套图ID，相同ID的作品属于同一个套图。",
-    )
-    collection_name = models.CharField(
-        max_length=120,
-        blank=True,
-        null=True,
-        help_text="套图名称，同一套图内的作品共享相同的名称。",
-    )
-    collection_index = models.PositiveIntegerField(
-        null=True,
-        blank=True,
-        help_text="在套图中的序号，从1开始。",
-    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -450,7 +450,6 @@ class UserUpload(models.Model):
         indexes = [
             models.Index(fields=["user", "-uploaded_at"]),
             models.Index(fields=["uploaded_at"]),
-            models.Index(fields=["collection_id", "collection_index"]),  # 套图索引优化
         ]
         ordering = ["-uploaded_at"]
 
@@ -1871,161 +1870,6 @@ class MonthlyReportTemplate(models.Model):
         return text
 
 
-class Notification(models.Model):
-    """
-    系统通知：管理员可以创建并推送通知给所有用户。
-    """
-    title = models.CharField(
-        max_length=256,
-        help_text="通知标题。",
-    )
-    summary = models.CharField(
-        max_length=512,
-        help_text="通知摘要，显示在通知列表中。",
-    )
-    content = models.TextField(
-        help_text="通知正文，显示在通知详情页。",
-    )
-    is_active = models.BooleanField(
-        default=True,
-        help_text="是否启用此通知。",
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ["-created_at"]
-        indexes = [
-            models.Index(fields=["-created_at"]),
-            models.Index(fields=["is_active", "-created_at"]),
-        ]
-        verbose_name = "系统通知"
-        verbose_name_plural = "系统通知"
-
-    def __str__(self) -> str:
-        return self.title
-
-
-class HighFiveCounter(models.Model):
-    """击掌按钮点击计数器（单例模式）"""
-    count = models.PositiveIntegerField(default=0, verbose_name="点击总数")
-    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
-
-    class Meta:
-        verbose_name = "击掌计数器"
-        verbose_name_plural = "击掌计数器"
-
-    def __str__(self) -> str:
-        return f"击掌计数: {self.count}"
-
-    @classmethod
-    def get_or_create_singleton(cls):
-        """获取或创建单例实例"""
-        obj, created = cls.objects.get_or_create(pk=1)
-        return obj
-
-    @classmethod
-    def increment(cls, user=None, session_key=None):
-        """增加计数（每个用户只能点击一次）"""
-        # 延迟导入避免循环引用
-        from core.models import HighFiveClick
-        
-        # 检查用户是否已经点击过
-        if user and user.is_authenticated:
-            # 已登录用户：检查是否已点击
-            existing_click = HighFiveClick.objects.filter(user=user).first()
-            if existing_click:
-                counter = cls.get_or_create_singleton()
-                return counter.count, False, existing_click.created_at  # 返回当前计数、是否成功和点击时间
-        elif session_key:
-            # 未登录用户：使用session_key检查
-            existing_click = HighFiveClick.objects.filter(session_key=session_key).first()
-            if existing_click:
-                counter = cls.get_or_create_singleton()
-                return counter.count, False, existing_click.created_at
-        
-        # 如果用户未点击过，增加计数并记录
-        counter = cls.get_or_create_singleton()
-        counter.count += 1
-        counter.save(update_fields=["count", "updated_at"])
-        
-        # 记录点击
-        click_record = HighFiveClick.objects.create(
-            user=user if user and user.is_authenticated else None,
-            session_key=session_key if not (user and user.is_authenticated) else None,
-        )
-        
-        return counter.count, True, click_record.created_at
-
-    @classmethod
-    def get_count(cls):
-        """获取当前计数"""
-        counter = cls.get_or_create_singleton()
-        return counter.count
-
-    @classmethod
-    def has_clicked(cls, user=None, session_key=None):
-        """检查用户是否已经点击过，返回(是否已点击, 点击时间)"""
-        # 延迟导入避免循环引用
-        from core.models import HighFiveClick
-        
-        if user and user.is_authenticated:
-            click_record = HighFiveClick.objects.filter(user=user).first()
-            if click_record:
-                return True, click_record.created_at
-        elif session_key:
-            click_record = HighFiveClick.objects.filter(session_key=session_key).first()
-            if click_record:
-                return True, click_record.created_at
-        return False, None
-
-
-class HighFiveClick(models.Model):
-    """击掌点击记录（防止重复点击）"""
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name="high_five_clicks",
-        verbose_name="用户",
-    )
-    session_key = models.CharField(
-        max_length=40,
-        null=True,
-        blank=True,
-        db_index=True,
-        verbose_name="Session Key（未登录用户）",
-    )
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name="点击时间")
-
-    class Meta:
-        verbose_name = "击掌点击记录"
-        verbose_name_plural = "击掌点击记录"
-        indexes = [
-            models.Index(fields=["user"]),
-            models.Index(fields=["session_key"]),
-        ]
-        # 确保每个用户或session只能有一条记录
-        constraints = [
-            models.UniqueConstraint(
-                fields=["user"],
-                condition=models.Q(user__isnull=False),
-                name="unique_user_high_five",
-            ),
-            models.UniqueConstraint(
-                fields=["session_key"],
-                condition=models.Q(session_key__isnull=False),
-                name="unique_session_high_five",
-            ),
-        ]
-
-    def __str__(self) -> str:
-        if self.user:
-            return f"{self.user.email} - {self.created_at}"
-        return f"Session {self.session_key} - {self.created_at}"
-
-
 class LoginAttempt(models.Model):
     """
     登录尝试记录：用于追踪登录失败次数，防止暴力破解攻击。
@@ -2446,6 +2290,181 @@ class VisualAnalysisResult(models.Model):
     
     def __str__(self) -> str:
         return f"{self.user.email} - {self.created_at.strftime('%Y-%m-%d %H:%M')}"
+
+
+class VisualAnalysisQuota(models.Model):
+    """
+    视觉分析使用额度：跟踪用户视觉分析的使用次数
+    - 新用户赠送10次额度（一次性，不按月重置）
+    - 会员用户每月60次额度（按月重置）
+    """
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="visual_analysis_quota",
+        help_text="用户",
+    )
+    # 赠送额度（新用户一次性赠送10次，不重置）
+    free_quota = models.PositiveIntegerField(
+        default=10,
+        help_text="赠送的免费额度（新用户一次性10次）",
+    )
+    # 会员月度额度（每月重置）
+    monthly_quota = models.PositiveIntegerField(
+        default=0,
+        help_text="会员月度额度（每月60次）",
+    )
+    # 当前月份（用于判断是否需要重置）
+    current_month = models.CharField(
+        max_length=7,  # 格式：YYYY-MM
+        blank=True,
+        help_text="当前月份（格式：YYYY-MM），用于判断是否需要重置月度额度",
+    )
+    # 已使用次数（赠送额度）
+    used_free_quota = models.PositiveIntegerField(
+        default=0,
+        help_text="已使用的免费额度",
+    )
+    # 已使用次数（月度额度）
+    used_monthly_quota = models.PositiveIntegerField(
+        default=0,
+        help_text="本月已使用的月度额度",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = "视觉分析额度"
+        verbose_name_plural = "视觉分析额度"
+        indexes = [
+            models.Index(fields=["user"]),
+            models.Index(fields=["current_month"]),
+        ]
+    
+    def __str__(self) -> str:
+        return f"{self.user.email} - 免费:{self.remaining_free_quota}, 月度:{self.remaining_monthly_quota}"
+    
+    @property
+    def remaining_free_quota(self) -> int:
+        """剩余免费额度"""
+        return max(0, self.free_quota - self.used_free_quota)
+    
+    @property
+    def remaining_monthly_quota(self) -> int:
+        """剩余月度额度"""
+        return max(0, self.monthly_quota - self.used_monthly_quota)
+    
+    @property
+    def total_remaining_quota(self) -> int:
+        """总剩余额度"""
+        return self.remaining_free_quota + self.remaining_monthly_quota
+    
+    def check_and_reset_monthly_quota(self):
+        """检查并重置月度额度（如果需要）
+        
+        基于用户会员开通时间计算月度周期，而不是自然月。
+        例如：如果用户在 2025-01-15 开通会员，则每月15号重置额度。
+        """
+        from datetime import datetime, timedelta
+        from django.utils import timezone as django_timezone
+        
+        # 获取用户会员开通时间
+        try:
+            profile = self.user.profile
+            membership_started_at = profile.membership_started_at
+        except Exception:
+            # 如果没有 profile 或 membership_started_at，回退到自然月逻辑
+            current_month_str = datetime.now().strftime("%Y-%m")
+            if self.current_month != current_month_str:
+                self.current_month = current_month_str
+                self.monthly_quota = 60
+                self.used_monthly_quota = 0
+                self.save(update_fields=["current_month", "monthly_quota", "used_monthly_quota", "updated_at"])
+            return
+        
+        # 如果没有会员开通时间，使用自然月逻辑
+        if not membership_started_at:
+            current_month_str = datetime.now().strftime("%Y-%m")
+            if self.current_month != current_month_str:
+                self.current_month = current_month_str
+                self.monthly_quota = 60
+                self.used_monthly_quota = 0
+                self.save(update_fields=["current_month", "monthly_quota", "used_monthly_quota", "updated_at"])
+            return
+        
+        # 确保 membership_started_at 是时区感知的
+        if django_timezone.is_naive(membership_started_at):
+            membership_started_at = django_timezone.make_aware(membership_started_at)
+        
+        now = django_timezone.now()
+        
+        # 使用开通时间的日期作为基准，计算当前应该处于第几个周期
+        # 例如：如果用户在 2025-01-15 开通，则：
+        # - 第一个周期：2025-01-15 到 2025-02-14
+        # - 第二个周期：2025-02-15 到 2025-03-14
+        # - 以此类推
+        start_date = membership_started_at.date()
+        current_date = now.date()
+        
+        # 计算当前周期
+        # 如果当前日期 >= 开通日期的日期，则周期数 = 月份差
+        # 如果当前日期 < 开通日期的日期，则周期数 = 月份差 - 1
+        months_diff = (current_date.year - start_date.year) * 12 + (current_date.month - start_date.month)
+        
+        if current_date.day >= start_date.day:
+            current_period = months_diff
+        else:
+            current_period = max(0, months_diff - 1)  # 确保周期数不为负数
+        
+        # 计算当前周期对应的标识（格式：YYYY-MM-DD-P，P是周期数）
+        # 这样可以唯一标识每个周期
+        period_key = f"{start_date.year}-{start_date.month:02d}-{start_date.day:02d}-P{current_period}"
+        
+        # 如果周期不同，重置月度额度
+        if self.current_month != period_key:
+            self.current_month = period_key
+            self.monthly_quota = 60  # 会员每月60次
+            self.used_monthly_quota = 0
+            self.save(update_fields=["current_month", "monthly_quota", "used_monthly_quota", "updated_at"])
+    
+    def can_use_quota(self, is_member: bool) -> tuple[bool, str]:
+        """
+        检查是否可以使用额度
+        
+        Returns:
+            (can_use, error_message)
+        """
+        # 如果是会员，检查并重置月度额度
+        if is_member:
+            self.check_and_reset_monthly_quota()
+        
+        # 检查总剩余额度
+        if self.total_remaining_quota <= 0:
+            if is_member:
+                return False, "本月视觉分析次数已用完（60次/月），请下月再试"
+            else:
+                return False, "视觉分析次数已用完（赠送的10次已用完），加入EchoDraw会员可享受每月60次额度"
+        
+        return True, ""
+    
+    def use_quota(self, is_member: bool):
+        """
+        使用一次额度（优先使用免费额度，免费额度用完后使用月度额度）
+        """
+        # 如果是会员，检查并重置月度额度
+        if is_member:
+            self.check_and_reset_monthly_quota()
+        
+        # 优先使用免费额度
+        if self.remaining_free_quota > 0:
+            self.used_free_quota += 1
+        # 免费额度用完后，使用月度额度（仅会员）
+        elif is_member and self.remaining_monthly_quota > 0:
+            self.used_monthly_quota += 1
+        else:
+            raise ValueError("没有可用额度")
+        
+        self.save(update_fields=["used_free_quota", "used_monthly_quota", "updated_at"])
 
 
 class ImageAnalysisTask(models.Model):

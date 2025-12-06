@@ -14,6 +14,7 @@ export function useTagManager() {
   const [selectedTags, setSelectedTags] = useState<(string | number)[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isInitialLoadRef = useRef(true);
 
   const loadTags = useCallback(async () => {
     try {
@@ -24,8 +25,21 @@ export function useTagManager() {
       setTagOptions(options);
       setSelectedTags((prev) => {
         const optionIds = new Set(options.map((option) => option.id));
-        // 只保留已经选择的tag，不再自动选择defaultActive的tag
+        // 只保留已经选择的tag
         const retained = prev.filter((id) => optionIds.has(id));
+        
+        // 如果是首次加载且没有已选择的标签，自动选中defaultActive为true的标签
+        if (isInitialLoadRef.current && retained.length === 0) {
+          const defaultActiveTags = options
+            .filter((option) => option.defaultActive)
+            .map((option) => option.id);
+          if (defaultActiveTags.length > 0) {
+            isInitialLoadRef.current = false;
+            return defaultActiveTags;
+          }
+        }
+        
+        isInitialLoadRef.current = false;
         return retained;
       });
     } catch (error) {

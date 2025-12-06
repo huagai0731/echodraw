@@ -178,7 +178,7 @@ const FALLBACK_TASK_LIBRARY: TaskItem[] = [
 ];
 
 const STEPS: StepKey[] = ["duration", "type", "tasks", "confirm"];
-const DEFAULT_PLAN_NAME = "我的短期挑战";
+const DEFAULT_PLAN_NAME = "我的短期目标";
 
 function NewChallengeWizard({ onClose, onSaved, initialGoal, mode = "create" }: NewChallengeWizardProps) {
   const [stepIndex, setStepIndex] = useState(0);
@@ -430,7 +430,7 @@ function NewChallengeWizard({ onClose, onSaved, initialGoal, mode = "create" }: 
   const stepLabel = useMemo(() => {
     switch (step) {
       case "duration":
-        return "选择挑战时长";
+        return "选择目标时长";
       case "type":
         return "选择任务类型";
       case "tasks":
@@ -731,7 +731,7 @@ function NewChallengeWizard({ onClose, onSaved, initialGoal, mode = "create" }: 
       onSaved(goal);
       onClose();
     } catch (error) {
-      let message = "保存挑战失败，请稍后再试。";
+      let message = "保存目标失败，请稍后再试。";
       
       if (error && typeof error === "object") {
         const maybeResponse = (error as { response?: { data?: unknown } }).response;
@@ -753,7 +753,7 @@ function NewChallengeWizard({ onClose, onSaved, initialGoal, mode = "create" }: 
         }
       }
       
-      if (message === "保存挑战失败，请稍后再试。" && error instanceof Error && error.message) {
+      if (message === "保存目标失败，请稍后再试。" && error instanceof Error && error.message) {
         message = error.message;
       }
       setSaveError(message);
@@ -817,7 +817,7 @@ function NewChallengeWizard({ onClose, onSaved, initialGoal, mode = "create" }: 
             <MaterialIcon name="arrow_back" />
           </button>
           <div className="wizard-header__title">
-            <h1>{mode === "edit" ? "编辑挑战" : "建立你的新挑战"}</h1>
+            <h1>{mode === "edit" ? "编辑目标" : "建立你的新目标"}</h1>
             <p>{stepLabel}</p>
           </div>
           <button type="button" className="wizard-header__button" onClick={onClose}>
@@ -923,7 +923,7 @@ function NewChallengeWizard({ onClose, onSaved, initialGoal, mode = "create" }: 
             onClick={handleNext}
             disabled={isSaving}
           >
-            {stepIndex === STEPS.length - 1 ? (isSaving ? "保存中..." : "保存挑战") : "下一步"}
+            {stepIndex === STEPS.length - 1 ? (isSaving ? "保存中..." : "保存目标") : "下一步"}
           </button>
         </footer>
       </div>
@@ -938,6 +938,7 @@ type DurationStepProps = {
 };
 
 function DurationStep({ duration, durationIndex, onChange }: DurationStepProps) {
+  const [showHint, setShowHint] = useState(false);
   const startXRef = useRef<number | null>(null);
   const deltaXRef = useRef(0);
   const isDraggingRef = useRef(false);
@@ -1059,7 +1060,7 @@ function DurationStep({ duration, durationIndex, onChange }: DurationStepProps) 
 
   return (
     <div className="wizard-panel wizard-panel--center">
-      <p className="wizard-panel__subtitle">选择挑战持续时间</p>
+      <p className="wizard-panel__subtitle">选择目标持续时间</p>
       <div className="wizard-duration">
         <button
           type="button"
@@ -1080,7 +1081,7 @@ function DurationStep({ duration, durationIndex, onChange }: DurationStepProps) 
           aria-valuemin={0}
           aria-valuemax={DURATIONS.length - 1}
           aria-valuenow={durationIndex}
-          aria-label="挑战持续天数"
+          aria-label="目标持续天数"
         >
           <span className="wizard-duration__number">{duration}</span>
           <span className="wizard-duration__unit">天</span>
@@ -1106,13 +1107,25 @@ function DurationStep({ duration, durationIndex, onChange }: DurationStepProps) 
           />
         ))}
       </div>
-      <div className="wizard-duration__hint">
-        <p>目标制定完成后，你可以择日再启动。</p>
-        <p>
-          目标启动后，需要你在{getToleranceDays(duration)}天内完成{duration}次打卡。
-        </p>
-        <p>之所以设置期限，是为了让一个小目标能顺利走完，而不会被无限拖延到失去意义。</p>
-        <p>但不论成功与否，这次目标的记录和总结都会保留。画了就是成功，不论多少。</p>
+      <div className="wizard-duration__hint-wrapper">
+        <button
+          type="button"
+          className="wizard-duration__hint-button"
+          onClick={() => setShowHint(!showHint)}
+        >
+          <MaterialIcon name={showHint ? "expand_less" : "expand_more"} />
+          <span>目标说明</span>
+        </button>
+        {showHint && (
+          <div className="wizard-duration__hint">
+            <p>目标制定完成后，你可以择日再启动。</p>
+            <p>
+              目标启动后，需要你在{getToleranceDays(duration)}天内完成{duration}次打卡。
+            </p>
+            <p>之所以设置期限，是为了让一个小目标能顺利走完，而不会被无限拖延到失去意义。</p>
+            <p>但不论成功与否，这次目标的记录和总结都会保留。画了就是成功，不论多少。</p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1126,7 +1139,7 @@ type TypeStepProps = {
 function TypeStep({ planType, onChange }: TypeStepProps) {
   return (
     <div className="wizard-panel">
-      <p className="wizard-panel__subtitle">选择挑战任务结构</p>
+      <p className="wizard-panel__subtitle">选择目标任务结构</p>
       <div className="wizard-type">
         {PLAN_TYPES.map((item) => (
           <button
@@ -1277,14 +1290,14 @@ function TasksStep({
     <div className="wizard-panel">
       <div className="wizard-plan-name">
         <div className="wizard-plan-name__header">
-          <label htmlFor="plan-name">挑战名称</label>
+          <label htmlFor="plan-name">目标名称</label>
           <MaterialIcon name="edit" className="wizard-plan-name__edit-icon" />
         </div>
         <input
           id="plan-name"
           value={planName}
           onChange={(event) => onChangePlanName(event.target.value)}
-          placeholder="为你的挑战取个名字"
+          placeholder="为你的目标取个名字"
         />
       </div>
 
@@ -1428,7 +1441,7 @@ function TasksStep({
               <article className="wizard-custom">
                 <header>
                   <h4>新增自定义任务</h4>
-                  <p>保存后可在任何挑战中重复使用</p>
+                  <p>保存后可在任何目标中重复使用</p>
                 </header>
                 <form className="wizard-custom__form" onSubmit={handleCustomPresetSubmit}>
                   <input
@@ -1579,7 +1592,7 @@ function ConfirmStep({ duration, planName, planType, tasks, dayLabels: _dayLabel
       <div className="wizard-panel">
         <div className="wizard-confirm">
           <header>
-            <h2>{planName || "未命名挑战"}</h2>
+            <h2>{planName || "未命名目标"}</h2>
             <p>
               {duration} 天 · {planType === "same" ? "每日重复任务" : "每日不同安排"}
             </p>

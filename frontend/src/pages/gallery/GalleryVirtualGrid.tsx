@@ -6,7 +6,6 @@ import type { ImageDimensions } from "@/utils/imageCache";
 type GalleryVirtualGridProps = {
   artworks: Artwork[];
   showInfo: boolean;
-  getCollectionCount: (collectionId: string) => number;
   tagIdToNameMap: Map<string, string>;
   onSelect: (artwork: Artwork) => void;
   onImageLoad?: (artworkId: string, dimensions: ImageDimensions) => void;
@@ -20,7 +19,6 @@ const INTERSECTION_ROOT_MARGIN = "300px";
 export function GalleryVirtualGrid({
   artworks,
   showInfo,
-  getCollectionCount,
   tagIdToNameMap,
   onSelect,
   onImageLoad,
@@ -221,7 +219,6 @@ export function GalleryVirtualGrid({
       <GalleryList
         artworks={visibleArtworks}
         showInfo={showInfo}
-        getCollectionCount={getCollectionCount}
         tagIdToNameMap={tagIdToNameMap}
         onSelect={onSelect}
         onImageLoad={onImageLoad}

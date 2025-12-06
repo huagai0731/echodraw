@@ -87,6 +87,11 @@
   align-items: center;
   justify-content: center;
   pointer-events: none;
+  z-index: 10;
+}
+
+.check-in-card__spinner .artistic-loader {
+  animation: none; /* 移除浮动动画，因为已经在绝对定位的容器中 */
 }
 
 .check-in-card__spinner-icon {

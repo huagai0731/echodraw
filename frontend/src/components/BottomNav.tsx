@@ -11,9 +11,9 @@ type BottomNavProps = {
 
 const NAV_ITEMS: Array<{ id: NavId; label: string; icon: string }> = [
   { id: "home", label: "首页", icon: "home" },
-  { id: "gallery", label: "作品", icon: "collections" },
-  { id: "goals", label: "目标", icon: "flag" },
-  { id: "reports", label: "报告", icon: "assessment" },
+  { id: "gallery", label: "作品", icon: "auto_awesome" },
+  { id: "goals", label: "目标", icon: "workspace_premium" },
+  { id: "reports", label: "报告", icon: "insights" },
   { id: "profile", label: "我的", icon: "person" },
 ];
 

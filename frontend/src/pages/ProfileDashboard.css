@@ -161,14 +161,14 @@
 }
 
 .profile-membership-trigger--premium {
-  border-color: rgba(255, 207, 134, 0.45);
-  background: rgba(255, 207, 134, 0.18);
-  color: #ffc978;
+  border-color: rgba(152, 219, 198, 0.45);
+  background: rgba(152, 219, 198, 0.18);
+  color: #98dbc6;
 }
 
 .profile-membership-trigger--premium:hover {
-  border-color: rgba(255, 207, 134, 0.7);
-  background: rgba(255, 207, 134, 0.26);
+  border-color: rgba(152, 219, 198, 0.7);
+  background: rgba(152, 219, 198, 0.26);
 }
 
 .profile-membership-trigger--premiumQuarter {

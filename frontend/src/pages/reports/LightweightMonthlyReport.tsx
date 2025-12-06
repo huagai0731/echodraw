@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import html2canvas from "html2canvas";
 import MaterialIcon from "@/components/MaterialIcon";
+import { ArtisticLoader } from "@/components/ArtisticLoader";
 import { fetchUserUploads, type UserUploadRecord } from "@/services/api";
 import api from "@/services/api";
 import { formatISODateInShanghai, parseISODateInShanghai, getTodayInShanghai } from "@/utils/dateUtils";
@@ -821,7 +822,13 @@ function LightweightMonthlyReport({ open, onClose, targetMonth, adminUserId }: L
                 aria-label="导出为图片"
                 title="导出为图片"
               >
-                <MaterialIcon name={exporting ? "hourglass_empty" : "download"} />
+                {exporting ? (
+                  <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+                    <ArtisticLoader size="small" text="" />
+                  </div>
+                ) : (
+                  <MaterialIcon name="download" />
+                )}
               </button>
               <button
                 type="button"

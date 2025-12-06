@@ -9,9 +9,6 @@ export type UploadState = {
   rating: number;
   durationHours: number;
   durationMinutes: number;
-  collectionId: string | null;
-  collectionName: string | null;
-  collectionMaxDurationMinutes: number | null;
 };
 
 export type ValidationError = {
@@ -35,9 +32,6 @@ export function useUploadState(initialState?: Partial<UploadState>) {
     rating: 70,
     durationHours: 1,
     durationMinutes: 30,
-    collectionId: null,
-    collectionName: null,
-    collectionMaxDurationMinutes: null,
     ...initialState,
   });
 
@@ -55,9 +49,6 @@ export function useUploadState(initialState?: Partial<UploadState>) {
       rating: 70,
       durationHours: 1,
       durationMinutes: 30,
-      collectionId: null,
-      collectionName: null,
-      collectionMaxDurationMinutes: null,
     });
   }, []);
 
@@ -136,24 +127,6 @@ export function useUploadState(initialState?: Partial<UploadState>) {
     []
   );
 
-  const validateCollection = useCallback(
-    (
-      totalMinutes: number,
-      collectionMaxDurationMinutes: number | null
-    ): ValidationError | null => {
-      if (collectionMaxDurationMinutes !== null) {
-        if (totalMinutes < collectionMaxDurationMinutes) {
-          return {
-            field: "duration",
-            message: `新增图片的时长必须大于等于套图当前最大时长（${Math.floor(collectionMaxDurationMinutes / 60)}:${String(collectionMaxDurationMinutes % 60).padStart(2, "0")}）`,
-          };
-        }
-      }
-      return null;
-    },
-    []
-  );
-
   const validateAll = useCallback((): ValidationError[] => {
     const errors: ValidationError[] = [];
 
@@ -174,21 +147,13 @@ export function useUploadState(initialState?: Partial<UploadState>) {
     );
     if (durationError) errors.push(durationError);
 
-    const collectionError = validateCollection(
-      totalMinutes,
-      state.collectionMaxDurationMinutes
-    );
-    if (collectionError) errors.push(collectionError);
-
     return errors;
   }, [
     state,
-    totalMinutes,
     validateFile,
     validateTitle,
     validateTags,
     validateDuration,
-    validateCollection,
   ]);
 
   return {
@@ -200,7 +165,6 @@ export function useUploadState(initialState?: Partial<UploadState>) {
     validateTitle,
     validateTags,
     validateDuration,
-    validateCollection,
     validateAll,
   };
 }

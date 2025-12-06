@@ -42,7 +42,7 @@ const DIGIT_HEIGHT = {
 } as const;
 const MIN_TOTAL_HOURS = 50;
 const MAX_TOTAL_HOURS = 9999;
-const MAX_CHECKPOINTS = 90;
+const MAX_CHECKPOINTS = 50;
 
 function LongTermGoalSetup({
   onClose,
@@ -258,9 +258,10 @@ function LongTermGoalSetup({
               type="text"
               value={title}
               onChange={(event) => setTitle(event.target.value.slice(0, 160))}
-              placeholder={`为自己的计划新建画布吧，任何你想要的名字，毕竟只有你会看见，抑或只是${totalHours}小时计划`}
+              placeholder="为自己的计划新建画布"
               maxLength={160}
             />
+            <h2 className="long-term-setup__section-title" style={{ marginTop: "1.5rem" }}>计划简介</h2>
             <textarea
               className="long-term-setup__textarea"
               value={description}
@@ -313,7 +314,7 @@ function LongTermGoalSetup({
                 </div>
                 {minCheckpoints > 1 && (
                   <p className="long-term-setup__hint" style={{ marginTop: "-0.5rem", textAlign: "center" }}>
-                    每个检查点最少 5 小时，最多 999 小时，当前总时长最少需要 {minCheckpoints} 个检查点
+                    每个检查点最多 999 小时，当前总时长最少需要 {minCheckpoints} 个检查点
                   </p>
                 )}
 
@@ -386,6 +387,7 @@ function DigitColumn({
   const scrollRef = useRef<HTMLDivElement>(null);
   const isSyncingRef = useRef(false);
   const syncTimeoutRef = useRef<number | null>(null);
+  const scrollTimeoutRef = useRef<number | null>(null);
   const [isPointerActive, setIsPointerActive] = useState(false);
 
   const style = useMemo(() => {
@@ -398,6 +400,9 @@ function DigitColumn({
     return () => {
       if (syncTimeoutRef.current) {
         window.clearTimeout(syncTimeoutRef.current);
+      }
+      if (scrollTimeoutRef.current) {
+        window.clearTimeout(scrollTimeoutRef.current);
       }
     };
   }, []);
@@ -425,7 +430,10 @@ function DigitColumn({
   }, [alignToValue]);
 
   useEffect(() => {
-    alignToValue();
+    // 只有在不是同步状态时才对齐，避免循环更新
+    if (!isSyncingRef.current) {
+      alignToValue();
+    }
   }, [alignToValue, value]);
 
   const handleScroll = useCallback(() => {
@@ -449,11 +457,28 @@ function DigitColumn({
       return;
     }
 
-    const raw = scrollTop / height;
-    const next = Math.min(Math.max(Math.round(raw), 0), 9);
-    if (next !== value) {
-      onChange(next);
+    // 清除之前的延迟更新
+    if (scrollTimeoutRef.current) {
+      window.clearTimeout(scrollTimeoutRef.current);
     }
+
+    // 延迟更新值，避免频繁触发导致循环
+    scrollTimeoutRef.current = window.setTimeout(() => {
+      if (!scrollRef.current || isSyncingRef.current) {
+        return;
+      }
+      const currentScrollTop = scrollRef.current.scrollTop;
+      const raw = currentScrollTop / height;
+      const next = Math.min(Math.max(Math.round(raw), 0), 9);
+      if (next !== value) {
+        isSyncingRef.current = true;
+        onChange(next);
+        // 短暂延迟后重置同步标志，确保对齐操作可以执行
+        window.setTimeout(() => {
+          isSyncingRef.current = false;
+        }, 100);
+      }
+    }, 100);
   }, [height, onChange, readOnly, value]);
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {

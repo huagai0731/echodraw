@@ -1,5 +1,6 @@
 // 异步操作 Hook - 处理 loading、error 状态
 import { useState, useCallback } from "react";
+import { extractApiError } from "./useApiError";
 
 type UseAsyncOperationOptions<T> = {
   onSuccess?: (data: T) => void;
@@ -48,10 +49,18 @@ export function useAsyncOperation<T = unknown>(
         onSuccess?.(result);
         return result;
       } catch (err) {
-        const errorMessage =
-          err instanceof Error ? err.message : defaultError;
+        // 使用 extractApiError 提取后端返回的详细错误信息
+        const errorMessage = extractApiError(err, defaultError);
         setError(errorMessage);
         onError?.(errorMessage);
+        // 在开发环境下输出详细错误信息，便于调试
+        if (import.meta.env.DEV) {
+          console.error("[useAsyncOperation] 操作失败:", {
+            error: err,
+            errorMessage,
+            response: (err as { response?: { data?: unknown } })?.response?.data,
+          });
+        }
         return undefined;
       } finally {
         setLoading(false);

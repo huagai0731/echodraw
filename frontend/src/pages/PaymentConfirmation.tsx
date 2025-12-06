@@ -53,12 +53,18 @@ function formatDate(date: Date): { label: string; iso: string } {
 
 function PaymentConfirmation({ plan, onBack, onConfirm }: PaymentConfirmationProps) {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("wechat");
+  const [quantity, setQuantity] = useState<number>(1);
+
+  const totalAmount = useMemo(() => {
+    return plan.amount * quantity;
+  }, [plan.amount, quantity]);
 
   const expirationInfo = useMemo(() => {
     const base = new Date();
-    const expires = addMonths(base, plan.billingCycleInMonths);
+    const totalMonths = plan.billingCycleInMonths * quantity;
+    const expires = addMonths(base, totalMonths);
     return formatDate(expires);
-  }, [plan.billingCycleInMonths]);
+  }, [plan.billingCycleInMonths, quantity]);
 
   return (
     <div className="payment-confirmation">
@@ -77,15 +83,55 @@ function PaymentConfirmation({ plan, onBack, onConfirm }: PaymentConfirmationPro
         </header>
 
         <main className="payment-confirmation__content">
+          <section className="payment-card payment-card--expiration">
+            <div className="payment-card__expiration">
+              <p className="payment-card__expiration-label">会员到期时间</p>
+              <strong className="payment-card__expiration-date">{expirationInfo.label}</strong>
+              <p className="payment-card__expiration-hint">购买 {quantity} 个月，会员时长将累计增加</p>
+            </div>
+          </section>
+
           <section className="payment-card">
             <div className="payment-card__row">
               <p>购买会员版本</p>
               <strong>{plan.name}</strong>
             </div>
             <div className="payment-card__divider" />
+            <div className="payment-card__quantity">
+              <p className="payment-card__label">购买时长</p>
+              <div className="payment-card__quantity-control">
+                <button
+                  type="button"
+                  className="payment-card__quantity-btn"
+                  onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                  disabled={quantity <= 1}
+                >
+                  <MaterialIcon name="remove" />
+                </button>
+                <span className="payment-card__quantity-value">{quantity} 个月</span>
+                <button
+                  type="button"
+                  className="payment-card__quantity-btn"
+                  onClick={() => setQuantity(Math.min(12, quantity + 1))}
+                  disabled={quantity >= 12}
+                >
+                  <MaterialIcon name="add" />
+                </button>
+              </div>
+            </div>
+            <div className="payment-card__divider" />
             <div className="payment-card__row">
-              <p>金额</p>
-              <strong>¥{formatPrice(plan.amount)}</strong>
+              <p>单价</p>
+              <strong>¥{formatPrice(plan.amount)} / 月</strong>
+            </div>
+            <div className="payment-card__row">
+              <p>数量</p>
+              <strong>{quantity} 个月</strong>
+            </div>
+            <div className="payment-card__divider" />
+            <div className="payment-card__row payment-card__row--total">
+              <p>总金额</p>
+              <strong>¥{formatPrice(totalAmount)}</strong>
             </div>
           </section>
 
@@ -123,7 +169,6 @@ function PaymentConfirmation({ plan, onBack, onConfirm }: PaymentConfirmationPro
           </section>
 
           <section className="payment-confirmation__meta">
-            <p>支付后的会员到期时间：{expirationInfo.label}</p>
             <p>你的创作之旅将更加精彩！</p>
           </section>
         </main>

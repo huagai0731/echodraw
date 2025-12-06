@@ -1,9 +1,12 @@
 import localforage from "localforage";
+import { getProxiedImageUrl } from "./urlUtils";
 
 // 全局图片缓存，避免重复加载
 const imageCache = new Map<string, HTMLImageElement>();
 // 存储blob URL，避免重复创建和过早清理
 const blobUrlCache = new Map<string, string>();
+// 存储原始URL到代理URL的映射
+const proxyUrlMap = new Map<string, string>();
 
 // 图片尺寸缓存（使用 localForage）
 const dimensionsStore = localforage.createInstance({
@@ -125,24 +128,41 @@ export function getOrLoadImage(src: string): Promise<HTMLImageElement> {
     });
   }
 
-  // 对于跨域图片，检查是否已经有blob URL
-  const blobUrl = blobUrlCache.get(src);
+  // 对于跨域图片，检查是否需要使用代理URL（TOS图片）
+  let actualSrc = src;
+  let proxiedUrl = proxyUrlMap.get(src);
+  if (!proxiedUrl) {
+    proxiedUrl = getProxiedImageUrl(src);
+    if (proxiedUrl !== src) {
+      // 如果URL被转换为代理URL，使用代理URL
+      console.log(`[ImageCache] 转换TOS URL为代理URL: ${src} -> ${proxiedUrl}`);
+      proxyUrlMap.set(src, proxiedUrl);
+      actualSrc = proxiedUrl;
+    }
+  } else {
+    actualSrc = proxiedUrl;
+  }
+
+  // 对于跨域图片，检查是否已经有blob URL（使用实际使用的URL作为key）
+  const blobUrl = blobUrlCache.get(actualSrc);
   if (blobUrl) {
     // 检查缓存的图片是否使用这个blob URL
-    const cached = imageCache.get(src);
+    const cached = imageCache.get(actualSrc);
     if (cached && cached.complete && cached.naturalWidth > 0 && cached.src === blobUrl) {
+      // 同时将原始URL也映射到这个缓存的图片
+      imageCache.set(src, cached);
       return Promise.resolve(cached);
     }
   }
 
-  // 对于跨域图片，通过fetch获取blob并转换为blob URL
-  return fetchImageAsBlob(src)
+  // 对于跨域图片，通过fetch获取blob并转换为blob URL（使用实际URL）
+  return fetchImageAsBlob(actualSrc)
     .then((blob) => {
-      // 检查是否已经有这个blob的URL
-      let currentBlobUrl = blobUrlCache.get(src);
+      // 检查是否已经有这个blob的URL（使用实际URL）
+      let currentBlobUrl = blobUrlCache.get(actualSrc);
       if (!currentBlobUrl) {
         currentBlobUrl = URL.createObjectURL(blob);
-        blobUrlCache.set(src, currentBlobUrl);
+        blobUrlCache.set(actualSrc, currentBlobUrl);
       }
       
       return new Promise<HTMLImageElement>((resolve, reject) => {
@@ -151,6 +171,8 @@ export function getOrLoadImage(src: string): Promise<HTMLImageElement> {
         img.crossOrigin = null;
         
         const handleLoad = () => {
+          // 同时缓存原始URL和实际URL到同一个图片对象
+          imageCache.set(actualSrc, img);
           imageCache.set(src, img);
           resolve(img);
         };
@@ -165,9 +187,9 @@ export function getOrLoadImage(src: string): Promise<HTMLImageElement> {
       });
     })
     .catch((error) => {
-      console.warn(`Failed to fetch image as blob: ${src}`, error);
+      console.warn(`Failed to fetch image as blob: ${actualSrc}`, error);
       // 如果fetch失败，尝试直接加载（可能仍然会有跨域问题）
-      const cached = imageCache.get(src);
+      const cached = imageCache.get(actualSrc) || imageCache.get(src);
       if (cached && cached.complete && cached.naturalWidth > 0) {
         return Promise.resolve(cached);
       }
@@ -177,6 +199,7 @@ export function getOrLoadImage(src: string): Promise<HTMLImageElement> {
         img.crossOrigin = "anonymous";
         
         const handleLoad = () => {
+          imageCache.set(actualSrc, img);
           imageCache.set(src, img);
           resolve(img);
         };
@@ -187,7 +210,7 @@ export function getOrLoadImage(src: string): Promise<HTMLImageElement> {
         
         img.addEventListener("load", handleLoad, { once: true });
         img.addEventListener("error", handleError, { once: true });
-        img.src = src;
+        img.src = actualSrc;
       });
     });
 }

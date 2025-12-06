@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import MaterialIcon from "@/components/MaterialIcon";
 import TopNav from "@/components/TopNav";
-import { PRESET_TAGS } from "@/constants/tagPresets";
 import {
   getDefaultTagPreferences,
   loadTagPreferencesAsync,
@@ -18,6 +17,7 @@ import {
 } from "@/services/api";
 
 import "./CustomTagManager.css";
+import "./ArtworkDetails.css";
 
 type CustomTagManagerProps = {
   userEmail: string | null;
@@ -34,6 +34,9 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
   const [editingName, setEditingName] = useState("");
   const [feedback, setFeedback] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
+  const [allTagNames, setAllTagNames] = useState<Set<string>>(new Set());
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [tagToDelete, setTagToDelete] = useState<CustomTag | null>(null);
 
   const refreshPreferences = useCallback(async () => {
     setIsLoading(true);
@@ -43,11 +46,14 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
       setDraftPreferences(clonePreferences(latest));
       setEditingTagId(null);
       setEditingName("");
+      // 更新所有标签名称集合（用于验证重名）
+      setAllTagNames(new Set(latest.customTags.map(tag => tag.name.toLowerCase())));
     } catch (error) {
       console.warn("[CustomTagManager] Failed to load preferences:", error);
       const fallback = getDefaultTagPreferences();
       setOriginalPreferences(fallback);
       setDraftPreferences(clonePreferences(fallback));
+      setAllTagNames(new Set());
     } finally {
       setIsLoading(false);
     }
@@ -57,22 +63,9 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
     refreshPreferences();
   }, [refreshPreferences]);
 
-  const hiddenPresetIds = useMemo(() => {
-    return new Set(draftPreferences.hiddenPresetTagIds);
-  }, [draftPreferences.hiddenPresetTagIds]);
-
-  const visiblePresetCount = PRESET_TAGS.length - hiddenPresetIds.size;
-
-  const hiddenCustomCount = useMemo(
-    () => draftPreferences.customTags.filter((tag) => tag.hidden).length,
-    [draftPreferences.customTags],
-  );
-
   const dirty = useMemo(() => {
     return !areTagPreferencesEqual(draftPreferences, originalPreferences);
   }, [draftPreferences, originalPreferences]);
-
-  const presetTagNames = useMemo(() => new Set(PRESET_TAGS.map((tag) => tag.name.toLowerCase())), []);
 
   const validateTagName = useCallback(
     (name: string, excludeId?: number | null): string | null => {
@@ -84,9 +77,7 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
         return `标签名称请控制在 ${TAG_NAME_LIMIT} 个字符以内`;
       }
       const normalized = trimmed.toLowerCase();
-      if (presetTagNames.has(normalized)) {
-        return "与预设标签重名，请使用其他名称";
-      }
+      // 检查是否与现有标签重名
       for (const tag of draftPreferences.customTags) {
         if (tag.id === excludeId) {
           continue;
@@ -97,46 +88,9 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
       }
       return null;
     },
-    [draftPreferences.customTags, presetTagNames],
+    [draftPreferences.customTags],
   );
 
-  const handleTogglePreset = useCallback((id: string) => {
-    setDraftPreferences((prev) => {
-      const hidden = new Set(prev.hiddenPresetTagIds);
-      if (hidden.has(id)) {
-        hidden.delete(id);
-      } else {
-        hidden.add(id);
-      }
-      return {
-        ...prev,
-        hiddenPresetTagIds: Array.from(hidden),
-      };
-    });
-    setFeedback("");
-  }, []);
-
-  const handleToggleCustomVisibility = useCallback((id: number) => {
-    setDraftPreferences((prev) => {
-      const nextTags = prev.customTags.map((tag) => {
-        if (tag.id !== id) {
-          return tag;
-        }
-        return {
-          ...tag,
-          hidden: !tag.hidden,
-        };
-      });
-      return {
-        ...prev,
-        customTags: nextTags,
-        hiddenCustomTagIds: nextTags
-          .filter(tag => tag.hidden)
-          .map(tag => tag.id),
-      };
-    });
-    setFeedback("");
-  }, []);
 
   const handleStartEdit = useCallback((tag: CustomTag) => {
     setEditingTagId(tag.id);
@@ -169,22 +123,27 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
         await updateTag(tag.id, { name: trimmed });
         clearTagsCache(); // 清除缓存，强制重新加载
         
-        // 更新本地状态
-        setDraftPreferences((prev) => {
-          const nextTags = prev.customTags.map((item) => {
-            if (item.id !== tag.id) {
-              return item;
-            }
-            return {
-              ...item,
-              name: trimmed,
-            };
-          });
+      // 更新本地状态
+      setDraftPreferences((prev) => {
+        const nextTags = prev.customTags.map((item) => {
+          if (item.id !== tag.id) {
+            return item;
+          }
           return {
-            ...prev,
-            customTags: nextTags,
+            ...item,
+            name: trimmed,
           };
         });
+        // 更新标签名称集合
+        const updatedNames = new Set(allTagNames);
+        updatedNames.delete(tag.name.toLowerCase());
+        updatedNames.add(trimmed.toLowerCase());
+        setAllTagNames(updatedNames);
+        return {
+          ...prev,
+          customTags: nextTags,
+        };
+      });
         
         // 刷新偏好设置
         await refreshPreferences();
@@ -199,14 +158,17 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
     [editingName, validateTagName, refreshPreferences],
   );
 
-  const handleDelete = useCallback(async (tag: CustomTag) => {
-    if (typeof window !== "undefined" && typeof window.confirm === "function") {
-      const ok = window.confirm(`确定要删除标签"${tag.name}"吗？删除后将无法在上传时选择。`);
-      if (!ok) {
-        return;
-      }
-    }
+  const handleDeleteClick = useCallback((tag: CustomTag) => {
+    setTagToDelete(tag);
+    setShowDeleteConfirm(true);
+  }, []);
 
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!tagToDelete) return;
+    
+    const tag = tagToDelete;
+    setShowDeleteConfirm(false);
+    
     try {
       // 调用后端API删除标签
       await deleteTag(tag.id);
@@ -214,10 +176,12 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
       
       // 更新本地状态
       setDraftPreferences((prev) => {
+        const updatedNames = new Set(allTagNames);
+        updatedNames.delete(tag.name.toLowerCase());
+        setAllTagNames(updatedNames);
         return {
           ...prev,
           customTags: prev.customTags.filter((item) => item.id !== tag.id),
-          hiddenCustomTagIds: prev.hiddenCustomTagIds.filter(id => id !== tag.id),
         };
       });
       
@@ -237,8 +201,15 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
       } else {
         setFeedback("删除失败，请重试。");
       }
+    } finally {
+      setTagToDelete(null);
     }
-  }, [editingTagId, refreshPreferences]);
+  }, [tagToDelete, editingTagId, refreshPreferences, allTagNames]);
+
+  const handleDeleteCancel = useCallback(() => {
+    setShowDeleteConfirm(false);
+    setTagToDelete(null);
+  }, []);
 
   const handleAddTag = useCallback(async () => {
     const error = validateTagName(newTagName, null);
@@ -263,6 +234,10 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
         ...prev,
         customTags: [...prev.customTags, newTag],
       }));
+      // 更新标签名称集合
+      const updatedNames = new Set(allTagNames);
+      updatedNames.add(createdTag.name.toLowerCase());
+      setAllTagNames(updatedNames);
       
       setNewTagName("");
       
@@ -283,21 +258,10 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
     [handleAddTag],
   );
 
-  const handleBack = useCallback(async () => {
-    if (dirty) {
-      try {
-        // 只保存隐藏偏好（标签的创建/更新/删除已经通过API完成）
-        saveTagPreferences(userEmail, {
-          ...draftPreferences,
-          customTags: [], // 不保存标签列表，从后端获取
-        });
-        setOriginalPreferences(clonePreferences(draftPreferences));
-      } catch (error) {
-        console.warn("[Echo] Failed to save tag preferences on back:", error);
-      }
-    }
+  const handleBack = useCallback(() => {
+    // 标签的创建/更新/删除已经通过API完成，不需要保存偏好
     onBack();
-  }, [dirty, draftPreferences, userEmail, onBack]);
+  }, [onBack]);
 
   return (
     <div className="custom-tag-page">
@@ -309,8 +273,8 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
       </div>
 
       <TopNav
-        title="自定义标签"
-        subtitle="Custom Tags"
+        title="标签管理"
+        subtitle="Tag Management"
         className="top-nav--fixed top-nav--flush"
         leadingAction={{
           icon: "arrow_back",
@@ -328,36 +292,9 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
           <>
         <section className="custom-tag-section">
           <header>
-            <h2>预设标签可见性</h2>
+            <h2>标签管理</h2>
             <p>
-              已显示 {visiblePresetCount} 个预设标签，隐藏 {hiddenPresetIds.size} 个。关闭后将在上传页面隐藏对应标签。
-            </p>
-          </header>
-          <div className="custom-tag-section__grid">
-            {PRESET_TAGS.map((preset) => {
-              const visible = !hiddenPresetIds.has(preset.id);
-              return (
-                <label
-                  key={preset.id}
-                  className={visible ? "custom-tag-pill" : "custom-tag-pill custom-tag-pill--muted"}
-                >
-                  <input
-                    type="checkbox"
-                    checked={visible}
-                    onChange={() => handleTogglePreset(preset.id)}
-                  />
-                  <span>{preset.name}</span>
-                </label>
-              );
-            })}
-          </div>
-        </section>
-
-        <section className="custom-tag-section">
-          <header>
-            <h2>自定义标签</h2>
-            <p>
-              当前共有 {draftPreferences.customTags.length} 个，其中隐藏 {hiddenCustomCount} 个。可直接编辑或隐藏标签。
+              当前共有 {draftPreferences.customTags.length} 个标签。可直接编辑或删除标签。
             </p>
           </header>
 
@@ -367,7 +304,6 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
             ) : (
               draftPreferences.customTags.map((tag) => {
                 const isEditing = editingTagId === tag.id;
-                const isHidden = Boolean(tag.hidden);
                 return (
                   <div key={tag.id} className="custom-tag-row">
                     <div className="custom-tag-row__label">
@@ -380,11 +316,10 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
                           placeholder="输入标签名称"
                         />
                       ) : (
-                        <span className={isHidden ? "custom-tag-row__name custom-tag-row__name--muted" : "custom-tag-row__name"}>
+                        <span className="custom-tag-row__name">
                           {tag.name}
                         </span>
                       )}
-                      <span className="custom-tag-row__meta">{isHidden ? "已隐藏" : "显示中"}</span>
                     </div>
                     <div className="custom-tag-row__actions">
                       {isEditing ? (
@@ -403,15 +338,8 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
                       )}
                       <button
                         type="button"
-                        className={isHidden ? "custom-tag-action custom-tag-action--ghost" : "custom-tag-action custom-tag-action--ghost"}
-                        onClick={() => handleToggleCustomVisibility(tag.id)}
-                      >
-                        <MaterialIcon name={isHidden ? "visibility" : "visibility_off"} />
-                      </button>
-                      <button
-                        type="button"
                         className="custom-tag-action custom-tag-action--danger"
-                        onClick={() => handleDelete(tag)}
+                        onClick={() => handleDeleteClick(tag)}
                       >
                         <MaterialIcon name="delete" />
                       </button>
@@ -441,13 +369,48 @@ function CustomTagManager({ userEmail, onBack }: CustomTagManagerProps) {
 
           <div className="custom-tag-hint">
             <span className={feedback ? "custom-tag-hint__message custom-tag-hint__message--active" : "custom-tag-hint__message"}>
-              {feedback || "标签名称支持中文与英文，最多 12 个字符。"}
+              {feedback || "标签名称支持中文与英文，最多 12 个字符。可以自由添加、编辑或删除标签。"}
             </span>
           </div>
         </section>
           </>
         )}
       </main>
+
+      {showDeleteConfirm && tagToDelete && (
+        <div className="artwork-delete-confirm-overlay" onClick={handleDeleteCancel}>
+          <div className="artwork-delete-confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <h2 className="artwork-delete-confirm-title">要删除这个标签吗？</h2>
+            <div className="artwork-delete-confirm-content">
+              <p className="artwork-delete-confirm-text">
+                删除后，标签"{tagToDelete.name}"将无法在上传时选择。
+              </p>
+              <p className="artwork-delete-confirm-text">
+                如果仍有画作使用此标签，删除操作将失败。
+              </p>
+              <p className="artwork-delete-confirm-text artwork-delete-confirm-text--highlight">
+                确认要删除吗？
+              </p>
+            </div>
+            <div className="artwork-delete-confirm-actions">
+              <button
+                type="button"
+                className="artwork-delete-confirm-button artwork-delete-confirm-button--cancel"
+                onClick={handleDeleteCancel}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="artwork-delete-confirm-button artwork-delete-confirm-button--confirm"
+                onClick={handleDeleteConfirm}
+              >
+                确认删除
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -463,30 +426,6 @@ function clonePreferences(preferences: TagPreferences): TagPreferences {
 }
 
 function areTagPreferencesEqual(a: TagPreferences, b: TagPreferences): boolean {
-  if (a.hiddenPresetTagIds.length !== b.hiddenPresetTagIds.length) {
-    return false;
-  }
-
-  const hiddenA = [...a.hiddenPresetTagIds].sort();
-  const hiddenB = [...b.hiddenPresetTagIds].sort();
-  for (let i = 0; i < hiddenA.length; i += 1) {
-    if (hiddenA[i] !== hiddenB[i]) {
-      return false;
-    }
-  }
-
-  if (a.hiddenCustomTagIds.length !== b.hiddenCustomTagIds.length) {
-    return false;
-  }
-
-  const hiddenCustomA = [...a.hiddenCustomTagIds].sort((x, y) => x - y);
-  const hiddenCustomB = [...b.hiddenCustomTagIds].sort((x, y) => x - y);
-  for (let i = 0; i < hiddenCustomA.length; i += 1) {
-    if (hiddenCustomA[i] !== hiddenCustomB[i]) {
-      return false;
-    }
-  }
-
   if (a.customTags.length !== b.customTags.length) {
     return false;
   }
@@ -499,9 +438,6 @@ function areTagPreferencesEqual(a: TagPreferences, b: TagPreferences): boolean {
       return false;
     }
     if (customA[i].name !== customB[i].name) {
-      return false;
-    }
-    if (Boolean(customA[i].hidden) !== Boolean(customB[i].hidden)) {
       return false;
     }
   }

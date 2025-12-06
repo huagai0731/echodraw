@@ -1,6 +1,7 @@
 import clsx from "clsx";
 import { useMemo } from "react";
 import MaterialIcon from "@/components/MaterialIcon";
+import { ArtisticLoader } from "@/components/ArtisticLoader";
 import type { CheckInStatus } from "@/services/api";
 import "./CheckInCard.css";
 
@@ -22,16 +23,10 @@ export default function CheckInCard({
   onRetry,
 }: CheckInCardProps) {
   const totalCheckins = checkInStatus?.total_checkins ?? 0;
-  const currentStreak = checkInStatus?.current_streak ?? 0;
 
   const statusText = useMemo(() => {
-    if (checkedIn) {
-      return `累计打卡 ${totalCheckins} 天${
-        currentStreak > 0 ? ` · 连续 ${currentStreak} 天` : ""
-      }`;
-    }
-    return "记录今日情绪与时长";
-  }, [checkedIn, totalCheckins, currentStreak]);
+    return `累计打卡 ${totalCheckins} 天`;
+  }, [totalCheckins]);
 
   return (
     <div className="check-in-card">
@@ -55,12 +50,12 @@ export default function CheckInCard({
         />
         {loading && (
           <span className="check-in-card__spinner" aria-hidden="true">
-            <MaterialIcon name="hourglass_empty" className="check-in-card__spinner-icon" />
+            <ArtisticLoader size="small" text="" />
           </span>
         )}
         <div className="check-in-card__text">
           <h2 className="check-in-card__title">
-            {checkedIn ? "今日已打卡！" : "每日打卡"}
+            {checkedIn ? "今天也想起来画画这件事了" : "签到"}
           </h2>
           <p className="check-in-card__description" id="check-in-description">
             {statusText}

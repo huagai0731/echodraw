@@ -546,6 +546,7 @@ function FourImageTemplateDesigner({ open, artworks, onClose }: FourImageTemplat
                   maxTagCount={MAX_TAG_COUNT}
                   selectedArtwork={selectedArtwork}
                   onStateChange={setContentState}
+                  showAddSuffix={false}
                   getDateLabel={(artwork) => {
                     const meta = composeMetaLabels(artwork, { showDate: true, showDuration: false });
                     return meta.dateLabel || "未设置";
@@ -745,12 +746,12 @@ function formatDurationForTemplate(minutesTotal: number): string {
   const hours = Math.floor(minutesTotal / 60);
   const minutes = Math.max(0, minutesTotal % 60);
   if (hours === 0) {
-    return `${minutes} min`;
+    return `${minutes}min`;
   }
   if (minutes === 0) {
-    return `${hours} h`;
+    return `${hours}h`;
   }
-  return `${hours} h ${minutes} min`;
+  return `${hours}h${minutes}min`;
 }
 
 function parseDateTime(source: string | null | undefined): Date | null {
@@ -965,7 +966,12 @@ function drawImageCell(
   if (showDuration && image && image.width > 0 && image.height > 0 && artwork) {
     const durationMinutes = artwork.durationMinutes;
     if (durationMinutes && durationMinutes > 0) {
+      // 获取日期和时长，组合成 "0000-00-00·1h30min" 格式
+      const date = resolveArtworkDate(artwork);
+      const dateLabel = date ? formatDateLabel(date) : "";
       const durationText = formatDurationForTemplate(durationMinutes);
+      const fullText = dateLabel ? `${dateLabel}·${durationText}` : durationText;
+      
       const fontSize = Math.round(width * 0.04); // 增大字体，基于cell宽度
       const textPadding = width * 0.02; // 距离右边缘的padding
       // 图片的实际底部是 cellY + cellHeight = y + padding + (height - padding * 2) = y + height - padding
@@ -984,7 +990,7 @@ function drawImageCell(
       context.fillStyle = "#98dbc6"; // 薄荷绿色
       context.textAlign = "right";
       context.textBaseline = "middle";
-      context.fillText(durationText, textX, textY);
+      context.fillText(fullText, textX, textY);
       context.restore();
     }
   }

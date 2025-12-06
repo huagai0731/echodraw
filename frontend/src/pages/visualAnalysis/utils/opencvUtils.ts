@@ -46,17 +46,17 @@ export const loadOpenCV = (): Promise<void> => {
             if (checkOpencvReady()) {
               resolve();
             } else {
-              reject(new Error("OpenCV 加载失败"));
+              reject(new Error("图像处理功能加载失败"));
             }
           }, 100);
         }
       } else {
-        reject(new Error("OpenCV 未加载"));
+        reject(new Error("图像处理功能未就绪"));
       }
     };
     
     script.onerror = () => {
-      reject(new Error("无法加载 OpenCV 库，请检查网络连接"));
+      reject(new Error("图像处理功能加载失败，请检查网络连接"));
     };
     
     document.body.appendChild(script);

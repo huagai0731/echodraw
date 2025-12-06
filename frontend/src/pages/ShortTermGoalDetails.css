@@ -219,10 +219,15 @@
   opacity: 0.75;
 }
 
-.short-term-details__day-title {
-  font-size: 1.05rem;
-  font-weight: 500;
-  letter-spacing: 0.04em;
+.short-term-details__day-status-text {
+  font-size: 0.85rem;
+  color: rgba(239, 234, 231, 0.65);
+  letter-spacing: 0.05em;
+}
+
+.short-term-details__day-notes {
+  padding: 0.75rem 1.25rem 0;
+  border-top: 1px solid rgba(239, 234, 231, 0.12);
 }
 
 .short-term-details__day-completion-time {
@@ -912,6 +917,157 @@ details[open] .short-term-details__day-actions .material-symbols-outlined:last-c
   100% {
     border-color: rgba(152, 219, 198, 0);
     box-shadow: 0 0 0 rgba(152, 219, 198, 0);
+  }
+}
+
+/* 删除确认弹窗样式 - 参考画集页面 */
+.short-term-goal-delete-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  animation: fade-in 0.2s ease;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.short-term-goal-delete-confirm-modal {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 2rem;
+  border-radius: 1.25rem;
+  border: 1px solid rgba(152, 219, 198, 0.25);
+  background: rgba(34, 27, 27, 0.95);
+  box-shadow:
+    0 25px 50px rgba(0, 0, 0, 0.5),
+    0 10px 20px rgba(152, 219, 198, 0.15);
+  backdrop-filter: blur(20px);
+  animation: slide-up 0.3s ease;
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.short-term-goal-delete-confirm-title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 400;
+  color: #ffffff;
+  text-align: center;
+  letter-spacing: -0.01em;
+}
+
+.short-term-goal-delete-confirm-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.short-term-goal-delete-confirm-text {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  font-weight: 300;
+  color: rgba(239, 234, 231, 0.85);
+  text-align: center;
+}
+
+.short-term-goal-delete-confirm-text--highlight {
+  color: rgba(152, 219, 198, 0.9);
+  font-weight: 400;
+}
+
+.short-term-goal-delete-confirm-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.short-term-goal-delete-confirm-button {
+  flex: 1;
+  padding: 0.85rem 1.5rem;
+  border: none;
+  border-radius: 0.75rem;
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    transform 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.short-term-goal-delete-confirm-button--cancel {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(239, 234, 231, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.short-term-goal-delete-confirm-button--cancel:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.short-term-goal-delete-confirm-button--cancel:active {
+  transform: scale(0.98);
+}
+
+.short-term-goal-delete-confirm-button--confirm {
+  background: rgba(255, 156, 156, 0.2);
+  color: #ff9c9c;
+  border: 1px solid rgba(255, 156, 156, 0.35);
+}
+
+.short-term-goal-delete-confirm-button--confirm:hover:not(:disabled) {
+  background: rgba(255, 156, 156, 0.3);
+  border-color: rgba(255, 156, 156, 0.5);
+}
+
+.short-term-goal-delete-confirm-button--confirm:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.short-term-goal-delete-confirm-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (min-width: 640px) {
+  .short-term-goal-delete-confirm-modal {
+    padding: 2.5rem;
+    gap: 2rem;
+  }
+
+  .short-term-goal-delete-confirm-title {
+    font-size: 1.75rem;
+  }
+
+  .short-term-goal-delete-confirm-text {
+    font-size: 1rem;
   }
 }
 

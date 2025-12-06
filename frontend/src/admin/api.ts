@@ -777,32 +777,4 @@ export async function deleteMonthlyReportTemplate(id: number) {
   await api.delete(`/admin/reports/monthly-templates/${id}/`);
 }
 
-export type AdminNotification = {
-  id: number;
-  title: string;
-  summary: string;
-  content: string;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-};
-
-export async function listNotifications() {
-  const response = await api.get<AdminNotification[]>("/admin/notifications/");
-  return response.data;
-}
-
-export async function createNotification(payload: Partial<AdminNotification>) {
-  const response = await api.post<AdminNotification>("/admin/notifications/", payload);
-  return response.data;
-}
-
-export async function updateNotification(id: number, payload: Partial<AdminNotification>) {
-  const response = await api.patch<AdminNotification>(`/admin/notifications/${id}/`, payload);
-  return response.data;
-}
-
-export async function deleteNotification(id: number) {
-  await api.delete(`/admin/notifications/${id}/`);
-}
 

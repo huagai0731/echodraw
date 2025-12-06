@@ -3,7 +3,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, star
 import BottomNav, { type NavId } from "@/components/BottomNav";
 import AddToHomeScreen from "@/components/AddToHomeScreen";
 import { CircularRevealWrapper } from "@/components/CircularRevealWrapper";
-import MaterialIcon from "@/components/MaterialIcon";
+import { ArtisticLoader } from "@/components/ArtisticLoader";
 
 // 懒加载页面组件
 const Gallery = lazy(() => import("@/pages/Gallery"));
@@ -33,11 +33,10 @@ import {
   deleteUserUpload,
   updateUserUpload,
   checkUploadLimit,
-  updateCollectionThumbnail,
-  updateCollectionName,
   fetchUserUploads,
   fetchMoods,
   hasAuthToken,
+  fetchProfilePreferences,
   type UserUploadRecord,
 } from "@/services/api";
 import { clearCache } from "@/utils/apiCache";
@@ -62,17 +61,9 @@ function PageLoadingFallback() {
       flexDirection: "column", 
       alignItems: "center", 
       justifyContent: "center", 
-      minHeight: "50vh",
-      gap: "1rem"
+      minHeight: "50vh"
     }}>
-      <MaterialIcon name="hourglass_empty" style={{ fontSize: "2rem", animation: "spin 1s linear infinite" }} />
-      <p style={{ color: "rgba(239, 234, 231, 0.7)" }}>加载中...</p>
-      <style>{`
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
+      <ArtisticLoader size="medium" />
     </div>
   );
 }
@@ -137,6 +128,7 @@ function UserApp() {
   const [currentTestId, setCurrentTestId] = useState<number | null>(null);
   const [currentTestResultId, setCurrentTestResultId] = useState<number | null>(null);
   const [uploadAnimationOrigin, setUploadAnimationOrigin] = useState<{ x: number; y: number; size: number } | null>(null);
+  const [isMember, setIsMember] = useState<boolean>(true);
   
   // 滚动位置存储
   const scrollPositionsRef = useRef<Map<string, number>>(new Map());
@@ -235,10 +227,6 @@ function UserApp() {
         uploadedAt,
         uploadedDate: formatDateKey(uploadedDate),
         durationMinutes: record.duration_minutes ?? null,
-        // 套图相关字段（后端返回 snake_case，转换为 camelCase）
-        collectionId: (record as any).collection_id ?? (record as any).collectionId ?? null,
-        collectionName: (record as any).collection_name ?? (record as any).collectionName ?? null,
-        collectionIndex: (record as any).collection_index ?? (record as any).collectionIndex ?? null,
       };
     },
     [formatArtworkDate, formatDuration],
@@ -503,6 +491,57 @@ function UserApp() {
     };
   }, [refreshUserArtworks, isForcedLogout]);
 
+  // 监听导航到会员购买页面的事件
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    
+    const handleNavigateToMembership = () => {
+      // 使用 sessionStorage 标记需要打开会员选项
+      sessionStorage.setItem("open-membership-options", "true");
+      setActiveNav("profile");
+      setActivePage("profile");
+    };
+    
+    window.addEventListener("navigate-to-membership", handleNavigateToMembership);
+    return () => {
+      window.removeEventListener("navigate-to-membership", handleNavigateToMembership);
+    };
+  }, []);
+
+  // 监听注册成功后跳转到首页的事件
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    
+    const handleNavigateToHome = () => {
+      setActiveNav("home");
+      setActivePage("home");
+    };
+    
+    window.addEventListener("echodraw-navigate-to-home", handleNavigateToHome);
+    return () => {
+      window.removeEventListener("echodraw-navigate-to-home", handleNavigateToHome);
+    };
+  }, []);
+
+  // 获取用户会员状态
+  useEffect(() => {
+    const loadMembershipStatus = async () => {
+      if (!hasAuthToken()) {
+        setIsMember(true); // 未登录时默认设为会员，避免阻止使用
+        return;
+      }
+      try {
+        const preferences = await fetchProfilePreferences();
+        setIsMember(preferences.isMember);
+      } catch (err) {
+        console.error("获取用户会员状态失败:", err);
+        // 默认设为会员，避免阻止用户使用
+        setIsMember(true);
+      }
+    };
+    loadMembershipStatus();
+  }, []);
+
   const handleOpenUpload = useCallback((origin?: { x: number; y: number; size: number }) => {
     if (origin) {
       setUploadAnimationOrigin(origin);
@@ -746,11 +785,11 @@ function UserApp() {
       // 这样可以确保不同设备之间的数据一致性
 
       try {
-        // 检查每日上传限制
+        // 检查每月上传限制
         const limitInfo = await checkUploadLimit();
         if (!limitInfo.can_upload) {
           window.alert(
-            `今日已上传 ${limitInfo.today_count} 张图片，已达到每日上限 ${limitInfo.max_daily_uploads} 张。\n\n删除已上传的图片后可以继续上传。`
+            `本月已上传 ${limitInfo.monthly_count} 张图片，已达到每月上限 ${limitInfo.max_monthly_uploads} 张。\n\n删除已上传的图片后可以继续上传。`
           );
           isUploadingRef.current = false;
           if (uploadTimeoutRef.current) {
@@ -783,9 +822,6 @@ function UserApp() {
           moodId: result.moodId,
           selfRating: result.rating,
           durationMinutes: result.durationMinutes,
-          collectionId: result.collectionId ?? null,
-          collectionName: result.collectionName ?? null,
-          collectionIndex: result.collectionIndex ?? null,
         });
         const artwork = mapUploadRecordToArtwork(record, result.previewDataUrl);
         // 优先使用上传时传递的 tags，因为后端可能返回的格式不对
@@ -1013,7 +1049,7 @@ function UserApp() {
       }
 
       // 从featured artworks中移除（如果存在）
-      removeFeaturedArtworkId(target.id);
+      await removeFeaturedArtworkId(target.id);
 
       // 清除API缓存，强制从服务器获取最新数据
       clearCache("/uploads/");
@@ -1149,66 +1185,14 @@ function UserApp() {
     [],
   );
 
-  const handleSetAsFeatured = useCallback((target: Artwork) => {
-    addFeaturedArtworkId(target.id);
+  const handleSetAsFeatured = useCallback(async (target: Artwork) => {
+    await addFeaturedArtworkId(target.id);
   }, []);
 
-  const handleRemoveFromFeatured = useCallback((target: Artwork) => {
-    removeFeaturedArtworkId(target.id);
+  const handleRemoveFromFeatured = useCallback(async (target: Artwork) => {
+    await removeFeaturedArtworkId(target.id);
   }, []);
 
-  const handleUpdateCollectionThumbnail = useCallback(
-    async (collectionId: string, thumbnailArtworkId: string) => {
-      try {
-        // 获取当前所有作品（从 combinedArtworks）
-        const allArtworks = combinedArtworks.map((a) => ({
-          id: a.id,
-          collectionId: a.collectionId,
-          collectionIndex: a.collectionIndex,
-          collectionName: a.collectionName,
-        }));
-        await updateCollectionThumbnail(collectionId, thumbnailArtworkId, allArtworks);
-        // 清除缓存，强制刷新数据
-        clearCache("/uploads/");
-        // 直接调用强制刷新，确保立即更新
-        await refreshUserArtworks(true);
-      } catch {
-        // 即使失败也触发刷新，确保数据同步
-        clearCache("/uploads/");
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(new CustomEvent(USER_ARTWORKS_CHANGED_EVENT));
-        }
-      }
-    },
-    [combinedArtworks, refreshUserArtworks],
-  );
-
-  const handleUpdateCollectionName = useCallback(
-    async (collectionId: string, collectionName: string) => {
-      try {
-        // 获取当前所有作品（从 combinedArtworks）
-        const allArtworks = combinedArtworks.map((a) => ({
-          id: a.id,
-          collectionId: a.collectionId,
-          collectionIndex: a.collectionIndex,
-          collectionName: a.collectionName,
-          title: a.title,
-        }));
-        await updateCollectionName(collectionId, collectionName, allArtworks);
-        // 清除缓存，强制刷新数据
-        clearCache("/uploads/");
-        // 直接调用强制刷新，确保立即更新
-        await refreshUserArtworks(true);
-      } catch {
-        // 即使失败也触发刷新，确保数据同步
-        clearCache("/uploads/");
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(new CustomEvent(USER_ARTWORKS_CHANGED_EVENT));
-        }
-      }
-    },
-    [combinedArtworks, refreshUserArtworks],
-  );
 
 
 
@@ -1224,7 +1208,21 @@ function UserApp() {
             originY={uploadAnimationOrigin?.y}
             originSize={uploadAnimationOrigin?.size}
           >
-            <Upload onClose={handleCloseUpload} onSave={handleUploadSave} />
+            <Upload 
+              onClose={handleCloseUpload} 
+              onSave={handleUploadSave}
+              userArtworks={userArtworks}
+              isMember={isMember}
+              onJoinMembership={() => {
+                handleCloseUpload();
+                // 使用 sessionStorage 标记需要打开会员选项
+                if (typeof window !== "undefined") {
+                  sessionStorage.setItem("open-membership-options", "true");
+                }
+                setActiveNav("profile");
+                setActivePage("profile");
+              }}
+            />
           </CircularRevealWrapper>
         ) : activePage === "test-list" ? (
           <TestList
@@ -1282,8 +1280,6 @@ function UserApp() {
             onUpdateArtwork={handleUpdateArtwork}
             onSetAsFeatured={handleSetAsFeatured}
             onRemoveFromFeatured={handleRemoveFromFeatured}
-            onUpdateCollectionThumbnail={handleUpdateCollectionThumbnail}
-            onUpdateCollectionName={handleUpdateCollectionName}
           />
         ) : activeNav === "goals" ? (
           <Goals />

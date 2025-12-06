@@ -97,7 +97,7 @@ function Login({ onBack, onSuccess, initialEmail = "", onForgotPassword }: Login
         <header className="login-screen__header">
           <div className="login-screen__headline">
             <h1>
-              再次创作，
+              再次创作
               <br />记录灵感
             </h1>
             <p>欢迎回到 EchoDraw</p>

@@ -54,7 +54,7 @@
   z-index: 1;
   flex: 1;
   overflow-y: auto;
-  padding: 1.5rem 1.5rem calc(var(--bottom-nav-safe-area) + 2rem);
+  padding: 1.5rem 1.5rem calc(var(--bottom-nav-safe-area) + 4rem);
   color: #efeae7;
 }
 
@@ -63,6 +63,7 @@
   flex-direction: column;
   gap: 1.25rem;
   margin-top: 1.75rem;
+  margin-bottom: 1rem;
 }
 
 .upload-section:first-of-type {

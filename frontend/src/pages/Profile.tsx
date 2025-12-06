@@ -14,11 +14,12 @@ import {
   hasAuthToken,
   setAuthToken,
   updateProfilePreferences,
+  subscribeMembership,
 } from "@/services/api";
 import { clearAllUserCache } from "@/utils/clearUserCache";
 import TopNav from "@/components/TopNav";
 import MaterialIcon from "@/components/MaterialIcon";
-import { loadFeaturedArtworkIds } from "@/services/featuredArtworks";
+import { loadFeaturedArtworkIds, loadFeaturedArtworkIdsFromServer } from "@/services/featuredArtworks";
 import type { Artwork } from "@/pages/Gallery";
 
 import "./Profile.css";
@@ -254,7 +255,17 @@ function Profile({
 }: ProfileProps) {
   const initialAuth = useMemo(getInitialAuth, []);
   const [auth, setAuth] = useState<AuthPayload | null>(initialAuth);
-  const [view, setView] = useState<ViewState>(initialAuth ? "dashboard" : "welcome");
+  const [view, setView] = useState<ViewState>(() => {
+    // 检查是否有打开会员选项的事件
+    if (typeof window !== "undefined") {
+      const shouldOpenMembership = sessionStorage.getItem("open-membership-options");
+      if (shouldOpenMembership === "true" && initialAuth) {
+        sessionStorage.removeItem("open-membership-options");
+        return "membership-options";
+      }
+    }
+    return initialAuth ? "dashboard" : "welcome";
+  });
   const [cachedEmail, setCachedEmail] = useState(initialAuth?.user.email ?? "");
   const [displayName, setDisplayName] = useState(() => {
     const email = initialAuth?.user.email;
@@ -273,8 +284,9 @@ function Profile({
     return stored?.signature ?? DEFAULT_SIGNATURE;
   });
   const [handledForcedLogoutVersion, setHandledForcedLogoutVersion] = useState(0);
-  const [membershipTier, setMembershipTier] = useState<MembershipTier>("basic");
+  const [membershipTier, setMembershipTier] = useState<MembershipTier>("pending");
   const [pendingTier, setPendingTier] = useState<MembershipTier | null>(null);
+  const [membershipTierLoading, setMembershipTierLoading] = useState(true);
 
   useEffect(() => {
     if (auth) {
@@ -307,14 +319,30 @@ function Profile({
     setHandledForcedLogoutVersion(forcedLogoutVersion);
   }, [forcedLogoutVersion, handledForcedLogoutVersion, auth]);
 
-  const handleAuthSuccess = useCallback((payload: AuthPayload) => {
+  const handleAuthSuccess = useCallback(async (payload: AuthPayload) => {
     // 立即设置 token，确保数据加载时 token 已经可用
     setAuthToken(payload.token);
     setAuth(payload);
     setCachedEmail(payload.user.email);
+    // 注册成功后跳转到首页，而不是我的页面
+    // 触发事件通知UserApp跳转到首页
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("echodraw-navigate-to-home"));
+    }
     setView("dashboard");
     // 清除旧的缓存，确保新用户不会看到之前用户的数据
     clearAllUserCache();
+    
+    // 从服务器加载展示作品列表
+    try {
+      await loadFeaturedArtworkIdsFromServer();
+      // 触发事件通知其他组件更新
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("echodraw-featured-artworks-changed"));
+      }
+    } catch (error) {
+      console.warn("[Echo] Failed to load featured artwork IDs after login:", error);
+    }
   }, []);
 
   const userEmail = auth?.user.email ?? null;
@@ -325,6 +353,7 @@ function Profile({
       setSignature(DEFAULT_SIGNATURE);
       clearStoredPreferences();
       clearStoredStats();
+      setMembershipTierLoading(false);
       return;
     }
 
@@ -337,6 +366,9 @@ function Profile({
         requestAbortController.abort();
       }
       requestAbortController = new AbortController();
+      
+      // 开始加载，设置加载状态
+      setMembershipTierLoading(true);
 
       // 先加载本地缓存以快速显示
       const stored = loadStoredPreferences(userEmail);
@@ -359,6 +391,23 @@ function Profile({
           setDisplayName(effectiveDisplayName);
           setSignature(effectiveSignature);
           storePreferences(userEmail, effectiveDisplayName, effectiveSignature);
+          // 更新会员状态
+          const isMember = preferences.isMember;
+          const membershipExpires = preferences.membershipExpires;
+          // 检查会员是否过期
+          if (isMember && membershipExpires) {
+            const expiresDate = new Date(membershipExpires);
+            const now = new Date();
+            if (expiresDate > now) {
+              setMembershipTier("premium");
+            } else {
+              setMembershipTier("pending");
+            }
+          } else {
+            setMembershipTier("pending");
+          }
+          // 加载完成，设置加载状态为false
+          setMembershipTierLoading(false);
         }
       } catch (error) {
         if (!cancelled && !requestAbortController.signal.aborted) {
@@ -367,10 +416,13 @@ function Profile({
             const httpError = error as { response?: { status?: number } };
             if (httpError.response?.status === 401) {
               // Token过期，不更新状态，让上层处理
+              setMembershipTierLoading(false);
               return;
             }
           }
           console.warn("[Echo] Failed to load profile preferences:", error);
+          // 加载失败，也设置加载状态为false
+          setMembershipTierLoading(false);
           // 只有在没有本地缓存时才使用默认值
           const hasStored = loadStoredPreferences(userEmail);
           if (!hasStored) {
@@ -531,6 +583,7 @@ function Profile({
         onUpdateDisplayName={handleUpdateDisplayName}
         onUpdateSignature={handleUpdateSignature}
         onOpenTagManager={() => setView("custom-tags")}
+        onLogout={handleLogout}
       />
     );
   }
@@ -556,10 +609,26 @@ function Profile({
       <PaymentConfirmation
         plan={nextPlan}
         onBack={() => setView("membership-options")}
-        onConfirm={({ tier }) => {
-          setMembershipTier(tier);
-          setPendingTier(null);
-          setView("dashboard");
+        onConfirm={async ({ tier, expiresAt }) => {
+          try {
+            // 调用 API 保存会员状态和到期时间
+            await subscribeMembership({
+              tier: tier as "premium",
+              expiresAt: expiresAt,
+            });
+            // 更新本地状态
+            setMembershipTier(tier);
+            setPendingTier(null);
+            setView("dashboard");
+          } catch (error) {
+            console.error("[Echo] Failed to subscribe membership:", error);
+            // 即使 API 调用失败，也更新本地状态（因为用户已经"支付"了）
+            // 但应该显示错误提示
+            alert("保存会员状态失败，请刷新页面重试");
+            setMembershipTier(tier);
+            setPendingTier(null);
+            setView("dashboard");
+          }
         }}
       />
     );
@@ -590,6 +659,7 @@ function Profile({
         displayName={displayName || formatName(auth.user.email)}
         signature={signature}
         membershipTier={membershipTier}
+        membershipTierLoading={membershipTierLoading}
         onOpenMembership={() => setView("membership-options")}
         artworks={artworks}
       />
@@ -611,6 +681,7 @@ type ProfileDashboardProps = {
   displayName: string;
   signature: string;
   membershipTier: MembershipTier;
+  membershipTierLoading: boolean;
   onOpenMembership: () => void;
   artworks: Artwork[];
 };
@@ -622,6 +693,7 @@ function ProfileDashboard({
   displayName,
   signature,
   membershipTier,
+  membershipTierLoading,
   onOpenMembership,
   artworks,
 }: ProfileDashboardProps) {
@@ -629,9 +701,7 @@ function ProfileDashboard({
   const effectiveSignature = signature.trim() || DEFAULT_SIGNATURE;
   const membershipLabels: Record<MembershipTier, string> = {
     pending: "加入EchoDraw",
-    basic: "Lite",
     premium: "Plus",
-    premiumQuarter: "Plus",
   };
   const currentMembershipLabel = membershipLabels[membershipTier] ?? membershipLabels.pending;
   // 先从缓存加载统计数据，避免闪烁
@@ -779,11 +849,39 @@ function ProfileDashboard({
   // 加载用户选择的"作品"
   const [featuredArtworks, setFeaturedArtworks] = useState<Artwork[]>([]);
 
+  // 在用户登录后，从服务器加载展示作品列表
   useEffect(() => {
-    const featuredIds = loadFeaturedArtworkIds();
-    const featured = artworks.filter((art) => featuredIds.includes(art.id));
-    setFeaturedArtworks(featured);
-  }, [artworks]);
+    if (!email) {
+      setFeaturedArtworks([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadFeatured = async () => {
+      try {
+        const featuredIds = await loadFeaturedArtworkIdsFromServer();
+        if (!cancelled) {
+          const featured = artworks.filter((art) => featuredIds.includes(art.id));
+          setFeaturedArtworks(featured);
+        }
+      } catch (error) {
+        console.warn("[Echo] Failed to load featured artworks from server:", error);
+        // 如果服务器加载失败，从localStorage加载
+        if (!cancelled) {
+          const featuredIds = loadFeaturedArtworkIds();
+          const featured = artworks.filter((art) => featuredIds.includes(art.id));
+          setFeaturedArtworks(featured);
+        }
+      }
+    };
+
+    loadFeatured();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [email, artworks]);
 
   // 监听"作品"变化事件
   useEffect(() => {
@@ -818,13 +916,15 @@ function ProfileDashboard({
         subtitle="Profile"
         className="top-nav--fixed top-nav--flush"
         leadingSlot={
-          <button
-            type="button"
-            className={clsx("profile-membership-trigger", `profile-membership-trigger--${membershipTier}`)}
-            onClick={onOpenMembership}
-          >
-            <span className="profile-membership-trigger__label">{currentMembershipLabel}</span>
-          </button>
+          !membershipTierLoading && (
+            <button
+              type="button"
+              className={clsx("profile-membership-trigger", `profile-membership-trigger--${membershipTier}`)}
+              onClick={onOpenMembership}
+            >
+              <span className="profile-membership-trigger__label">{currentMembershipLabel}</span>
+            </button>
+          )
         }
         trailingActions={[
           {
@@ -894,12 +994,6 @@ function ProfileDashboard({
         </section>
 
       </main>
-
-      <footer className="profile-page__footer">
-        <button type="button" className="profile-page__logout" onClick={onLogout}>
-          退出登录
-        </button>
-      </footer>
     </div>
   );
 }

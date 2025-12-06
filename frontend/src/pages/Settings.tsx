@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import MaterialIcon from "@/components/MaterialIcon";
 import TopNav from "@/components/TopNav";
-import { PRESET_TAGS } from "@/constants/tagPresets";
 import {
   getDefaultTagPreferences,
   loadTagPreferences,
@@ -23,6 +22,7 @@ type SettingsProps = {
   onUpdateDisplayName: (value: string) => Promise<void> | void;
   onUpdateSignature: (value: string) => Promise<void> | void;
   onOpenTagManager: () => void;
+  onLogout: () => void;
 };
 
 type SettingsItem = {
@@ -70,6 +70,7 @@ function Settings({
   onUpdateDisplayName,
   onUpdateSignature,
   onOpenTagManager,
+  onLogout,
 }: SettingsProps) {
   const [activeDialog, setActiveDialog] = useState<SettingsDialog>(null);
   const [draftValue, setDraftValue] = useState("");
@@ -193,23 +194,10 @@ function Settings({
         };
       }
       if (item.id === "custom-tags") {
-        const hiddenPresetCount = tagPreferences.hiddenPresetTagIds.length;
-        const visiblePresetCount = PRESET_TAGS.length - hiddenPresetCount;
-        const totalCustomCount = tagPreferences.customTags.length;
-        const hiddenCustomCount = tagPreferences.customTags.filter((tag) => tag.hidden).length;
-        const visibleCustomCount = totalCustomCount - hiddenCustomCount;
-
-        let subtitle = `预设标签 ${visiblePresetCount} 个可见`;
-        if (hiddenPresetCount > 0) {
-          subtitle += `，隐藏 ${hiddenPresetCount} 个`;
-        }
-        if (totalCustomCount > 0) {
-          subtitle += `，自定义 ${visibleCustomCount} 个可见`;
-          if (hiddenCustomCount > 0) {
-            subtitle += `，隐藏 ${hiddenCustomCount} 个`;
-          }
-        } else {
-          subtitle += "，暂无自定义标签";
+        const totalCount = tagPreferences.customTags.length;
+        let subtitle = `共有 ${totalCount} 个标签`;
+        if (totalCount === 0) {
+          subtitle = "暂无标签，请先添加";
         }
 
         return {
@@ -371,6 +359,12 @@ function Settings({
           </div>
         </section>
       </main>
+
+      <footer className="settings-page__footer">
+        <button type="button" className="settings-page__logout" onClick={onLogout}>
+          退出登录
+        </button>
+      </footer>
 
       <div className={clsx("settings-dialog", activeDialog && "settings-dialog--open")}>
         <button type="button" className="settings-dialog__backdrop" onClick={handleCloseDialog} />

@@ -7,7 +7,7 @@ import {
   fetchVisualAnalysisResult,
   fetchVisualAnalysisResults,
 } from "@/services/api";
-import { processSavedResultUrls } from "../utils/imageUrlUtils";
+import { processSavedResultUrls, processImageUrl } from "../utils/imageUrlUtils";
 import type { SavedResultData } from "../types";
 
 export type ExistingResultCheckCallbacks = {
@@ -24,6 +24,7 @@ export type ExistingResultCheckCallbacks = {
   onSetCheckingExistingResult: (checking: boolean) => void;
   onStartPolling: (taskId: string, initialProgress: number) => void;
   onSetCurrentTaskId: (taskId: string | null) => void;
+  onSetOriginalImage?: (imageUrl: string | null) => void;
 };
 
 /**
@@ -264,6 +265,20 @@ async function handleExistingResults(
     // 加载结果
     const processedResult = processSavedResultUrls(savedResult);
     await callbacks.onLoadResult(processedResult);
+
+    if (!isMountedRef.current) return;
+
+    // 加载结果后，设置必要的状态以正确显示
+    // 设置 originalImage 状态（如果回调存在）
+    if (callbacks.onSetOriginalImage && savedResult.original_image) {
+      callbacks.onSetOriginalImage(processImageUrl(savedResult.original_image));
+    }
+
+    // 如果有专业分析结果或基础结果，设置 showComprehensive
+    // 这样即使没有专业分析结果，也能显示基础分析结果
+    if (savedResult.comprehensive_analysis || savedResult.original_image) {
+      callbacks.onSetShowComprehensive(true);
+    }
 
     if (isMountedRef.current) {
       onComplete();

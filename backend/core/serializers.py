@@ -29,7 +29,6 @@ from core.models import (
     LongTermPlanCopy,
     Mood,
     MonthlyReportTemplate,
-    Notification,
     ShortTermGoal,
     ShortTermTaskPreset,
     Tag,
@@ -84,22 +83,6 @@ class TagSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("标签名称不可超过 24 字符。")
         return text
     
-    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-        # 确保用户自定义标签不能设置is_preset=True
-        request = self.context.get("request")
-        user = getattr(request, "user", None) if request else None
-        
-        if self.instance:
-            # 更新时，不能将用户标签改为预设标签
-            if self.instance.user and attrs.get("is_preset", False):
-                raise serializers.ValidationError({"is_preset": "用户自定义标签不能设置为预设标签。"})
-        else:
-            # 创建时，用户只能创建自定义标签
-            if user and attrs.get("is_preset", False):
-                raise serializers.ValidationError({"is_preset": "用户不能创建预设标签。"})
-        
-        return attrs
-    
     def create(self, validated_data: dict[str, Any]) -> Tag:
         request = self.context.get("request")
         user = getattr(request, "user", None) if request else None
@@ -107,9 +90,10 @@ class TagSerializer(serializers.ModelSerializer):
         if not user:
             raise serializers.ValidationError("用户未认证。")
         
-        # 用户只能创建自定义标签
+        # 所有标签都是用户自定义标签
         validated_data["user"] = user
         validated_data["is_preset"] = False
+        validated_data["is_hidden"] = False  # 不再支持隐藏功能
         
         return super().create(validated_data)
 
@@ -120,6 +104,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         fields = [
             "display_name",
             "signature",
+            "featured_artwork_ids",
             "updated_at",
         ]
         read_only_fields = ["updated_at"]
@@ -133,6 +118,9 @@ class UserProfileSerializer(serializers.ModelSerializer):
                 "allow_blank": True,
                 "required": False,
                 "trim_whitespace": True,
+            },
+            "featured_artwork_ids": {
+                "required": False,
             },
         }
 
@@ -289,9 +277,6 @@ class UserUploadSerializer(serializers.ModelSerializer):
             "duration_minutes",
             "image",
             "thumbnail",
-            "collection_id",
-            "collection_name",
-            "collection_index",
             "created_at",
             "updated_at",
         ]
@@ -2294,35 +2279,6 @@ class DailyQuizSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["created_at", "updated_at"]
-
-
-class NotificationSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Notification
-        fields = [
-            "id",
-            "title",
-            "summary",
-            "content",
-            "is_active",
-            "created_at",
-            "updated_at",
-        ]
-        read_only_fields = ["id", "created_at", "updated_at"]
-
-
-class NotificationPublicSerializer(serializers.ModelSerializer):
-    """用户端使用的通知序列化器，不包含 is_active 字段"""
-    class Meta:
-        model = Notification
-        fields = [
-            "id",
-            "title",
-            "summary",
-            "content",
-            "created_at",
-        ]
-        read_only_fields = ["id", "created_at"]
 
 
 class VisualAnalysisResultListSerializer(serializers.ModelSerializer):

@@ -256,6 +256,7 @@ function ShortTermGoalDetails({
   const [checkInTimes, setCheckInTimes] = useState<Record<string, string>>({}); // dateKey -> completedAt (ISO)
   const [showMenu, setShowMenu] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showSummaryTemplate, setShowSummaryTemplate] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -584,13 +585,9 @@ function ShortTermGoalDetails({
   const handleDeleteGoal = useCallback(async () => {
     if (isDeleting) return;
     
-    const confirmed = window.confirm("确定要删除这个短期目标吗？删除后无法恢复。");
-    if (!confirmed) {
-      setShowMenu(false);
-      return;
-    }
-
     setIsDeleting(true);
+    setShowDeleteConfirm(false);
+    setShowMenu(false);
     try {
       await deleteShortTermGoal(goal.id);
       if (onDeleted) {
@@ -602,7 +599,6 @@ function ShortTermGoalDetails({
       alert("删除失败，请稍后重试");
     } finally {
       setIsDeleting(false);
-      setShowMenu(false);
     }
   }, [goal.id, isDeleting, onDeleted, onClose]);
 
@@ -770,7 +766,10 @@ function ShortTermGoalDetails({
               >
                 <button
                   type="button"
-                  onClick={handleDeleteGoal}
+                  onClick={() => {
+                    setShowMenu(false);
+                    setShowDeleteConfirm(true);
+                  }}
                   disabled={isDeleting}
                   style={{
                     width: "100%",
@@ -795,7 +794,7 @@ function ShortTermGoalDetails({
                   }}
                 >
                   <MaterialIcon name="delete" />
-                  <span>{isDeleting ? "删除中..." : "删除目标"}</span>
+                  <span>删除目标</span>
                 </button>
               </div>
             )}
@@ -803,7 +802,7 @@ function ShortTermGoalDetails({
         </header>
 
         <p className="short-term-details__meta">
-          挑战时长：{goal.durationDays} 天 | 截止日期：{formatDateChinese(deadlineDate)} | {getStatusHint()}
+          目标时长：{goal.durationDays} 天 | 截止日期：{formatDateChinese(deadlineDate)} | {getStatusHint()}
         </p>
 
         <section className="short-term-details__progress">
@@ -838,7 +837,6 @@ function ShortTermGoalDetails({
                       <span className="short-term-details__day-number">
                         第 {day.dayNumber} 天
                       </span>
-                      <span className="short-term-details__day-title">{day.summary}</span>
                     </p>
                     <div className="short-term-details__day-actions">
                       {isCompleted ? (
@@ -847,17 +845,16 @@ function ShortTermGoalDetails({
                       <MaterialIcon name="expand_more" />
                     </div>
                   </div>
-                  {day.subtitle ? (
-                    <p className="short-term-details__day-subtitle">{day.subtitle}</p>
-                  ) : null}
-                  {dayNotes[day.dateKey] ? (
-                    <p className="short-term-details__day-subtitle">{dayNotes[day.dateKey]}</p>
-                  ) : null}
-                  {isCompleted && checkInTimes[day.dateKey] ? (
-                    <p className="short-term-details__day-subtitle" style={{ color: "#98dbc6" }}>
-                      {formatCompletionTime(checkInTimes[day.dateKey])}
-                    </p>
-                  ) : null}
+                  {/* 状态显示：完成时间或待完成 */}
+                  <div className="short-term-details__day-status-collapsed">
+                    {isCompleted && checkInTimes[day.dateKey] ? (
+                      <span className="short-term-details__day-status-text" style={{ color: "#98dbc6" }}>
+                        {formatCompletionTime(checkInTimes[day.dateKey])}
+                      </span>
+                    ) : !isLocked ? (
+                      <span className="short-term-details__day-status-text">待完成</span>
+                    ) : null}
+                  </div>
                 </summary>
 
                 {isLocked ? (
@@ -869,52 +866,60 @@ function ShortTermGoalDetails({
                     今日无任务安排
                   </div>
                 ) : (
-                  <div className="short-term-details__task-list">
-                    {day.tasks.map((task) => {
-                      const taskKey = `${day.dateKey}-${task.taskId}`;
-                      const taskImage = taskImages[taskKey];
-                      const hasImage = Boolean(taskImage);
+                  <>
+                    {/* 备注显示在展开内容区域 */}
+                    {dayNotes[day.dateKey] ? (
+                      <div className="short-term-details__day-notes">
+                        <p className="short-term-details__day-subtitle">{dayNotes[day.dateKey]}</p>
+                      </div>
+                    ) : null}
+                    <div className="short-term-details__task-list">
+                      {day.tasks.map((task) => {
+                        const taskKey = `${day.dateKey}-${task.taskId}`;
+                        const taskImage = taskImages[taskKey];
+                        const hasImage = Boolean(taskImage);
 
-                      return (
-                        <div className="short-term-details__task" key={task.taskId}>
-                          <div className="short-term-details__task-meta">
-                            <div className="short-term-details__task-text">
-                              <p className="short-term-details__task-title">{task.title}</p>
-                              {task.subtitle ? (
-                                <p className="short-term-details__task-subtitle">{task.subtitle}</p>
-                              ) : null}
+                        return (
+                          <div className="short-term-details__task" key={task.taskId}>
+                            <div className="short-term-details__task-meta">
+                              <div className="short-term-details__task-text">
+                                <p className="short-term-details__task-title">{task.title}</p>
+                                {task.subtitle ? (
+                                  <p className="short-term-details__task-subtitle">{task.subtitle}</p>
+                                ) : null}
+                              </div>
                             </div>
+                            {(isAvailable || isCompleted) && !isLocked ? (
+                              <div className="short-term-details__task-extra">
+                                {hasImage ? (
+                                  <button
+                                    type="button"
+                                    className="short-term-details__task-image"
+                                    onClick={() => handleImageView(taskImage!)}
+                                    aria-label={`查看任务「${task.title}」作品`}
+                                  >
+                                    <LazyImage
+                                      src={taskImage!.image ? replaceLocalhostInUrl(taskImage!.image) : ""}
+                                      alt={task.title}
+                                    />
+                                  </button>
+                                ) : isAvailable && !isCompleted ? (
+                                  <button
+                                    type="button"
+                                    className="short-term-details__ghost-button"
+                                    onClick={() => handleTaskUploadClick(day.dateKey, task.taskId)}
+                                    aria-label={`上传任务「${task.title}」作品`}
+                                  >
+                                    上传
+                                  </button>
+                                ) : null}
+                              </div>
+                            ) : null}
                           </div>
-                          {(isAvailable || isCompleted) && !isLocked ? (
-                            <div className="short-term-details__task-extra">
-                              {hasImage ? (
-                                <button
-                                  type="button"
-                                  className="short-term-details__task-image"
-                                  onClick={() => handleImageView(taskImage!)}
-                                  aria-label={`查看任务「${task.title}」作品`}
-                                >
-                                  <LazyImage
-                                    src={taskImage!.image ? replaceLocalhostInUrl(taskImage!.image) : ""}
-                                    alt={task.title}
-                                  />
-                                </button>
-                              ) : isAvailable && !isCompleted ? (
-                                <button
-                                  type="button"
-                                  className="short-term-details__ghost-button"
-                                  onClick={() => handleTaskUploadClick(day.dateKey, task.taskId)}
-                                  aria-label={`上传任务「${task.title}」作品`}
-                                >
-                                  上传
-                                </button>
-                              ) : null}
-                            </div>
-                          ) : null}
-                        </div>
-                      );
-                    })}
-                  </div>
+                        );
+                      })}
+                    </div>
+                  </>
                 )}
 
                 {isAvailable && !isCompleted && !isLocked ? (
@@ -1187,6 +1192,43 @@ function ShortTermGoalDetails({
             {viewingImage.title ? (
               <div className="short-term-details__image-view-title">{viewingImage.title}</div>
             ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {/* 删除确认弹窗 */}
+      {showDeleteConfirm ? (
+        <div className="short-term-goal-delete-confirm-overlay" onClick={() => setShowDeleteConfirm(false)}>
+          <div className="short-term-goal-delete-confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <h2 className="short-term-goal-delete-confirm-title">要删除这个短期目标吗？</h2>
+            <div className="short-term-goal-delete-confirm-content">
+              <p className="short-term-goal-delete-confirm-text">
+                删除后，所有相关的打卡记录和进度数据都会被清除。
+              </p>
+              <p className="short-term-goal-delete-confirm-text">
+                很多目标在当下觉得困难，可它们都是你一路积累下来的痕迹。
+              </p>
+              <p className="short-term-goal-delete-confirm-text short-term-goal-delete-confirm-text--highlight">
+                如果不是误操作，再考虑一下吗
+              </p>
+            </div>
+            <div className="short-term-goal-delete-confirm-actions">
+              <button
+                type="button"
+                className="short-term-goal-delete-confirm-button short-term-goal-delete-confirm-button--cancel"
+                onClick={() => setShowDeleteConfirm(false)}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="short-term-goal-delete-confirm-button short-term-goal-delete-confirm-button--confirm"
+                onClick={handleDeleteGoal}
+                disabled={isDeleting}
+              >
+                {isDeleting ? "删除中..." : "确认删除"}
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

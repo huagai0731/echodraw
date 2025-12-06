@@ -14,10 +14,9 @@ type AdminUser = {
 
 const NAV_ITEMS = [
   { to: "home-content", label: "首页文案", description: "历史上的今天、用户行为文案、通用文案" },
-  { to: "notifications", label: "系统通知", description: "创建并推送通知给所有用户" },
   { to: "monthly-report-templates", label: "月报文案模板", description: "管理月报各部分的个性化文案模板" },
   { to: "monthly-report-viewer", label: "实时月报查看器", description: "查看任意用户的实时月报数据（调试用）" },
-  { to: "task-presets", label: "短期任务预设", description: "维护短期挑战的任务模板库" },
+  { to: "task-presets", label: "短期任务预设", description: "维护短期目标的任务模板库" },
   { to: "long-term-copy", label: "长期计划文案", description: "管理时间区间对应的提示文案" },
   { to: "test-management", label: "测试管理", description: "管理测试、题目和选项" },
   { to: "daily-quiz", label: "每日小测", description: "管理每日小测题目和选项" },

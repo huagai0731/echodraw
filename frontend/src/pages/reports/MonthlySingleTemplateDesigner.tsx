@@ -11,6 +11,7 @@ import { loadTagPreferencesAsync, buildTagOptionsAsync } from "@/services/tagPre
 import { ImageInfoSettings, type ImageInfoSettingsState } from "@/components/templateDesigner/ImageInfoSettings";
 import { ImageGridSelector, type GridImage } from "@/components/templateDesigner/ImageGridSelector";
 import { ContentEditor, type ContentEditorState } from "@/components/templateDesigner/ContentEditor";
+import { formatISODateInShanghai } from "@/utils/dateUtils";
 
 import "./SingleArtworkTemplateDesigner.css";
 
@@ -531,11 +532,13 @@ function MonthlySingleTemplateDesigner({ open, artworks, onClose }: MonthlySingl
       return [];
     }
     
-    const targetDateStr = targetDate.toISOString().split("T")[0];
+    const targetDateStr = formatISODateInShanghai(targetDate);
+    if (!targetDateStr) return [];
     return artworks.filter((artwork) => {
       const artworkDate = resolveArtworkDate(artwork);
       if (!artworkDate) return false;
-      const artworkDateStr = artworkDate.toISOString().split("T")[0];
+      const artworkDateStr = formatISODateInShanghai(artworkDate);
+      if (!artworkDateStr) return false;
       return artworkDateStr === targetDateStr;
     });
   };

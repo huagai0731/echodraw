@@ -46,7 +46,7 @@ export const generateGrayscaleLevels = async (
         const cv = (window as any).cv;
         if (!cv || !opencvReady) {
           cleanup();
-          reject(new Error("OpenCV未就绪"));
+          reject(new Error("图像处理功能未就绪"));
           return;
         }
 
@@ -133,12 +133,12 @@ export const processImageBasic = async (
   opencvReady: boolean
 ): Promise<Partial<VisualAnalysisResult>> => {
   if (!opencvReady) {
-    throw new Error("OpenCV 库尚未加载完成，请稍候");
+    throw new Error("图像处理功能尚未就绪，请稍候");
   }
 
   const cv = (window as any).cv;
   if (!cv) {
-    throw new Error("OpenCV 未加载");
+    throw new Error("图像处理功能未就绪");
   }
 
   let src: any = null;
@@ -334,12 +334,13 @@ export const processImageBasic = async (
     if (err instanceof Error) {
       errorMessage = err.message;
     } else if (typeof err === "number") {
-      // OpenCV 错误代码
-      errorMessage = `OpenCV 错误代码: ${err}`;
+      // 图像处理错误代码
       if (err === 7083872 || err === -215) {
         errorMessage = "图片尺寸过大或格式不支持，请尝试使用较小的图片";
       } else if (err === -27) {
         errorMessage = "内存不足，请尝试使用较小的图片";
+      } else {
+        errorMessage = "处理图像时出错，请重试";
       }
     } else if (err && typeof err === "object" && "message" in err) {
       errorMessage = String(err.message);

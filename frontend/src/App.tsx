@@ -2,7 +2,7 @@ import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import ErrorBoundary from "@/components/ErrorBoundary";
-import MaterialIcon from "@/components/MaterialIcon";
+import { ArtisticLoader } from "@/components/ArtisticLoader";
 
 // 懒加载用户应用
 const UserApp = lazy(() => import("@/UserApp"));
@@ -13,7 +13,6 @@ const AdminLogin = lazy(() => import("@/admin/AdminLogin"));
 const HomeContentPage = lazy(() => import("@/admin/pages/HomeContent"));
 const MonthlyReportTemplatesPage = lazy(() => import("@/admin/pages/MonthlyReportTemplates"));
 const MonthlyReportViewerPage = lazy(() => import("@/admin/pages/MonthlyReportViewer"));
-const NotificationsPage = lazy(() => import("@/admin/pages/Notifications"));
 const TestAccountsPage = lazy(() => import("@/admin/pages/TestAccounts"));
 const TestAccountDetailPage = lazy(() => import("@/admin/pages/TestAccountDetail"));
 const ShortTermTaskPresetsPage = lazy(() => import("@/admin/pages/ShortTermTaskPresets"));
@@ -30,16 +29,10 @@ function LoadingFallback() {
       alignItems: "center", 
       justifyContent: "center", 
       minHeight: "100vh",
-      gap: "1rem"
+      background: "#221b1b",
+      color: "#efeae7"
     }}>
-      <MaterialIcon name="hourglass_empty" style={{ fontSize: "3rem", animation: "spin 1s linear infinite" }} />
-      <p>加载中...</p>
-      <style>{`
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
+      <ArtisticLoader size="large" />
     </div>
   );
 }
@@ -62,7 +55,6 @@ function App() {
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<Navigate to="home-content" replace />} />
               <Route path="home-content" element={<HomeContentPage />} />
-              <Route path="notifications" element={<NotificationsPage />} />
               <Route path="monthly-report-templates" element={<MonthlyReportTemplatesPage />} />
               <Route path="monthly-report-viewer" element={<MonthlyReportViewerPage />} />
               <Route path="task-presets" element={<ShortTermTaskPresetsPage />} />

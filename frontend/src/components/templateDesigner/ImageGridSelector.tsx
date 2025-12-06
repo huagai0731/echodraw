@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import MaterialIcon from "@/components/MaterialIcon";
 import ImageCropper, { type CropData } from "@/components/ImageCropper";
 import type { Artwork } from "@/types/artwork";
@@ -222,6 +222,10 @@ export function ImageGridSelector({
   const [cropperOpen, setCropperOpen] = useState(false);
   const [croppingArtwork, setCroppingArtwork] = useState<Artwork | null>(null);
   const [croppingPosition, setCroppingPosition] = useState<number | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  
+  // 每页显示的图片数量
+  const ITEMS_PER_PAGE = 20;
   
   // 根据gridImages的长度自动计算网格列数
   const gridCols = useMemo(() => {
@@ -239,6 +243,7 @@ export function ImageGridSelector({
       return; // 占位符不可点击
     }
     setPickingPosition(index);
+    setCurrentPage(1); // 打开弹窗时重置到第一页
     setImagePickerOpen(true);
   };
 
@@ -373,6 +378,25 @@ export function ImageGridSelector({
 
   const filteredArtworks = pickingPosition !== null ? getArtworksForPosition(pickingPosition) : [];
   const pickerTitle = pickingPosition !== null ? getTitleForPosition(pickingPosition) : "选择图片";
+  
+  // 分页计算
+  const totalPages = Math.ceil(filteredArtworks.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const currentPageArtworks = filteredArtworks.slice(startIndex, endIndex);
+  
+  // 当筛选结果变化时，如果当前页超出范围，重置到第一页
+  useEffect(() => {
+    if (filteredArtworks.length > 0 && currentPage > totalPages) {
+      setCurrentPage(1);
+    }
+  }, [filteredArtworks.length, currentPage, totalPages]);
+  
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage);
+    }
+  };
 
   return (
     <>
@@ -456,7 +480,7 @@ export function ImageGridSelector({
                 </div>
               ) : (
                 <>
-                  {filteredArtworks.map((artwork) => {
+                  {currentPageArtworks.map((artwork) => {
                     const isActive = gridImages[pickingPosition]?.artworkId === artwork.id;
                     return (
                       <button
@@ -468,7 +492,6 @@ export function ImageGridSelector({
                         onClick={() => handleImageSelect(artwork)}
                       >
                         <img src={artwork.imageSrc} alt={artwork.alt} loading="lazy" />
-                        <span>{artwork.title || "未命名"}</span>
                       </button>
                     );
                   })}
@@ -480,11 +503,35 @@ export function ImageGridSelector({
                     <div className="image-grid-selector__clear-icon">
                       <MaterialIcon name="close" />
                     </div>
-                    <span>清空</span>
                   </button>
                 </>
               )}
             </div>
+            {filteredArtworks.length > ITEMS_PER_PAGE && (
+              <div className="image-grid-selector__pagination">
+                <button
+                  type="button"
+                  className="image-grid-selector__pagination-button"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  aria-label="上一页"
+                >
+                  <MaterialIcon name="chevron_left" />
+                </button>
+                <span className="image-grid-selector__pagination-info">
+                  {currentPage} / {totalPages}
+                </span>
+                <button
+                  type="button"
+                  className="image-grid-selector__pagination-button"
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  aria-label="下一页"
+                >
+                  <MaterialIcon name="chevron_right" />
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

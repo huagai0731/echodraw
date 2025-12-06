@@ -12,6 +12,7 @@ import { ImageInfoSettings, type ImageInfoSettingsState } from "@/components/tem
 import { ImageGridSelector, type GridImage } from "@/components/templateDesigner/ImageGridSelector";
 import { ContentEditor, type ContentEditorState } from "@/components/templateDesigner/ContentEditor";
 import { type ShadowOpacitySettingsState } from "@/components/templateDesigner/ShadowOpacitySettings";
+import { formatISODateInShanghai } from "@/utils/dateUtils";
 
 import "./SingleArtworkTemplateDesigner.css";
 
@@ -379,11 +380,13 @@ function WeeklySingleTemplateDesigner({ open, artworks, onClose }: WeeklySingleT
     const dayOffset = positionToDayOffset[position] ?? 0;
     const targetDate = new Date(weekStartDate);
     targetDate.setDate(weekStartDate.getDate() + dayOffset);
-    const targetDateStr = targetDate.toISOString().split("T")[0];
+    const targetDateStr = formatISODateInShanghai(targetDate);
+    if (!targetDateStr) return [];
     return artworks.filter((artwork) => {
       const artworkDate = resolveArtworkDate(artwork);
       if (!artworkDate) return false;
-      const artworkDateStr = artworkDate.toISOString().split("T")[0];
+      const artworkDateStr = formatISODateInShanghai(artworkDate);
+      if (!artworkDateStr) return false;
       return artworkDateStr === targetDateStr;
     });
   };

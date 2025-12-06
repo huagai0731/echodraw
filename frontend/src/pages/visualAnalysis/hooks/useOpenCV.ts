@@ -26,7 +26,7 @@ export function useOpenCV() {
         setError(null);
       })
       .catch((err) => {
-        setError(err instanceof Error ? err.message : "无法加载 OpenCV 库");
+        setError(err instanceof Error ? err.message : "图像处理功能加载失败");
         setOpencvReady(false);
       });
   }, []);

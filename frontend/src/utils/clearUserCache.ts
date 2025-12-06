@@ -35,10 +35,7 @@ export function clearAllUserCache(): void {
       }
     });
     
-    // 4. 通知相关
-    window.localStorage.removeItem("echo-notification-read-ids");
-    
-    // 5. 用户画作
+    // 4. 用户画作
     window.localStorage.removeItem("echo.user-artworks.v1");
     
     // 6. 标签偏好（清除所有用户的标签偏好）

@@ -59,9 +59,6 @@ export function ImageUploadArea({
             style={{ display: "none" }}
           />
         </div>
-        {!opencvReady && (
-          <p className="visual-analysis__loading-text">正在加载 OpenCV 库...</p>
-        )}
       </div>
     );
   }
@@ -103,16 +100,13 @@ export function ImageUploadArea({
               type="button"
               className="visual-analysis__upload-button"
               onClick={onConfirm}
-              disabled={!opencvReady || loading || compressing || disabled}
+              disabled={loading || compressing || disabled}
             >
               {compressing ? "压缩中..." : loading ? "处理中..." : "确认并开始分析"}
             </button>
           )}
         </div>
       </div>
-      {!opencvReady && (
-        <p className="visual-analysis__loading-text">正在加载 OpenCV 库...</p>
-      )}
       {compressing && (
         <p className="visual-analysis__loading-text">正在压缩图片到600k以下...</p>
       )}

@@ -20,7 +20,6 @@ from core.models import (
     HolidayMessage,
     LongTermPlanCopy,
     MonthlyReportTemplate,
-    Notification,
     ShortTermTaskPreset,
     Test,
     TestAccountProfile,
@@ -42,7 +41,6 @@ from core.serializers import (
     HolidayMessageSerializer,
     LongTermPlanCopySerializer,
     MonthlyReportTemplateSerializer,
-    NotificationSerializer,
     ShortTermTaskPresetSerializer,
     TestAccountCheckInSerializer,
     TestAccountSerializer,
@@ -314,8 +312,3 @@ class DailyQuizOptionAdminViewSet(viewsets.ModelViewSet):
         return [MultiPartParser, FormParser, JSONParser]
 
 
-class NotificationAdminViewSet(viewsets.ModelViewSet):
-    queryset = Notification.objects.all().order_by("-created_at")
-    serializer_class = NotificationSerializer
-    permission_classes = [IsStaffUser]
-    pagination_class = None

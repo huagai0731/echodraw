@@ -9,7 +9,6 @@ import "../Gallery.css";
 type GalleryListProps = {
   artworks: Artwork[];
   showInfo: boolean;
-  getCollectionCount: (collectionId: string) => number;
   tagIdToNameMap: Map<string, string>;
   onSelect: (artwork: Artwork) => void;
   onImageLoad?: (artworkId: string, dimensions: ImageDimensions) => void;
@@ -18,7 +17,6 @@ type GalleryListProps = {
 export function GalleryList({
   artworks,
   showInfo,
-  getCollectionCount,
   tagIdToNameMap,
   onSelect,
   onImageLoad,
@@ -36,7 +34,6 @@ export function GalleryList({
             artwork={artwork}
             index={index * 2}
             showInfo={showInfo}
-            collectionCount={artwork.collectionId ? getCollectionCount(artwork.collectionId) : undefined}
             tagIdToNameMap={tagIdToNameMap}
             onSelect={onSelect}
             onImageLoad={onImageLoad}
@@ -50,7 +47,6 @@ export function GalleryList({
             artwork={artwork}
             index={index * 2 + 1}
             showInfo={showInfo}
-            collectionCount={artwork.collectionId ? getCollectionCount(artwork.collectionId) : undefined}
             tagIdToNameMap={tagIdToNameMap}
             onSelect={onSelect}
             onImageLoad={onImageLoad}

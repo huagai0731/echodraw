@@ -8,7 +8,6 @@ type GalleryItemProps = {
   artwork: Artwork;
   index?: number;
   showInfo: boolean;
-  collectionCount?: number;
   tagIdToNameMap: Map<string, string>;
   onSelect: (artwork: Artwork) => void;
   onImageLoad?: (artworkId: string, dimensions: ImageDimensions) => void;
@@ -20,7 +19,6 @@ function GalleryItemComponent({
   artwork,
   index,
   showInfo,
-  collectionCount,
   tagIdToNameMap,
   onSelect,
   onImageLoad,
@@ -164,34 +162,54 @@ function GalleryItemComponent({
           </div>
         )}
         
-        {artwork.collectionId && showInfo && (
-          <div className="gallery-item__collection-badge">
-            套图{collectionCount !== undefined && collectionCount > 0 ? `·${collectionCount}` : ""}
-          </div>
-        )}
-        
         <figcaption
           className={`gallery-item__info ${showInfo ? "" : "gallery-item__info--hidden"}`.trim()}
           aria-hidden={!showInfo}
         >
           <div>
             <h2 className="gallery-item__title">
-              {artwork.collectionName || artwork.title || ""}
+              {artwork.title || ""}
             </h2>
             <p className="gallery-item__date">{artwork.date}</p>
           </div>
           <div className="gallery-item__tags">
-            {artwork.tags && artwork.tags.length > 0 ? (
-              artwork.tags.slice(0, 3).map((tag, index) => {
-                const tagId = String(tag).trim();
-                const tagName = tagIdToNameMap.get(tagId) || tagId;
-                return (
-                  <span key={`${artwork.id}-tag-${index}`} className="gallery-item__tag">
-                    {tagName}
-                  </span>
-                );
-              })
-            ) : (
+            {artwork.tags && artwork.tags.length > 0 ? (() => {
+              // 过滤并转换标签：如果标签是数字ID且找不到映射，则过滤掉；如果是名称则直接使用
+              const validTags = artwork.tags
+                .map((tag) => {
+                  const tagStr = String(tag).trim();
+                  // 如果是纯数字，尝试从映射中获取名称
+                  if (/^\d+$/.test(tagStr)) {
+                    const tagName = tagIdToNameMap.get(tagStr);
+                    return tagName || null; // 找不到映射则返回null，后续过滤掉
+                  }
+                  // 如果不是纯数字，可能是标签名称，直接返回
+                  return tagStr;
+                })
+                .filter((tagName): tagName is string => tagName !== null && tagName.length > 0)
+                .slice(0, 3);
+              
+              // 如果标签映射还未加载完成（tagIdToNameMap为空），且所有标签都是数字ID，则不显示"无标签"
+              // 等待映射加载完成后再显示
+              const hasNumericTags = artwork.tags.some((tag) => /^\d+$/.test(String(tag).trim()));
+              const isMappingLoaded = tagIdToNameMap.size > 0;
+              
+              // 如果映射未加载且存在数字ID标签，暂时不显示任何内容（等待映射加载）
+              if (hasNumericTags && !isMappingLoaded && validTags.length === 0) {
+                return null;
+              }
+              
+              // 如果映射已加载但找不到有效标签，显示"无标签"
+              if (validTags.length === 0) {
+                return <span className="gallery-item__tag gallery-item__tag--empty">无标签</span>;
+              }
+              
+              return validTags.map((tagName, index) => (
+                <span key={`${artwork.id}-tag-${index}`} className="gallery-item__tag">
+                  {tagName}
+                </span>
+              ));
+            })() : (
               <span className="gallery-item__tag gallery-item__tag--empty">无标签</span>
             )}
           </div>
@@ -211,9 +229,7 @@ export const GalleryItem = memo(GalleryItemComponent, (prevProps, nextProps) => 
     prevProps.artwork.thumbnailSrc !== nextProps.artwork.thumbnailSrc ||
     prevProps.artwork.title !== nextProps.artwork.title ||
     prevProps.artwork.date !== nextProps.artwork.date ||
-    JSON.stringify(prevProps.artwork.tags) !== JSON.stringify(nextProps.artwork.tags) ||
-    prevProps.artwork.collectionId !== nextProps.artwork.collectionId ||
-    prevProps.artwork.collectionName !== nextProps.artwork.collectionName
+    JSON.stringify(prevProps.artwork.tags) !== JSON.stringify(nextProps.artwork.tags)
   ) {
     return false; // props 变化，需要重新渲染
   }
@@ -221,15 +237,38 @@ export const GalleryItem = memo(GalleryItemComponent, (prevProps, nextProps) => 
   // 比较其他 props
   if (
     prevProps.showInfo !== nextProps.showInfo ||
-    prevProps.collectionCount !== nextProps.collectionCount ||
     prevProps.index !== nextProps.index
   ) {
     return false;
   }
   
   // tagIdToNameMap 是 Map，需要特殊比较
-  // 如果 artwork.tags 没有变化，tagIdToNameMap 的变化通常不影响显示
-  // 这里简化处理，假设 tagIdToNameMap 引用变化但内容相同时不重新渲染
+  // 如果 artwork.tags 有值，需要检查 tagIdToNameMap 是否变化
+  // 因为标签显示依赖于 tagIdToNameMap 的映射关系
+  if (prevProps.artwork.tags && prevProps.artwork.tags.length > 0) {
+    // 检查 tagIdToNameMap 的大小是否变化（从空到有内容，或内容变化）
+    if (prevProps.tagIdToNameMap.size !== nextProps.tagIdToNameMap.size) {
+      return false; // Map 大小变化，需要重新渲染
+    }
+    
+    // 检查 artwork.tags 中的标签ID是否能在新的 tagIdToNameMap 中找到映射
+    // 如果之前找不到映射但现在能找到，需要重新渲染
+    for (const tag of prevProps.artwork.tags) {
+      const tagStr = String(tag).trim();
+      if (/^\d+$/.test(tagStr)) {
+        const prevMapped = prevProps.tagIdToNameMap.get(tagStr);
+        const nextMapped = nextProps.tagIdToNameMap.get(tagStr);
+        // 如果之前没有映射但现在有映射，需要重新渲染
+        if (!prevMapped && nextMapped) {
+          return false;
+        }
+        // 如果映射的值发生变化，需要重新渲染
+        if (prevMapped !== nextMapped) {
+          return false;
+        }
+      }
+    }
+  }
   
   // 函数引用变化不影响渲染（因为我们已经用 useCallback 稳定了）
   

@@ -16,13 +16,13 @@ import {
 import {
   isValidArtwork,
   filterArtworks,
-  processCollectionArtworks,
   sortArtworks,
 } from "./galleryUtils";
 import { GalleryHeader } from "./GalleryHeader";
 import { FilterPanel } from "./FilterPanel";
 import { GalleryVirtualGrid } from "./GalleryVirtualGrid";
 import { GalleryDetailModal } from "./GalleryDetailModal";
+import { getVisualAnalysisQuota, type VisualAnalysisQuota } from "@/services/api";
 
 import "../Gallery.css";
 
@@ -38,8 +38,6 @@ type GalleryPageProps = {
   onUpdateArtwork?: (artwork: Artwork) => void;
   onSetAsFeatured?: (artwork: Artwork) => void;
   onRemoveFromFeatured?: (artwork: Artwork) => void;
-  onUpdateCollectionThumbnail?: (collectionId: string, thumbnailArtworkId: string) => void;
-  onUpdateCollectionName?: (collectionId: string, collectionName: string) => void;
 };
 
 export function GalleryPage({
@@ -50,8 +48,6 @@ export function GalleryPage({
   onUpdateArtwork,
   onSetAsFeatured,
   onRemoveFromFeatured,
-  onUpdateCollectionThumbnail,
-  onUpdateCollectionName,
 }: GalleryPageProps) {
   const fabRef = useRef<HTMLButtonElement>(null);
   const [showInfo, setShowInfo] = useState(true);
@@ -61,6 +57,7 @@ export function GalleryPage({
   const scrollRestoredRef = useRef(false);
   const wasDetailOpenRef = useRef(false);
   const shouldRestoreScrollRef = useRef(false);
+  const [quota, setQuota] = useState<VisualAnalysisQuota | null>(null);
 
   // 验证作品数据
   const validArtworks = useMemo(() => {
@@ -127,15 +124,8 @@ export function GalleryPage({
     }
   }, [validArtworks, normalizedFilters, tagNameToIdMap]);
 
-  // 处理套图
-  const processedArtworks = useMemo(() => {
-    try {
-      return processCollectionArtworks(filteredArtworks);
-    } catch (error) {
-      console.error("[Gallery] Error processing collections", error);
-      return filteredArtworks;
-    }
-  }, [filteredArtworks]);
+  // 直接使用筛选后的作品，不再处理套图
+  const processedArtworks = filteredArtworks;
 
   // 排序作品（默认按最新优先）
   const sortedArtworks = useMemo(() => {
@@ -147,13 +137,6 @@ export function GalleryPage({
     }
   }, [processedArtworks]);
 
-  // 获取套图数量
-  const getCollectionCount = useCallback(
-    (collectionId: string): number => {
-      return validArtworks.filter((a) => a.collectionId === collectionId).length;
-    },
-    [validArtworks]
-  );
 
 
   // 处理作品选择
@@ -206,77 +189,8 @@ export function GalleryPage({
     [onDeleteArtwork]
   );
 
-  // 展开套图内的所有图片，用于导航（优化版本，减少计算）
-  const expandedArtworksForNavigation = useMemo(() => {
-    if (filteredArtworks.length === 0) return [];
-    
-    const expanded: Artwork[] = [];
-    const processedCollectionIds = new Set<string>();
-    const collectionItemsMap = new Map<string, Artwork[]>();
-    
-    // 先分组套图
-    filteredArtworks.forEach((artwork) => {
-      if (artwork.collectionId) {
-        if (!collectionItemsMap.has(artwork.collectionId)) {
-          collectionItemsMap.set(artwork.collectionId, []);
-        }
-        collectionItemsMap.get(artwork.collectionId)!.push(artwork);
-      }
-    });
-    
-    // 对每个套图内的作品排序（按时间从早到晚，与罗马数字序号一致）
-    collectionItemsMap.forEach((items) => {
-      items.sort((a, b) => {
-        const timeA = a.uploadedAt ? Date.parse(a.uploadedAt) : (a.uploadedDate ? Date.parse(`${a.uploadedDate}T00:00:00Z`) : 0);
-        const timeB = b.uploadedAt ? Date.parse(b.uploadedAt) : (b.uploadedDate ? Date.parse(`${b.uploadedDate}T00:00:00Z`) : 0);
-        return timeA - timeB; // 从早到晚，与罗马数字序号一致
-      });
-    });
-    
-    // 创建时间戳映射（用于排序）
-    const getTimestamp = (artwork: Artwork): number => {
-      if (artwork.uploadedAt) return Date.parse(artwork.uploadedAt);
-      if (artwork.uploadedDate) return Date.parse(`${artwork.uploadedDate}T00:00:00Z`);
-      return 0;
-    };
-    
-    // 合并所有作品（套图和非套图）并排序
-    const allArtworks: Array<{ artwork: Artwork; timestamp: number; isCollection: boolean }> = [];
-    
-    filteredArtworks.forEach((artwork) => {
-      if (artwork.collectionId && !processedCollectionIds.has(artwork.collectionId)) {
-        const items = collectionItemsMap.get(artwork.collectionId)!;
-        const firstItem = items[0];
-        allArtworks.push({
-          artwork: firstItem,
-          timestamp: getTimestamp(firstItem),
-          isCollection: true,
-        });
-        processedCollectionIds.add(artwork.collectionId);
-      } else if (!artwork.collectionId) {
-        allArtworks.push({
-          artwork,
-          timestamp: getTimestamp(artwork),
-          isCollection: false,
-        });
-      }
-    });
-    
-    // 按时间戳排序
-    allArtworks.sort((a, b) => b.timestamp - a.timestamp);
-    
-    // 展开套图
-    allArtworks.forEach(({ artwork, isCollection }) => {
-      if (isCollection && artwork.collectionId) {
-        const items = collectionItemsMap.get(artwork.collectionId)!;
-        expanded.push(...items);
-      } else {
-        expanded.push(artwork);
-      }
-    });
-    
-    return expanded;
-  }, [filteredArtworks]);
+  // 用于导航的作品列表（直接使用筛选后的作品）
+  const expandedArtworksForNavigation = filteredArtworks;
 
   // 处理详情页导航
   const handleNavigate = useCallback(
@@ -316,6 +230,21 @@ export function GalleryPage({
       hasNext: currentIndex < expandedArtworksForNavigation.length - 1,
     };
   }, [selectedArtwork, expandedArtworksForNavigation]);
+
+  // 获取视觉分析额度信息
+  useEffect(() => {
+    const fetchQuota = async () => {
+      try {
+        const quotaData = await getVisualAnalysisQuota();
+        setQuota(quotaData);
+      } catch (err) {
+        console.error("获取视觉分析额度失败:", err);
+        // 不显示错误，因为这不是关键功能
+      }
+    };
+    
+    fetchQuota();
+  }, []);
 
   // 恢复滚动位置（页面加载时）
   useEffect(() => {
@@ -448,7 +377,6 @@ export function GalleryPage({
           <GalleryVirtualGrid
             artworks={sortedArtworks}
             showInfo={showInfo}
-            getCollectionCount={getCollectionCount}
             tagIdToNameMap={tagIdToNameMap}
             onSelect={handleSelectArtwork}
             onImageLoad={handleImageLoad}
@@ -506,8 +434,6 @@ export function GalleryPage({
           onRemoveFromFeatured={onRemoveFromFeatured}
           onNavigate={handleNavigate}
           onSelectArtwork={handleSelectArtwork}
-          onUpdateCollectionThumbnail={onUpdateCollectionThumbnail}
-          onUpdateCollectionName={onUpdateCollectionName}
         />
       )}
     </>

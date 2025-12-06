@@ -1,5 +1,6 @@
 // 删除确认对话框组件
 import MaterialIcon from "@/components/MaterialIcon";
+import { ArtisticLoader } from "@/components/ArtisticLoader";
 import "./DeleteConfirmModal.css";
 
 type DeleteConfirmModalProps = {
@@ -49,11 +50,7 @@ export function DeleteConfirmModal({
                   padding: "1rem 0",
                 }}
               >
-                <MaterialIcon
-                  name="hourglass_empty"
-                  className="visual-analysis__loading-icon"
-                  style={{ fontSize: "2rem" }}
-                />
+                <ArtisticLoader size="medium" text="" />
                 <p
                   className="artwork-delete-confirm-text"
                   style={{ textAlign: "center", margin: 0 }}

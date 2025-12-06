@@ -83,11 +83,11 @@ export function QuickUploadModal({ open, date, onClose, onSuccess }: QuickUpload
     setError(null);
 
     try {
-      // 检查每日上传限制
+      // 检查每月上传限制
       const limitInfo = await checkUploadLimit();
       if (!limitInfo.can_upload) {
         setError(
-          `今日已上传 ${limitInfo.today_count} 张图片，已达到每日上限 ${limitInfo.max_daily_uploads} 张。删除已上传的图片后可以继续上传。`
+          `本月已上传 ${limitInfo.monthly_count} 张图片，已达到每月上限 ${limitInfo.max_monthly_uploads} 张。删除已上传的图片后可以继续上传。`
         );
         setIsUploading(false);
         return;

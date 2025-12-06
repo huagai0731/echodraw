@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import MaterialIcon from "@/components/MaterialIcon";
 import NewChallengeWizard from "@/pages/NewChallengeWizard";
@@ -16,6 +16,7 @@ import {
   hasAuthToken,
   updateCheckpoint,
   deleteLongTermGoal,
+  fetchShortTermGoalTaskCompletions,
   type GoalsCalendarDay,
   type LongTermGoal,
   type LongTermGoalCheckpoint,
@@ -286,6 +287,23 @@ function getShortTermGoalTodayTask(goal: ShortTermGoal): string {
   return firstTask;
 }
 
+// 获取短期目标的已完成打卡天数
+function getShortTermGoalCompletedDays(
+  goal: ShortTermGoal,
+  goalTaskCompletions?: Record<number, Set<string>>
+): number {
+  if (goal.status === "saved") {
+    return 0;
+  }
+  
+  // 优先使用任务完成记录（按目标ID隔离）
+  if (goalTaskCompletions && goalTaskCompletions[goal.id]) {
+    return goalTaskCompletions[goal.id].size;
+  }
+  
+  return 0;
+}
+
 function formatISODate(source: Date) {
   const shanghaiDate = formatISODateInShanghai(source);
   return shanghaiDate || "";
@@ -538,6 +556,9 @@ function Goals() {
   const [showCompletedShortTermGoals, setShowCompletedShortTermGoals] = useState(false);
   const [showFinalCheckpointImageModal, setShowFinalCheckpointImageModal] = useState(false);
   const [completingGoal, setCompletingGoal] = useState<LongTermGoal | null>(null);
+  const [completedShortTermGoalsPage, setCompletedShortTermGoalsPage] = useState(1);
+  // 存储每个目标的任务完成记录（按目标ID索引）
+  const [goalTaskCompletions, setGoalTaskCompletions] = useState<Record<number, Set<string>>>({});
 
   // 使用自定义 hooks 管理短期目标和打卡记录
   const {
@@ -674,6 +695,122 @@ function Goals() {
     refreshUploadData();
     refreshCheckInDates();
   }, [refreshUploadData, refreshCheckInDates]);
+
+  // 使用目标ID数组作为稳定依赖，避免因数组引用变化导致重复请求
+  // 创建稳定的依赖键：使用所有目标的ID和状态组合
+  const goalsDependencyKey = useMemo(() => {
+    return shortTermGoals
+      .map((g) => `${g.id}-${g.status}`)
+      .sort()
+      .join(',');
+  }, [shortTermGoals]);
+
+  const activeGoalIds = useMemo(() => {
+    return shortTermGoals
+      .filter((goal) => goal.status === "active")
+      .map((goal) => goal.id)
+      .sort((a, b) => a - b); // 排序确保顺序一致
+  }, [goalsDependencyKey]);
+
+  // 使用 ref 跟踪正在进行的请求和请求缓存，避免重复请求
+  const loadingRequestsRef = useRef<Set<number>>(new Set());
+  const requestCacheRef = useRef<Map<number, { timestamp: number; promise: Promise<any> }>>(new Map());
+  const CACHE_DURATION = 3000; // 3秒内的重复请求使用缓存
+
+  // 当短期目标列表变化时，为每个目标加载任务完成记录
+  useEffect(() => {
+    if (activeGoalIds.length === 0) {
+      // 清除已完成目标的任务完成记录
+      setGoalTaskCompletions({});
+      return;
+    }
+
+    let cancelled = false;
+
+    // 并行加载所有目标的任务完成记录
+    const loadPromises = activeGoalIds.map(async (goalId) => {
+      if (cancelled) return;
+      
+      // 检查是否正在加载中
+      if (loadingRequestsRef.current.has(goalId)) {
+        return;
+      }
+
+      // 检查缓存
+      const cached = requestCacheRef.current.get(goalId);
+      const now = Date.now();
+      if (cached && (now - cached.timestamp) < CACHE_DURATION) {
+        // 使用缓存的请求
+        try {
+          await cached.promise;
+        } catch {
+          // 忽略缓存请求的错误，因为可能已经在处理新的请求
+        }
+        return;
+      }
+
+      // 标记为正在加载
+      loadingRequestsRef.current.add(goalId);
+      
+      try {
+        const requestPromise = fetchShortTermGoalTaskCompletions(goalId);
+        // 缓存请求
+        requestCacheRef.current.set(goalId, {
+          timestamp: now,
+          promise: requestPromise,
+        });
+
+        const data = await requestPromise;
+        if (cancelled) return;
+        
+        // 提取完成日期
+        const completions = data.completions || {};
+        const completedDates = new Set<string>();
+        
+        Object.keys(completions).forEach((dateKey) => {
+          const tasks = completions[dateKey];
+          // 如果有任务完成记录，说明这一天已经完成了
+          if (tasks && Object.keys(tasks).length > 0) {
+            const normalizedDateKey = formatISODateInShanghai(dateKey) || dateKey;
+            completedDates.add(normalizedDateKey);
+            // 如果标准化后的日期键与原始不同，也添加原始格式
+            if (normalizedDateKey !== dateKey) {
+              completedDates.add(dateKey);
+            }
+          }
+        });
+        
+        if (!cancelled) {
+          setGoalTaskCompletions((prev) => ({
+            ...prev,
+            [goalId]: completedDates,
+          }));
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.warn(`[Goals] Failed to load task completions for goal ${goalId}`, error);
+          // 如果加载失败，设置为空集合
+          setGoalTaskCompletions((prev) => ({
+            ...prev,
+            [goalId]: new Set<string>(),
+          }));
+        }
+      } finally {
+        // 移除加载标记
+        loadingRequestsRef.current.delete(goalId);
+      }
+    });
+
+    Promise.all(loadPromises).catch((error) => {
+      if (!cancelled) {
+        console.warn("[Goals] Failed to load some task completions", error);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeGoalIds.join(',')]); // 使用字符串化的ID数组作为依赖，更稳定
 
   // 监听跨标签页的缓存更新（用于同步数据）
   useEffect(() => {
@@ -1006,15 +1143,6 @@ function Goals() {
     setActiveLongTermGoal(null);
   }, []);
 
-  const handleLongTermExport = useCallback(() => {
-    if (typeof window !== "undefined") {
-      try {
-        window.print();
-      } catch (error) {
-        console.info("Export action triggered", error);
-      }
-    }
-  }, []);
 
   const handleSelectShowcase = useCallback(
     async (checkpoint: LongTermGoalCheckpoint, artworkId?: number) => {
@@ -1117,13 +1245,40 @@ function Goals() {
         // ignore
       }
 
-      // 刷新打卡记录，确保与服务器同步
+      // 刷新打卡记录和任务完成记录，确保与服务器同步
       try {
         const dateRange = activeGoalDetail ? getGoalDateRange(activeGoalDetail) : null;
         if (dateRange) {
           await refreshCheckInDates(dateRange);
         } else {
           await refreshCheckInDates();
+        }
+        
+        // 如果有关联的目标，刷新该目标的任务完成记录
+        if (activeGoalDetail) {
+          try {
+            const data = await fetchShortTermGoalTaskCompletions(activeGoalDetail.id);
+            const completions = data.completions || {};
+            const completedDates = new Set<string>();
+            
+            Object.keys(completions).forEach((dateKey) => {
+              const tasks = completions[dateKey];
+              if (tasks && Object.keys(tasks).length > 0) {
+                const normalizedDateKey = formatISODateInShanghai(dateKey) || dateKey;
+                completedDates.add(normalizedDateKey);
+                if (normalizedDateKey !== dateKey) {
+                  completedDates.add(dateKey);
+                }
+              }
+            });
+            
+            setGoalTaskCompletions((prev) => ({
+              ...prev,
+              [activeGoalDetail.id]: completedDates,
+            }));
+          } catch (error) {
+            console.warn("[Goals] Failed to refresh task completions after goal completion", error);
+          }
         }
       } catch (error) {
         console.error("[Goals] Failed to refresh check-in dates after goal completion", error);
@@ -1146,6 +1301,12 @@ function Goals() {
   const handleGoalDeleted = useCallback(
     (goalId: number) => {
       removeGoal(goalId);
+      // 清除该目标的任务完成记录
+      setGoalTaskCompletions((prev) => {
+        const next = { ...prev };
+        delete next[goalId];
+        return next;
+      });
     },
     [removeGoal]
   );
@@ -1170,41 +1331,29 @@ function Goals() {
     [refreshCheckInDates, getGoalDateRange]
   );
 
-  // 优化：只传递该目标自己的完成日期对应的打卡记录，用于验证
-  // 因为已经完全隔离，每个目标只使用自己的 goalCompletedDates
-  // uploadDates 的作用只是验证这些日期是否真的有打卡记录
-  // 这样不限制日期范围，用户可以随时完成任何一天的任务
+  // 优化：只传递该目标自己的完成日期，使用任务完成记录（按目标ID隔离）
   // 注意：这个 hook 必须在所有早期返回之前调用，遵守 React Hooks 规则
   const filteredUploadDates = useMemo(() => {
     if (!activeGoalDetail?.id) {
       return new Set<string>();
     }
     
-    // 从 localStorage 读取该目标的完成日期列表
-    try {
-      const completedDatesKey = `short-term-goal-${activeGoalDetail.id}-completed-dates`;
-      const stored = localStorage.getItem(completedDatesKey);
-      if (!stored) {
-        // 如果还没有完成日期，返回空集合
-        return new Set<string>();
-      }
-      
-      const completedDates = JSON.parse(stored) as string[];
-      const filtered = new Set<string>();
-      
-      // 只传递该目标自己的完成日期对应的打卡记录
-      completedDates.forEach((dateKey) => {
-        if (localUploadDates.has(dateKey)) {
-          filtered.add(dateKey);
-        }
-      });
-      
-      return filtered;
-    } catch (error) {
-      console.warn("[Goals] Failed to load completed dates for filtering", error);
+    // 使用该目标的任务完成记录
+    const completedDates = goalTaskCompletions[activeGoalDetail.id];
+    if (!completedDates) {
       return new Set<string>();
     }
-  }, [localUploadDates, activeGoalDetail?.id]);
+    
+    // 只返回在打卡记录中存在的日期（用于验证）
+    const filtered = new Set<string>();
+    completedDates.forEach((dateKey) => {
+      if (localUploadDates.has(dateKey)) {
+        filtered.add(dateKey);
+      }
+    });
+    
+    return filtered;
+  }, [localUploadDates, activeGoalDetail?.id, goalTaskCompletions]);
 
   if (showLongTermMetaEdit && longTermGoal) {
     return (
@@ -1265,7 +1414,6 @@ function Goals() {
             setActiveLongTermGoal(null);
             setShowLongTermMetaEdit(true);
           }}
-          onExport={handleLongTermExport}
           onSelectShowcase={handleSelectShowcase}
           onAddMessage={handleAddMessage}
           onComplete={async (completedGoal) => {
@@ -1376,36 +1524,12 @@ function Goals() {
           leadingAction={{
             icon: "arrow_back",
             label: "返回",
-            onClick: async () => {
-              // 从已完成页面返回时，如果是长期目标，清除目标状态以便开启新目标
-              if (showCompletedLongTermGoals && longTermGoal) {
-                try {
-                  // 调用API删除长期目标
-                  await deleteLongTermGoal();
-                  setLongTermGoal(null);
-                  setActiveLongTermGoal(null);
-                  // 清除缓存
-                  try {
-                    window.sessionStorage.removeItem(LONG_TERM_GOAL_CACHE_KEY);
-                    window.sessionStorage.removeItem(LONG_TERM_GOAL_CACHE_TIMESTAMP_KEY);
-                  } catch (e) {
-                    // ignore
-                  }
-                } catch (error) {
-                  console.error("删除长期目标失败:", error);
-                  // 即使删除失败，也清除本地状态
-                  setLongTermGoal(null);
-                  setActiveLongTermGoal(null);
-                  try {
-                    window.sessionStorage.removeItem(LONG_TERM_GOAL_CACHE_KEY);
-                    window.sessionStorage.removeItem(LONG_TERM_GOAL_CACHE_TIMESTAMP_KEY);
-                  } catch (e) {
-                    // ignore
-                  }
-                }
-              }
+            onClick: () => {
+              // 从已完成页面返回时，只关闭已完成目标列表，不删除当前进行中的目标
               setShowCompletedLongTermGoals(false);
               setShowCompletedShortTermGoals(false);
+              // 重置分页
+              setCompletedShortTermGoalsPage(1);
             },
           }}
         />
@@ -1438,8 +1562,130 @@ function Goals() {
               </p>
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-              {goals.map((goal) => {
+            <>
+              {type === "short-term" ? (
+                (() => {
+                  const ITEMS_PER_PAGE = 10;
+                  const totalPages = Math.ceil(goals.length / ITEMS_PER_PAGE);
+                  const currentPage = completedShortTermGoalsPage;
+                  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+                  const endIndex = startIndex + ITEMS_PER_PAGE;
+                  const paginatedGoals = goals.slice(startIndex, endIndex);
+                  
+                  return (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+                      <div className="goals-carousel" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                        {paginatedGoals.map((goal) => {
+                          const shortTerm = goal as ShortTermGoal;
+                          // 验证短期目标数据有效性
+                          if (!shortTerm || !shortTerm.id || !shortTerm.title) {
+                            return null; // 跳过无效数据
+                          }
+                          
+                          const statusText = getShortTermGoalStatusText(shortTerm);
+                          // 使用任务完成记录计算完成天数
+                          const completedDays = getShortTermGoalCompletedDays(shortTerm, goalTaskCompletions);
+                          const durationDays = shortTerm.durationDays ?? 0;
+                          const progressPercent = durationDays > 0 
+                            ? Math.min(Math.round((completedDays / durationDays) * 100), 100)
+                            : 0;
+                          const boxCount = durationDays;
+                          // 获取启动日期：已完成的目标使用创建日期作为启动日期
+                          const startDate = shortTerm.createdAt;
+                          const startDateFormatted = formatDateYYYYMMDD(startDate);
+                          
+                          return (
+                            <button
+                              key={shortTerm.id}
+                              type="button"
+                              className="goals-card goals-card--primary goals-card--actionable goals-card--short-term"
+                              onClick={() => {
+                                handleGoalOpen(shortTerm);
+                                setShowCompletedShortTermGoals(false);
+                              }}
+                            >
+                              <div className="goals-short-term__header">
+                                <p className="goals-short-term__title">{shortTerm.title}</p>
+                                <p className="goals-short-term__status">{statusText}</p>
+                              </div>
+                              <div className="goals-short-term__content">
+                                <div className="goals-short-term__boxes">
+                                  {Array.from({ length: boxCount }).map((_, index) => {
+                                    const isCompleted = index < completedDays;
+                                    return (
+                                      <div
+                                        key={index}
+                                        className={`goals-short-term__box ${isCompleted ? 'goals-short-term__box--completed' : ''}`}
+                                      />
+                                    );
+                                  })}
+                                </div>
+                                <div className="goals-short-term__summary">
+                                  <p className="goals-short-term__caption">
+                                    {startDateFormatted} {completedDays} / {durationDays} 天
+                                  </p>
+                                  <p className="goals-short-term__percent">{progressPercent}%</p>
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      
+                      {totalPages > 1 && (
+                        <div style={{ 
+                          display: "flex", 
+                          justifyContent: "center", 
+                          alignItems: "center", 
+                          gap: "1rem",
+                          padding: "1rem 0"
+                        }}>
+                          <button
+                            type="button"
+                            onClick={() => setCompletedShortTermGoalsPage(Math.max(1, currentPage - 1))}
+                            disabled={currentPage === 1}
+                            style={{
+                              padding: "0.5rem 1rem",
+                              backgroundColor: currentPage === 1 ? "rgba(239, 234, 231, 0.1)" : "rgba(152, 219, 198, 0.2)",
+                              color: currentPage === 1 ? "rgba(239, 234, 231, 0.4)" : "#98dbc6",
+                              border: "1px solid rgba(239, 234, 231, 0.12)",
+                              borderRadius: "0.5rem",
+                              cursor: currentPage === 1 ? "not-allowed" : "pointer",
+                              fontSize: "0.9rem",
+                            }}
+                          >
+                            上一页
+                          </button>
+                          <span style={{ 
+                            color: "rgba(239, 234, 231, 0.7)",
+                            fontSize: "0.9rem"
+                          }}>
+                            {currentPage} / {totalPages}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setCompletedShortTermGoalsPage(Math.min(totalPages, currentPage + 1))}
+                            disabled={currentPage === totalPages}
+                            style={{
+                              padding: "0.5rem 1rem",
+                              backgroundColor: currentPage === totalPages ? "rgba(239, 234, 231, 0.1)" : "rgba(152, 219, 198, 0.2)",
+                              color: currentPage === totalPages ? "rgba(239, 234, 231, 0.4)" : "#98dbc6",
+                              border: "1px solid rgba(239, 234, 231, 0.12)",
+                              borderRadius: "0.5rem",
+                              cursor: currentPage === totalPages ? "not-allowed" : "pointer",
+                              fontSize: "0.9rem",
+                            }}
+                          >
+                            下一页
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                  {goals.map((goal) => {
                 if (type === "long-term") {
                   const longTerm = goal as LongTermGoal;
                   const progress = longTerm.progress ?? {
@@ -1512,58 +1758,11 @@ function Goals() {
                       </div>
                     </button>
                   );
-                } else {
-                  const shortTerm = goal as ShortTermGoal;
-                  // 验证短期目标数据有效性
-                  if (!shortTerm || !shortTerm.id || !shortTerm.title) {
-                    return null; // 跳过无效数据
-                  }
-                  
-                  const durationDays = shortTerm.durationDays ?? 0;
-                  const completedDate = shortTerm.updatedAt 
-                    ? formatDateLabel(shortTerm.updatedAt)
-                    : shortTerm.createdAt
-                    ? formatDateLabel(shortTerm.createdAt)
-                    : "未知日期";
-                  
-                  return (
-                    <button
-                      key={shortTerm.id}
-                      type="button"
-                      onClick={() => {
-                        handleGoalOpen(shortTerm);
-                        setShowCompletedShortTermGoals(false);
-                      }}
-                      className="goals-card goals-card--primary goals-card--actionable goals-card--short-term-completed"
-                    >
-                      <div className="goals-short-term-completed__header">
-                        <MaterialIcon 
-                          name="check_circle" 
-                          className="goals-short-term-completed__icon"
-                        />
-                        <div className="goals-short-term-completed__title-group">
-                          <h3 className="goals-short-term-completed__title">{shortTerm.title}</h3>
-                          {durationDays > 0 && (
-                            <span className="goals-short-term-completed__duration">
-                              {durationDays} 天挑战
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="goals-short-term-completed__footer">
-                        <span className="goals-short-term-completed__date">
-                          完成于 {completedDate}
-                        </span>
-                        <MaterialIcon 
-                          name="arrow_forward" 
-                          className="goals-short-term-completed__arrow"
-                        />
-                      </div>
-                    </button>
-                  );
                 }
-              })}
-            </div>
+                  })}
+                </div>
+              )}
+            </>
           )}
         </main>
       </div>
@@ -1811,16 +2010,14 @@ function Goals() {
           <div className="goals-section__header">
             <h2 className="goals-section__title">短期目标</h2>
             <div style={{ display: "flex", gap: "0.5rem" }}>
-              {shortTermGoals.length > 0 && (
-                <button
-                  type="button"
-                  className="goals-section__action"
-                  onClick={() => setShowWizard(true)}
-                  aria-label="新建短期目标"
-                >
-                  <MaterialIcon name="add" />
-                </button>
-              )}
+              <button
+                type="button"
+                className="goals-section__action"
+                onClick={() => setShowWizard(true)}
+                aria-label="新建短期目标"
+              >
+                <MaterialIcon name="add" />
+              </button>
               <button
                 type="button"
                 className="goals-section__action"
@@ -1839,53 +2036,63 @@ function Goals() {
                 {shortTermError}
               </p>
             ) : shortTermGoals.length === 0 ? (
-              <button
-                type="button"
-                className="goals-carousel__item goals-carousel__item--cta"
-                onClick={() => setShowWizard(true)}
-              >
-                <div className="goals-carousel__cover goals-carousel__cover--cta">
-                  <MaterialIcon name="add" />
+              <div className="goals-carousel__empty">
+                <div className="goals-carousel__empty-divider">
+                  <div className="goals-carousel__empty-divider-line"></div>
+                  <div className="goals-carousel__empty-divider-dot"></div>
+                  <div className="goals-carousel__empty-divider-line"></div>
                 </div>
-                <div className="goals-carousel__body">
-                  <p className="goals-carousel__title">创建新目标</p>
-                  <p className="goals-carousel__subtitle">为你的短期计划设定节奏</p>
-                </div>
-              </button>
+                <p className="goals-carousel__empty-text">暂无目标</p>
+              </div>
             ) : (
               shortTermGoals
                 .filter((goal) => goal.status !== "completed") // 过滤掉已完成的目标
                 .map((goal) => {
                   const statusText = getShortTermGoalStatusText(goal);
-                  const todayTask = getShortTermGoalTodayTask(goal);
+                  // 使用任务完成记录计算完成天数（按目标ID隔离）
+                  const completedDays = getShortTermGoalCompletedDays(goal, goalTaskCompletions);
+                  const durationDays = goal.durationDays ?? 0;
+                  const progressPercent = durationDays > 0 
+                    ? Math.min(Math.round((completedDays / durationDays) * 100), 100)
+                    : 0;
+                  
+                  // 根据天数确定小方块数量（7、14、21、28）
+                  const boxCount = durationDays;
+                  // 获取启动日期：使用创建日期作为启动日期
+                  const startDate = goal.createdAt;
+                  const startDateFormatted = formatDateYYYYMMDD(startDate);
+                  
                   return (
                     <button
                       type="button"
-                      className="goals-carousel__item goals-carousel__item--button"
+                      className={`goals-card goals-card--primary goals-card--actionable goals-card--short-term ${goal.status === "saved" ? "goals-card--short-term--saved" : ""}`}
                       key={goal.id}
                       onClick={() => handleGoalOpen(goal)}
                     >
-                      <img
-                        alt={`${goal.title}背景`}
-                        className="goals-carousel__item-image"
-                        src={colortestImage}
-                      />
-                      <div className="goals-carousel__item-gradient" />
-                      <div className="goals-carousel__content">
-                        <div className="goals-carousel__top-inner">
-                          <span className="goals-carousel__days">{goal.durationDays} 天</span>
-                          {goal.status === "active" ? (
-                            <span className="goals-carousel__status-tag">{statusText}</span>
-                          ) : (
-                            <span className="goals-carousel__status">{statusText}</span>
-                          )}
-                        </div>
+                      <div className="goals-short-term__header">
+                        <p className="goals-short-term__title">{goal.title}</p>
+                        <p className={`goals-short-term__status ${goal.status === "saved" ? "goals-short-term__status--saved" : ""}`}>
+                          {statusText}
+                        </p>
                       </div>
-                      <div className="goals-carousel__content">
-                        <p className="goals-carousel__title">{goal.title}</p>
-                        {todayTask && (
-                          <p className="goals-carousel__today-task">今日任务: {todayTask}</p>
-                        )}
+                      <div className="goals-short-term__content">
+                        <div className="goals-short-term__boxes">
+                          {Array.from({ length: boxCount }).map((_, index) => {
+                            const isCompleted = index < completedDays;
+                            return (
+                              <div
+                                key={index}
+                                className={`goals-short-term__box ${isCompleted ? 'goals-short-term__box--completed' : ''}`}
+                              />
+                            );
+                          })}
+                        </div>
+                        <div className="goals-short-term__summary">
+                          <p className="goals-short-term__caption">
+                            {startDateFormatted} {completedDays} / {durationDays} 天
+                          </p>
+                          <p className="goals-short-term__percent">{progressPercent}%</p>
+                        </div>
                       </div>
                     </button>
                   );
@@ -1945,6 +2152,21 @@ function formatDateLabel(iso: string | null | undefined): string {
     month: "long",
     day: "numeric",
   });
+}
+
+// 格式化日期为 YYYY-MM-DD 格式
+function formatDateYYYYMMDD(iso: string | null | undefined): string {
+  if (!iso) {
+    return "";
+  }
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 // Removed unused function: formatMonthDayLabel

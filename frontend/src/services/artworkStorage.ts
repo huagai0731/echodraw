@@ -122,16 +122,6 @@ function sanitizeStoredArtworks(payload: unknown): Artwork[] {
     if (rawDurationMinutes !== null) {
       sanitized.durationMinutes = rawDurationMinutes;
     }
-    // 套图相关字段
-    if (typeof record.collectionId === "string" && record.collectionId.trim().length > 0) {
-      sanitized.collectionId = record.collectionId;
-    }
-    if (typeof record.collectionName === "string" && record.collectionName.trim().length > 0) {
-      sanitized.collectionName = record.collectionName;
-    }
-    if (typeof record.collectionIndex === "number" && Number.isFinite(record.collectionIndex)) {
-      sanitized.collectionIndex = Math.max(1, Math.floor(record.collectionIndex));
-    }
     if (typeof record.incrementalDurationMinutes === "number" && Number.isFinite(record.incrementalDurationMinutes)) {
       sanitized.incrementalDurationMinutes = Math.max(0, record.incrementalDurationMinutes);
     }

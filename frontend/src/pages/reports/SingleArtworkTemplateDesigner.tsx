@@ -10,6 +10,7 @@ import { getOrLoadImage } from "@/utils/imageCache";
 import { loadTagPreferencesAsync, buildTagOptionsAsync } from "@/services/tagPreferences";
 
 import "./SingleArtworkTemplateDesigner.css";
+import "@/components/templateDesigner/ContentEditor.css";
 
 type SingleArtworkTemplateDesignerProps = {
   open: boolean;
@@ -90,6 +91,10 @@ function SingleArtworkTemplateDesigner({ open, artworks, onClose }: SingleArtwor
   const [textTone, _setTextTone] = useState<"light" | "dark">("light");
   const [tagOptions, setTagOptions] = useState<Array<{ id: string | number; name: string }>>([]);
   const [addSuffix, setAddSuffix] = useState<boolean>(false);
+  const [shadowSettingsExpanded, setShadowSettingsExpanded] = useState<boolean>(false);
+  const [showSuffixTooltip, setShowSuffixTooltip] = useState(false);
+  const suffixTooltipRef = useRef<HTMLDivElement>(null);
+  const suffixIconRef = useRef<HTMLButtonElement>(null);
 
   const hasArtworks = artworks.length > 0;
 
@@ -149,8 +154,30 @@ function SingleArtworkTemplateDesigner({ open, artworks, onClose }: SingleArtwor
   useEffect(() => {
     if (!open) {
       setPickerOpen(false);
+      setShowSuffixTooltip(false);
     }
   }, [open]);
+
+  // 点击外部关闭tooltip
+  useEffect(() => {
+    if (!showSuffixTooltip) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        suffixTooltipRef.current &&
+        suffixIconRef.current &&
+        !suffixTooltipRef.current.contains(event.target as Node) &&
+        !suffixIconRef.current.contains(event.target as Node)
+      ) {
+        setShowSuffixTooltip(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showSuffixTooltip]);
 
   useEffect(() => {
     if (!open) {
@@ -522,9 +549,29 @@ function SingleArtworkTemplateDesigner({ open, artworks, onClose }: SingleArtwor
             {hasArtworks ? (
               <section>
                 <div className="single-template-designer__group" style={{ marginTop: 0, paddingTop: 8, paddingBottom: 8 }}>
-                  <div className="single-template-designer__group-header" style={{ marginBottom: 6 }}>
-                    <h3>阴影区设置</h3>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShadowSettingsExpanded(!shadowSettingsExpanded)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      width: "100%",
+                      background: "transparent",
+                      border: "none",
+                      cursor: "pointer",
+                      padding: 0,
+                      marginBottom: shadowSettingsExpanded ? 6 : 0,
+                    }}
+                  >
+                    <h3 style={{ margin: 0 }}>阴影区设置</h3>
+                    <MaterialIcon 
+                      name={shadowSettingsExpanded ? "expand_less" : "expand_more"} 
+                      style={{ fontSize: "1.5rem", color: "rgba(255, 255, 255, 0.7)" }}
+                    />
+                  </button>
+                  {shadowSettingsExpanded && (
+                    <>
                   {/* 色相滑块 */}
                   <div className="single-template-designer__tuning" style={{ marginTop: 6 }}>
                     <div><p>色相</p></div>
@@ -644,6 +691,8 @@ function SingleArtworkTemplateDesigner({ open, artworks, onClose }: SingleArtwor
                       <span className="single-template-designer__slider-dot" />
                     </div>
                   </div>
+                    </>
+                  )}
                 </div>
               </section>
             ) : null}
@@ -698,28 +747,45 @@ function SingleArtworkTemplateDesigner({ open, artworks, onClose }: SingleArtwor
                     </label>
                     {renderToggle(showUsername, () => setShowUsername((prev) => !prev), "署名")}
                   </div>
-                  <div className="single-template-designer__field-row single-template-designer__field-row--inline" style={{ marginTop: 8 }}>
-                    <div>
+                  <div className="single-template-designer__field-row single-template-designer__field-row--inline" style={{ marginTop: 8, position: "relative" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                       <span>增加后缀</span>
+                      <button
+                        ref={suffixIconRef}
+                        type="button"
+                        className="content-editor__help-icon"
+                        onClick={() => setShowSuffixTooltip(!showSuffixTooltip)}
+                        aria-label="关于增加后缀"
+                      >
+                        <MaterialIcon name="help" />
+                      </button>
+                      {showSuffixTooltip && (
+                        <div
+                          ref={suffixTooltipRef}
+                          className="content-editor__tooltip"
+                        >
+                          <p>如果愿意通过此方法让更多人了解到EchoDraw的话，可以开启，非常感谢&gt;&lt;</p>
+                        </div>
+                      )}
                     </div>
                     {renderToggle(addSuffix, () => setAddSuffix((prev) => !prev), "增加后缀")}
                   </div>
                   <div className="single-template-designer__field-row single-template-designer__field-row--meta" style={{ marginTop: 12 }}>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <div>
-                          <p>日期</p>
-                          <span>{selectedArtwork ? (() => {
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                        <div style={{ flex: 1 }}>
+                          <p style={{ margin: 0 }}>日期</p>
+                          <span style={{ fontSize: "0.85rem", color: "rgba(255, 255, 255, 0.6)" }}>{selectedArtwork ? (() => {
                             const meta = composeMetaLabels(selectedArtwork, { showDate: true, showDuration: false });
                             return meta.dateLabel || "未设置";
                           })() : "未设置"}</span>
                         </div>
                         {renderToggle(showDate, () => setShowDate((prev) => !prev), "日期")}
                       </div>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <div>
-                          <p>时长</p>
-                          <span>{selectedArtwork ? (() => {
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                        <div style={{ flex: 1 }}>
+                          <p style={{ margin: 0 }}>时长</p>
+                          <span style={{ fontSize: "0.85rem", color: "rgba(255, 255, 255, 0.6)" }}>{selectedArtwork ? (() => {
                             const meta = composeMetaLabels(selectedArtwork, { showDate: false, showDuration: true });
                             return meta.durationLabel || "未设置";
                           })() : "未设置"}</span>
@@ -1206,7 +1272,7 @@ function drawGradientFooter(
         let tagX = contentX;
         const maxX = contentX + contentWidth;
         for (const tag of tags) {
-          const label = `#${tag}`;
+          const label = tag;
           const width = measureTagBadgeWidth(context, label, rect.width);
           if (tagX + width > maxX) {
             break;

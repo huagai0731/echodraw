@@ -69,7 +69,7 @@ function YearlyTemplateDesigner({ open, artworks, onClose }: YearlyTemplateDesig
     addSuffix: false,
     showTitle: true,
     showSubtitle: true,
-    showUsername: true,
+    showUsername: false, // 全年模版不需要显示署名
     showDate: true,
     showDuration: true,
     selectedTags: [],
@@ -120,28 +120,7 @@ function YearlyTemplateDesigner({ open, artworks, onClose }: YearlyTemplateDesig
     };
   }, [open]);
 
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const resolved = await resolveActiveUsername();
-        if (!cancelled) {
-          setContentState((prev) => ({ ...prev, username: resolved }));
-        }
-      } catch (error) {
-        if (!cancelled) {
-          console.warn("[YearlyTemplateDesigner] 无法加载用户昵称：", error);
-          setContentState((prev) => ({ ...prev, username: DEFAULT_USERNAME }));
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [open]);
+  // 全年模版不需要加载用户名，已移除
 
   useEffect(() => {
     if (!open) {
@@ -290,12 +269,8 @@ function YearlyTemplateDesigner({ open, artworks, onClose }: YearlyTemplateDesig
     });
     const durationLabel = meta.durationLabel || "";
 
-    // 获取用户名
-    let displayUsername = contentState.showUsername ? normalizeUsername(contentState.username) : "";
-    if (displayUsername && contentState.addSuffix) {
-      const baseName = displayUsername.startsWith("@") ? displayUsername.slice(1) : displayUsername;
-      displayUsername = `${baseName}@EchoDraw`;
-    }
+    // 全年模版不需要署名，直接设置为空字符串
+    const displayUsername = "";
 
     return {
       durationLabel,
@@ -312,6 +287,33 @@ function YearlyTemplateDesigner({ open, artworks, onClose }: YearlyTemplateDesig
     yearInfo,
   ]);
 
+  // 根据小图尺寸比例计算实际画布高度
+  const actualCanvasHeight = useMemo(() => {
+    const gap = CANVAS_WIDTH * 0.01;
+    const totalGapWidth = gap * (GRID_COLS - 1);
+    const totalGapHeight = gap * (GRID_ROWS - 1);
+    const availableWidth = CANVAS_WIDTH - totalGapWidth;
+    
+    let cellWidth: number;
+    let cellHeight: number;
+    
+    if (imageInfoSettings.imageSizePreset === "square") {
+      // 正方形：cellWidth = cellHeight
+      cellWidth = availableWidth / GRID_COLS;
+      cellHeight = cellWidth; // 保持1:1比例
+    } else {
+      // 长方形：cellWidth : cellHeight = 1080 : 1350 = 4 : 5
+      cellWidth = availableWidth / GRID_COLS;
+      cellHeight = cellWidth * 5 / 4; // 保持4:5比例
+    }
+    
+    // 计算实际需要的总高度：网格高度（3行 * cell高度 + 行间距）+ 底部时长标签空间
+    const gridTotalHeight = GRID_ROWS * cellHeight + totalGapHeight;
+    // 如果显示时长标签，需要在底部预留空间
+    const bottomDurationSpace = imageInfoSettings.showDurationTag ? DURATION_TEXT_HEIGHT : 0;
+    return gridTotalHeight + bottomDurationSpace;
+  }, [imageInfoSettings.imageSizePreset, imageInfoSettings.showDurationTag]);
+
   const downloadDisabled = !templateData || imageStatus === "loading";
 
   useEffect(() => {
@@ -327,18 +329,16 @@ function YearlyTemplateDesigner({ open, artworks, onClose }: YearlyTemplateDesig
       return;
     }
 
-    const canvasHeight = imageInfoSettings.imageSizePreset === "square" ? CANVAS_HEIGHT_SQUARE : CANVAS_HEIGHT_RECTANGLE;
-    if (canvas.width !== CANVAS_WIDTH || canvas.height !== canvasHeight) {
+    if (canvas.width !== CANVAS_WIDTH || canvas.height !== actualCanvasHeight) {
       canvas.width = CANVAS_WIDTH;
-      canvas.height = canvasHeight;
+      canvas.height = actualCanvasHeight;
     }
 
     const draw = () => {
-      const canvasHeight = imageInfoSettings.imageSizePreset === "square" ? CANVAS_HEIGHT_SQUARE : CANVAS_HEIGHT_RECTANGLE;
       drawTemplate(
         context,
         CANVAS_WIDTH,
-        canvasHeight,
+        actualCanvasHeight,
         templateData,
         gridImages,
         artworks,
@@ -354,7 +354,7 @@ function YearlyTemplateDesigner({ open, artworks, onClose }: YearlyTemplateDesig
     } else {
       setTimeout(draw, 150);
     }
-  }, [gridImages, open, templateData, imageInfoSettings.imageSizePreset, selectedYear]);
+  }, [gridImages, open, templateData, imageInfoSettings.imageSizePreset, selectedYear, actualCanvasHeight]);
 
   // 根据月份索引（0-11）获取该月的所有图片
   const getFilteredArtworks = (monthIndex: number): Artwork[] => {
@@ -495,9 +495,30 @@ function YearlyTemplateDesigner({ open, artworks, onClose }: YearlyTemplateDesig
       const loadedImages = await Promise.all(loadPromises);
       reloadedGridImages.push(...loadedImages);
 
+      // 计算实际画布高度（与预览一致）
+      const gap = CANVAS_WIDTH * 0.01;
+      const totalGapWidth = gap * (GRID_COLS - 1);
+      const totalGapHeight = gap * (GRID_ROWS - 1);
+      const availableWidth = CANVAS_WIDTH - totalGapWidth;
+      
+      let cellWidth: number;
+      let cellHeight: number;
+      
+      if (imageInfoSettings.imageSizePreset === "square") {
+        cellWidth = availableWidth / GRID_COLS;
+        cellHeight = cellWidth;
+      } else {
+        cellWidth = availableWidth / GRID_COLS;
+        cellHeight = cellWidth * 5 / 4;
+      }
+      
+      const gridTotalHeight = GRID_ROWS * cellHeight + totalGapHeight;
+      // 如果显示时长标签，需要在底部预留空间
+      const bottomDurationSpace = imageInfoSettings.showDurationTag ? DURATION_TEXT_HEIGHT : 0;
+      const exportCanvasHeight = gridTotalHeight + bottomDurationSpace;
+
       // 创建一个新的 canvas 用于导出，避免污染原始 canvas
       const exportCanvas = document.createElement("canvas");
-      const exportCanvasHeight = imageInfoSettings.imageSizePreset === "square" ? CANVAS_HEIGHT_SQUARE : CANVAS_HEIGHT_RECTANGLE;
       exportCanvas.width = CANVAS_WIDTH;
       exportCanvas.height = exportCanvasHeight;
       const exportContext = exportCanvas.getContext("2d");
@@ -577,7 +598,7 @@ function YearlyTemplateDesigner({ open, artworks, onClose }: YearlyTemplateDesig
                 <div className="single-template-designer__device">
                   <div
                     className="single-template-designer__device-screen"
-                    style={{ aspectRatio: CANVAS_WIDTH / (imageInfoSettings.imageSizePreset === "square" ? CANVAS_HEIGHT_SQUARE : CANVAS_HEIGHT_RECTANGLE) }}
+                    style={{ aspectRatio: `${CANVAS_WIDTH} / ${actualCanvasHeight}` }}
                   >
                     <canvas ref={canvasRef} className="single-template-designer__canvas" />
                     {imageStatus === "loading" ? (
@@ -726,7 +747,7 @@ function YearlyTemplateDesigner({ open, artworks, onClose }: YearlyTemplateDesig
                     <MaterialIcon name="download" />
                     保存为图片
                   </button>
-                  <p>导出 PNG · {CANVAS_WIDTH} × {imageInfoSettings.imageSizePreset === "square" ? CANVAS_HEIGHT_SQUARE : CANVAS_HEIGHT_RECTANGLE} 像素 · 适配社交媒体展示。</p>
+                  <p>导出 PNG · {CANVAS_WIDTH} × {Math.round(actualCanvasHeight)} 像素 · 适配社交媒体展示。</p>
                 </div>
               </section>
             ) : null}
@@ -1065,37 +1086,26 @@ function drawTemplate(
 
   const gap = width * 0.01;
   const totalGapWidth = gap * (GRID_COLS - 1);
-  // 直接使用整个高度，不留底部空白
   const totalGapHeight = gap * (GRID_ROWS - 1);
+  const availableWidth = width - totalGapWidth;
   
-  // 计算cell尺寸，同时满足宽度和高度约束，填满整个画布
-  const maxCellWidth = (width - totalGapWidth) / GRID_COLS;
-  const maxCellHeight = (height - totalGapHeight) / GRID_ROWS;
-  
+  // 根据小图尺寸比例计算 cell 尺寸
   let actualCellWidth: number;
   let actualCellHeight: number;
   
   if (imageSizePreset === "square") {
-    // 正方形：cellWidth = cellHeight，使用较小的约束值
-    const targetSize = Math.min(maxCellWidth, maxCellHeight);
-    actualCellWidth = targetSize;
-    actualCellHeight = targetSize;
+    // 正方形：cellWidth = cellHeight，保持1:1比例
+    actualCellWidth = availableWidth / GRID_COLS;
+    actualCellHeight = actualCellWidth;
   } else {
     // 长方形：cellWidth : cellHeight = 1080 : 1350 = 4 : 5
-    // 所以 cellHeight = cellWidth * 5 / 4
-    // 尝试使用宽度约束
-    const cellHeightFromWidth = maxCellWidth * 5 / 4;
-    if (cellHeightFromWidth <= maxCellHeight) {
-      // 宽度约束更严格，使用宽度填满
-      actualCellWidth = maxCellWidth;
-      actualCellHeight = cellHeightFromWidth;
-    } else {
-      // 高度约束更严格，使用高度填满
-      actualCellHeight = maxCellHeight;
-      actualCellWidth = maxCellHeight * 4 / 5;
-    }
+    actualCellWidth = availableWidth / GRID_COLS;
+    actualCellHeight = actualCellWidth * 5 / 4; // 保持4:5比例
   }
-
+  
+  // 计算网格总高度（不包括底部时长标签空间）
+  const gridTotalHeight = GRID_ROWS * actualCellHeight + totalGapHeight;
+  
   // 4列3行网格位置映射（12个月）
   const gridPositions = [];
   for (let row = 0; row < GRID_ROWS; row++) {
@@ -1114,7 +1124,8 @@ function drawTemplate(
     const imageToDraw = gridImage?.image || null;
     const artwork = gridImage?.artworkId ? artworks.find(a => a.id === gridImage.artworkId) ?? null : null;
     const monthIndex = index; // 0-11对应1-12月
-    drawImageCell(context, x, y, actualCellWidth, actualCellHeight, imageToDraw, artwork, gap, data.durationTagShow, data.durationTagOpacity, height, height, row === GRID_ROWS - 1, monthIndex);
+    // 传递网格总高度给 drawImageCell，用于计算时长标签位置
+    drawImageCell(context, x, y, actualCellWidth, actualCellHeight, imageToDraw, artwork, gap, data.durationTagShow, data.durationTagOpacity, height, gridTotalHeight, row === GRID_ROWS - 1, monthIndex);
   });
 
   context.restore();
@@ -1153,6 +1164,7 @@ function drawImageCell(
   context.clip();
 
   if (image && image.width > 0 && image.height > 0) {
+    // 使用 cover 模式：确保图片填满整个 cell，保持宽高比
     const scale = Math.max(cellWidth / image.width, cellHeight / image.height);
     const drawWidth = image.width * scale;
     const drawHeight = image.height * scale;
@@ -1210,7 +1222,8 @@ function drawImageCell(
   if (showDuration && image && image.width > 0 && image.height > 0) {
     if (artwork && artwork.durationMinutes && artwork.durationMinutes > 0) {
       const durationText = formatDurationForTemplate(artwork.durationMinutes);
-      const fontSize = Math.round(width * 0.04);
+      // 增大字体大小，参考单月模版，使用更大的比例
+      const fontSize = Math.round(width * 0.06); // 从 0.04 增加到 0.06，使字体更大
       const textPadding = width * 0.02;
       const padding = width * 0.02;
       const textY = isBottomRow && availableHeight > 0 && canvasHeight > 0

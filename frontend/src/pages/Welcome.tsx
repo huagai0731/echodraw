@@ -23,7 +23,7 @@ function Welcome({ onLogin, onRegister }: WelcomeProps) {
           <p>记录你的创作过程。</p>
           <p>设定艺术目标与里程碑。</p>
           <p>追踪创作时长与创作心情。</p>
-          <p>生成仪式感满满的进度报告。</p>
+          <p>画画，是一生的冲动。</p>
         </main>
 
         <footer className="welcome-screen__actions">

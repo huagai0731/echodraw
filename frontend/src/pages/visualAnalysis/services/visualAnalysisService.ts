@@ -1,7 +1,30 @@
 // 视觉分析服务模块 - 处理服务器保存逻辑
 
-import { createVisualAnalysisResult } from "@/services/api";
+import { createVisualAnalysisResult, fetchVisualAnalysisResults, deleteVisualAnalysisResult } from "@/services/api";
 import type { VisualAnalysisResult } from "../types";
+
+/**
+ * 删除所有旧的视觉分析结果（确保最多只保留一个）
+ */
+const deleteAllExistingResults = async (): Promise<void> => {
+  try {
+    const existingResults = await fetchVisualAnalysisResults();
+    console.log("[VisualAnalysis] 发现", existingResults.length, "个旧结果，准备删除...");
+    
+    // 删除所有旧结果
+    const deletePromises = existingResults.map(result => 
+      deleteVisualAnalysisResult(result.id).catch(err => {
+        console.warn(`[VisualAnalysis] 删除结果 ${result.id} 失败:`, err);
+      })
+    );
+    
+    await Promise.all(deletePromises);
+    console.log("[VisualAnalysis] 已删除所有旧结果");
+  } catch (err) {
+    console.warn("[VisualAnalysis] 查询或删除旧结果时出错:", err);
+    // 不抛出错误，继续创建新结果
+  }
+};
 
 /**
  * 保存基础分析结果到服务器
@@ -12,6 +35,9 @@ export const saveBasicResultsToServer = async (
   if (!basicResults.originalImage || !basicResults.step1Binary) {
     throw new Error("基础结果不完整，无法保存");
   }
+
+  // 先删除所有旧结果，确保最多只保留一个
+  await deleteAllExistingResults();
 
   console.log("[VisualAnalysis] 开始保存基础结果到服务器...");
   const savedResult = await createVisualAnalysisResult({
@@ -43,7 +69,9 @@ export const updateComprehensiveResultsToServer = async (
 ): Promise<{ id: number } | null> => {
   if (!savedResultId) {
     console.warn("[VisualAnalysis] savedResultId 尚未设置，创建新结果...");
-    // 如果没有savedResultId，创建新结果
+    // 如果没有savedResultId，先删除所有旧结果，然后创建新结果
+    await deleteAllExistingResults();
+    
     try {
       const newResult = await createVisualAnalysisResult({
         original_image: originalImage || "",
@@ -79,6 +107,10 @@ export const updateComprehensiveResultsToServer = async (
 
   try {
     console.log("[VisualAnalysis] 开始更新分析结果到服务器，ID:", savedResultId);
+    
+    // 先删除所有旧结果（包括当前的），确保最多只保留一个
+    // 因为我们会创建新结果，所以需要删除所有旧结果
+    await deleteAllExistingResults();
     
     // 从comprehensiveResults中提取图片和结构化数据
     const structuredAnalysis = JSON.parse(JSON.stringify(comprehensiveResults || {}));
@@ -129,7 +161,8 @@ export const updateComprehensiveResultsToServer = async (
       return imageData;
     };
     
-    // 保存完整结果
+    // 创建新结果（因为后端没有提供更新接口）
+    // 我们已经删除了所有旧结果，所以最多只会有一个结果
     const updatedResult = await createVisualAnalysisResult({
       original_image: getImageData(originalImage || undefined),
       step1_binary: getImageData(step1Binary),

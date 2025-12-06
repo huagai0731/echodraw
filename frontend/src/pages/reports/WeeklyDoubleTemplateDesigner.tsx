@@ -10,6 +10,7 @@ import { loadTagPreferencesAsync, buildTagOptionsAsync } from "@/services/tagPre
 import { ImageInfoSettings, type ImageInfoSettingsState } from "@/components/templateDesigner/ImageInfoSettings";
 import { ImageGridSelector, type GridImage } from "@/components/templateDesigner/ImageGridSelector";
 import { ContentEditor, type ContentEditorState } from "@/components/templateDesigner/ContentEditor";
+import { formatISODateInShanghai } from "@/utils/dateUtils";
 
 import "./SingleArtworkTemplateDesigner.css";
 
@@ -416,11 +417,13 @@ function WeeklyDoubleTemplateDesigner({ open, artworks, onClose }: WeeklyDoubleT
     const dayOffset = position - 2; // 0-13
     const targetDate = new Date(weekStartDate);
     targetDate.setDate(weekStartDate.getDate() + dayOffset);
-    const targetDateStr = targetDate.toISOString().split("T")[0];
+    const targetDateStr = formatISODateInShanghai(targetDate);
+    if (!targetDateStr) return [];
     return artworks.filter((artwork) => {
       const artworkDate = resolveArtworkDate(artwork);
       if (!artworkDate) return false;
-      const artworkDateStr = artworkDate.toISOString().split("T")[0];
+      const artworkDateStr = formatISODateInShanghai(artworkDate);
+      if (!artworkDateStr) return false;
       return artworkDateStr === targetDateStr;
     });
   };

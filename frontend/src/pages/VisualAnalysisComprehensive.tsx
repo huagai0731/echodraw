@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import MaterialIcon from "@/components/MaterialIcon";
+import { ArtisticLoader } from "@/components/ArtisticLoader";
 import "./VisualAnalysis.css";
 
 // 图片弹窗组件
@@ -237,8 +238,7 @@ function VisualAnalysisComprehensive({
   if (!results && !basicResults) {
     return (
       <div className="visual-analysis__loading">
-        <MaterialIcon name="hourglass_empty" className="visual-analysis__loading-icon" />
-        <p>正在加载分析结果...</p>
+        <ArtisticLoader size="medium" text="正在加载分析结果..." />
       </div>
     );
   }
@@ -706,7 +706,13 @@ function VisualAnalysisComprehensive({
             textAlign: "left"
           }}
         >
-          <span style={{ fontWeight: 500 }}>解读说明</span>
+          <span style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <span style={{ fontWeight: 500 }}>解读说明</span>
+            <MaterialIcon 
+              name="help_outline" 
+              style={{ fontSize: "1rem", color: "#98dbc6" }}
+            />
+          </span>
           <MaterialIcon 
             name={isExpanded ? "expand_less" : "expand_more"} 
             style={{ fontSize: "1.2rem" }}
@@ -828,38 +834,6 @@ Hls转饱和度的图，是否更像黑白关系图，而不是更像填底色�
       {currentPage === 3 && renderPage3()}
       {currentPage === 4 && renderPage4()}
       {currentPage === 5 && renderPage5()}
-
-      <div className="visual-analysis-pagination">
-        <button
-          type="button"
-          className="visual-analysis-page-button"
-          onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-          disabled={currentPage === 1}
-        >
-          <MaterialIcon name="chevron_left" />
-          上一页
-        </button>
-        <div className="visual-analysis-page-dots">
-          {[1, 2, 3, 4, 5].map((page) => (
-            <button
-              key={page}
-              type="button"
-              className={`visual-analysis-page-dot ${currentPage === page ? 'active' : ''}`}
-              onClick={() => setCurrentPage(page)}
-              aria-label={`第${page}页`}
-            />
-          ))}
-        </div>
-        <button
-          type="button"
-          className="visual-analysis-page-button"
-          onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-          disabled={currentPage === totalPages}
-        >
-          下一页
-          <MaterialIcon name="chevron_right" />
-        </button>
-      </div>
 
       {/* 图片弹窗 */}
       {modalImage && (
