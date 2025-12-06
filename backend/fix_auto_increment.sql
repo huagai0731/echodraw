@@ -6,11 +6,12 @@
 ALTER TABLE `core_dailycheckin`
 MODIFY COLUMN `id` BIGINT AUTO_INCREMENT NOT NULL;
 
+-- 修复 core_emailverification 表（当前问题）
+ALTER TABLE `core_emailverification`
+MODIFY COLUMN `id` BIGINT AUTO_INCREMENT NOT NULL;
+
 -- 检查其他可能有同样问题的表（可选，根据需要取消注释）
 -- ALTER TABLE `core_userupload`
--- MODIFY COLUMN `id` BIGINT AUTO_INCREMENT NOT NULL;
-
--- ALTER TABLE `core_emailverification`
 -- MODIFY COLUMN `id` BIGINT AUTO_INCREMENT NOT NULL;
 
 -- ALTER TABLE `core_authtoken`
