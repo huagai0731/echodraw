@@ -17,126 +17,181 @@ export type TaskPollingCallbacks = {
  */
 export function useTaskPolling() {
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const initialWaitTimeoutRef = useRef<NodeJS.Timeout | null>(null); // 初始等待的定时器
+  const startTimeRef = useRef<number | null>(null); // 记录开始时间
+  
+  const minWaitTimeMs = 3 * 60 * 1000; // 最小等待时间：3分钟（毫秒）
+  const slowPollInterval = 15000; // 慢速轮询间隔：15秒
 
   const startPolling = useCallback((
     taskId: string,
     callbacks: TaskPollingCallbacks,
     isMountedRef: { current: boolean } = { current: true }
   ) => {
-    // 清理之前的轮询
+    // 清理之前的轮询和等待
     if (pollIntervalRef.current) {
       clearInterval(pollIntervalRef.current);
       pollIntervalRef.current = null;
     }
+    if (initialWaitTimeoutRef.current) {
+      clearTimeout(initialWaitTimeoutRef.current);
+      initialWaitTimeoutRef.current = null;
+    }
 
-    let pollCount = 0;
-    const maxPolls = 180; // 最多轮询180次（6分钟，每2秒一次）
-    const maxPendingPolls = 30; // 如果一直是pending，最多轮询30次（1分钟）
-    let pendingCount = 0;
+    // 重置状态
+    startTimeRef.current = Date.now();
 
-    pollIntervalRef.current = setInterval(async () => {
-      // 检查组件是否已卸载
-      if (!isMountedRef.current) {
-        if (pollIntervalRef.current) {
-          clearInterval(pollIntervalRef.current);
-          pollIntervalRef.current = null;
-        }
-        return;
-      }
+    console.log("[VisualAnalysis] 开始等待3分钟后再开始轮询任务状态...");
 
-      pollCount++;
+    // 先等待3分钟，然后再开始轮询
+    initialWaitTimeoutRef.current = setTimeout(() => {
+      if (!isMountedRef.current) return;
 
-      // 超时检查
-      if (pollCount > maxPolls) {
-        if (pollIntervalRef.current) {
-          clearInterval(pollIntervalRef.current);
-          pollIntervalRef.current = null;
-        }
-        if (isMountedRef.current) {
-          callbacks.onError?.("分析超时（超过6分钟）。可能的原因：\n1. Celery worker 未运行\n2. 服务器负载过高\n3. 图片处理时间过长\n\n请检查后端日志或联系管理员");
-        }
-        return;
-      }
+      console.log("[VisualAnalysis] 已等待3分钟，开始轮询任务状态（15秒间隔）");
 
-      try {
-        const statusResponse = await getImageAnalysisTaskStatus(taskId);
-        
-        console.log(`[VisualAnalysis] 任务状态: ${statusResponse.status}, 进度: ${statusResponse.progress}%, 轮询次数: ${pollCount}`);
-        
-        if (!isMountedRef.current) return;
+      let pollCount = 0;
+      const maxPolls = 588; // 最多轮询588次（147分钟，每15秒一次）
 
-        // 更新进度
-        if (statusResponse.progress !== undefined) {
-          callbacks.onProgress?.(statusResponse.progress);
-        }
-
-        // 如果一直是pending且没有进度，增加pending计数
-        if (statusResponse.status === "pending" && (!statusResponse.progress || statusResponse.progress === 0)) {
-          pendingCount++;
-          if (pendingCount > maxPendingPolls) {
-            if (pollIntervalRef.current) {
-              clearInterval(pollIntervalRef.current);
-              pollIntervalRef.current = null;
-            }
-            if (isMountedRef.current) {
-              callbacks.onError?.("任务一直处于等待状态，可能的原因：\n1. Celery worker 未运行\n2. 服务器负载过高\n\n请检查后端日志或联系管理员，或尝试重新上传图片");
-            }
-            return;
-          }
-        } else {
-          pendingCount = 0;
-        }
-
-        // 任务完成
-        if (statusResponse.status === "success") {
-          console.log("[VisualAnalysis] 检测到任务成功状态");
-          
+      // 开始轮询
+      pollIntervalRef.current = setInterval(async () => {
+        // 检查组件是否已卸载
+        if (!isMountedRef.current) {
           if (pollIntervalRef.current) {
             clearInterval(pollIntervalRef.current);
             pollIntervalRef.current = null;
           }
-
-          const resultId = statusResponse.result?.result_id;
-          if (resultId) {
-            try {
-              const savedResult = await fetchVisualAnalysisResult(resultId);
-              const processedResult = processSavedResultUrls(savedResult);
-              callbacks.onSuccess?.(processedResult);
-            } catch (err) {
-              console.error("[VisualAnalysis] 加载结果失败:", err);
-              callbacks.onError?.("分析完成，但加载结果失败，请刷新页面重试");
-            }
-          }
+          return;
         }
-        // 任务失败
-        else if (statusResponse.status === "failure") {
+
+        pollCount++;
+
+        // 超时检查
+        if (pollCount > maxPolls) {
           if (pollIntervalRef.current) {
             clearInterval(pollIntervalRef.current);
             pollIntervalRef.current = null;
           }
           if (isMountedRef.current) {
-            const errorMsg = statusResponse.error || "未知错误";
-            callbacks.onError?.(`图像分析失败: ${errorMsg}`);
+            callbacks.onError?.("分析超时（超过150分钟）。可能的原因：\n1. Celery worker 未运行\n2. 服务器负载过高\n3. 图片处理时间过长\n\n请检查后端日志或联系管理员");
+          }
+          return;
+        }
+
+        try {
+          const statusResponse = await getImageAnalysisTaskStatus(taskId);
+          
+          const elapsedTime = startTimeRef.current ? Date.now() - startTimeRef.current : 0;
+          console.log(`[VisualAnalysis] 任务状态: ${statusResponse.status}, 进度: ${statusResponse.progress}%, 轮询次数: ${pollCount}, 总等待时间: ${Math.round(elapsedTime / 1000)}秒`);
+          
+          if (!isMountedRef.current) return;
+
+          // 更新进度
+          if (statusResponse.progress !== undefined) {
+            callbacks.onProgress?.(statusResponse.progress);
+          }
+
+          // 任务完成
+          if (statusResponse.status === "success") {
+            console.log("[VisualAnalysis] 检测到任务成功状态");
+            
+            if (pollIntervalRef.current) {
+              clearInterval(pollIntervalRef.current);
+              pollIntervalRef.current = null;
+            }
+
+            const resultId = statusResponse.result?.result_id;
+            if (resultId) {
+              try {
+                const savedResult = await fetchVisualAnalysisResult(resultId);
+                const processedResult = processSavedResultUrls(savedResult);
+                callbacks.onSuccess?.(processedResult);
+              } catch (err) {
+                console.error("[VisualAnalysis] 加载结果失败:", err);
+                callbacks.onError?.("分析完成，但加载结果失败，请刷新页面重试");
+              }
+            }
+          }
+          // 任务失败
+          else if (statusResponse.status === "failure") {
+            if (pollIntervalRef.current) {
+              clearInterval(pollIntervalRef.current);
+              pollIntervalRef.current = null;
+            }
+            if (isMountedRef.current) {
+              const errorMsg = statusResponse.error || "未知错误";
+              callbacks.onError?.(`图像分析失败: ${errorMsg}`);
+            }
+          }
+          // 任务仍在进行中，继续轮询
+          // （pending 或 started 状态，继续等待）
+        } catch (err) {
+          console.error("查询任务状态失败:", err);
+          if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current);
+            pollIntervalRef.current = null;
+          }
+          if (isMountedRef.current) {
+            callbacks.onError?.(`查询任务状态失败: ${err instanceof Error ? err.message : "未知错误"}`);
           }
         }
-        // 任务仍在进行中，继续轮询
-        else if (statusResponse.status === "pending" || statusResponse.status === "started") {
-          if (pollCount > 60 && statusResponse.status === "pending") {
-            console.warn("[图像分析] 任务已创建2分钟但仍未开始，可能 Celery worker 未运行");
-            callbacks.onError?.("任务正在等待处理中...如果长时间无响应，请检查 Celery worker 是否运行");
+      }, slowPollInterval); // 每15秒轮询一次
+
+      // 立即执行一次轮询（不等待第一个间隔）
+      const initialPoll = async () => {
+        if (!isMountedRef.current) return;
+        
+        try {
+          const statusResponse = await getImageAnalysisTaskStatus(taskId);
+          
+          const elapsedTime = startTimeRef.current ? Date.now() - startTimeRef.current : 0;
+          console.log(`[VisualAnalysis] 首次轮询 - 任务状态: ${statusResponse.status}, 进度: ${statusResponse.progress}%, 总等待时间: ${Math.round(elapsedTime / 1000)}秒`);
+          
+          if (!isMountedRef.current) return;
+
+          // 更新进度
+          if (statusResponse.progress !== undefined) {
+            callbacks.onProgress?.(statusResponse.progress);
           }
+
+          // 如果任务已经完成，直接显示结果
+          if (statusResponse.status === "success") {
+            console.log("[VisualAnalysis] 首次轮询即检测到任务成功状态");
+            
+            if (pollIntervalRef.current) {
+              clearInterval(pollIntervalRef.current);
+              pollIntervalRef.current = null;
+            }
+
+            const resultId = statusResponse.result?.result_id;
+            if (resultId) {
+              try {
+                const savedResult = await fetchVisualAnalysisResult(resultId);
+                const processedResult = processSavedResultUrls(savedResult);
+                callbacks.onSuccess?.(processedResult);
+              } catch (err) {
+                console.error("[VisualAnalysis] 加载结果失败:", err);
+                callbacks.onError?.("分析完成，但加载结果失败，请刷新页面重试");
+              }
+            }
+          } else if (statusResponse.status === "failure") {
+            if (pollIntervalRef.current) {
+              clearInterval(pollIntervalRef.current);
+              pollIntervalRef.current = null;
+            }
+            if (isMountedRef.current) {
+              const errorMsg = statusResponse.error || "未知错误";
+              callbacks.onError?.(`图像分析失败: ${errorMsg}`);
+            }
+          }
+          // 如果还在 pending 或 started，继续轮询（已经在上面设置了）
+        } catch (err) {
+          console.error("首次查询任务状态失败:", err);
+          // 即使首次查询失败，也继续轮询
         }
-      } catch (err) {
-        console.error("查询任务状态失败:", err);
-        if (pollIntervalRef.current) {
-          clearInterval(pollIntervalRef.current);
-          pollIntervalRef.current = null;
-        }
-        if (isMountedRef.current) {
-          callbacks.onError?.(`查询任务状态失败: ${err instanceof Error ? err.message : "未知错误"}`);
-        }
-      }
-    }, 2000); // 每2秒轮询一次
+      };
+      
+      initialPoll();
+    }, minWaitTimeMs); // 等待3分钟
   }, []);
 
   const stopPolling = useCallback(() => {
@@ -144,6 +199,12 @@ export function useTaskPolling() {
       clearInterval(pollIntervalRef.current);
       pollIntervalRef.current = null;
     }
+    if (initialWaitTimeoutRef.current) {
+      clearTimeout(initialWaitTimeoutRef.current);
+      initialWaitTimeoutRef.current = null;
+    }
+    // 清理状态
+    startTimeRef.current = null;
   }, []);
 
   return { startPolling, stopPolling };

@@ -3455,10 +3455,20 @@ def analyze_image_comprehensive(request):
 def get_image_analysis_task_status(request, task_id):
     """
     查询图像分析任务状态
+    注意：强制关闭并重新打开数据库连接，绕过 REPEATABLE-READ 隔离级别的限制
+    这样可以立即看到 Celery worker 提交的更新（解决 MySQL 和 SQLite 差异问题）
     """
     try:
         from core.models import ImageAnalysisTask
+        from django.db import connection
         
+        # 关键：强制关闭当前数据库连接，确保使用新连接查询
+        # 这可以绕过 REPEATABLE-READ 隔离级别的限制，立即看到其他事务的提交
+        # 在 MySQL 中，REPEATABLE-READ 隔离级别会导致一个事务看不到另一个事务的提交
+        # 关闭连接会结束当前事务，下次查询使用新连接，可以看到最新的已提交数据
+        connection.close()
+        
+        # 从数据库重新查询（使用新连接，会看到最新的数据）
         task_obj = ImageAnalysisTask.objects.get(
             task_id=task_id,
             user=request.user  # 确保只能查询自己的任务

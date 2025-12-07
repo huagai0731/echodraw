@@ -81,22 +81,28 @@ def analyze_image_comprehensive_task(self, result_id: int, image_url: str, user_
         # 保存结果到任务对象
         if task_obj:
             try:
+                from django.db import connection
                 task_obj.status = ImageAnalysisTask.STATUS_SUCCESS
                 task_obj.progress = 100
                 task_obj.result_data = result_data
                 task_obj.completed_at = timezone.now()
                 task_obj.save(update_fields=['status', 'progress', 'result_data', 'completed_at', 'updated_at'])
+                # 关闭数据库连接，确保事务立即提交，让其他进程（Django应用）能够立即看到更新
+                connection.close()
                 logger.info(f"任务状态已更新为成功: {task_id}, 结果ID: {result_id}")
             except Exception as save_error:
                 logger.error(f"保存任务状态失败: {task_id}, 错误: {str(save_error)}")
                 # 尝试重新获取任务对象并保存
                 try:
+                    from django.db import connection
                     task_obj = ImageAnalysisTask.objects.get(task_id=task_id)
                     task_obj.status = ImageAnalysisTask.STATUS_SUCCESS
                     task_obj.progress = 100
                     task_obj.result_data = result_data
                     task_obj.completed_at = timezone.now()
                     task_obj.save()
+                    # 关闭数据库连接，确保事务立即提交
+                    connection.close()
                     logger.info(f"重新保存任务状态成功: {task_id}")
                 except Exception as retry_error:
                     logger.error(f"重新保存任务状态也失败: {task_id}, 错误: {str(retry_error)}")
