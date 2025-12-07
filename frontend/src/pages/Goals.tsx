@@ -870,7 +870,7 @@ function Goals() {
   }, [reloadLongTermGoal]);
 
   useEffect(() => {
-    let active = true;
+    const active = { current: true };
 
     async function loadInitialLongTermGoal() {
       // 初始化时已经从缓存加载了，这里只需要在后台更新
@@ -973,7 +973,7 @@ function Goals() {
     loadInitialLongTermGoal();
 
     return () => {
-      active = false;
+      active.current = false;
     };
   }, [authVersion]);
 
