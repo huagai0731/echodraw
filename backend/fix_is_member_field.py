@@ -60,6 +60,31 @@ def check_table_exists(cursor, table_name):
     return cursor.fetchone()[0] > 0
 
 
+def get_user_id_column_type(cursor):
+    """获取 auth_user 表的 id 列完整类型（包括 UNSIGNED 等修饰符）"""
+    User = get_user_model()
+    user_table = User._meta.db_table
+    
+    cursor.execute("""
+        SELECT COLUMN_TYPE
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = %s
+        AND COLUMN_NAME = 'id'
+    """, [user_table])
+    
+    result = cursor.fetchone()
+    if result:
+        column_type = result[0]
+        # 返回完整的列类型，包括 UNSIGNED 等修饰符
+        # 例如：'bigint unsigned' 或 'int'
+        return column_type.upper()
+    
+    # 如果查询失败，默认使用 BIGINT（Django 5.2+ 默认）
+    print(f"  警告：无法查询 {user_table} 表的 id 类型，使用默认 BIGINT")
+    return 'BIGINT'
+
+
 def create_visual_analysis_quota_table(cursor):
     """创建 core_visualanalysisquota 表"""
     table_name = 'core_visualanalysisquota'
@@ -72,8 +97,12 @@ def create_visual_analysis_quota_table(cursor):
     User = get_user_model()
     user_table = User._meta.db_table
     
+    # 获取用户表的 id 列类型，确保外键类型匹配
+    user_id_type = get_user_id_column_type(cursor)
+    print(f"  检测到用户表 {user_table} 的 id 类型: {user_id_type}")
+    
     try:
-        # 创建表
+        # 创建表，使用匹配的 user_id 类型
         cursor.execute(f"""
             CREATE TABLE `{table_name}` (
                 `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -84,7 +113,7 @@ def create_visual_analysis_quota_table(cursor):
                 `used_monthly_quota` INT UNSIGNED NOT NULL DEFAULT 0,
                 `created_at` DATETIME(6) NOT NULL,
                 `updated_at` DATETIME(6) NOT NULL,
-                `user_id` BIGINT NOT NULL UNIQUE,
+                `user_id` {user_id_type} NOT NULL UNIQUE,
                 FOREIGN KEY (`user_id`) REFERENCES `{user_table}` (`id`) ON DELETE CASCADE,
                 INDEX `core_visual_user_id_07e9af_idx` (`user_id`),
                 INDEX `core_visual_current_7c4742_idx` (`current_month`)
