@@ -3390,6 +3390,45 @@ def analyze_image_comprehensive(request):
         except (ValueError, TypeError):
             binary_threshold = 140
         
+        # 创建新报告前，删除用户的所有旧报告（确保只保留一个报告，控制TOS存储成本）
+        old_results = list(VisualAnalysisResult.objects.filter(user=request.user))
+        old_count = len(old_results)
+        
+        for old_result in old_results:
+            try:
+                # 删除旧报告的所有图片文件
+                if old_result.original_image:
+                    old_result.original_image.delete(save=False)
+                if old_result.step1_binary:
+                    old_result.step1_binary.delete(save=False)
+                if old_result.step2_grayscale:
+                    old_result.step2_grayscale.delete(save=False)
+                if old_result.step3_lab_l:
+                    old_result.step3_lab_l.delete(save=False)
+                if old_result.step4_hsv_s:
+                    old_result.step4_hsv_s.delete(save=False)
+                if old_result.step4_hls_s:
+                    old_result.step4_hls_s.delete(save=False)
+                if old_result.step5_hue:
+                    old_result.step5_hue.delete(save=False)
+                if old_result.step2_grayscale_3_level:
+                    old_result.step2_grayscale_3_level.delete(save=False)
+                if old_result.step2_grayscale_4_level:
+                    old_result.step2_grayscale_4_level.delete(save=False)
+                if old_result.step4_hls_s_inverted:
+                    old_result.step4_hls_s_inverted.delete(save=False)
+                if old_result.kmeans_segmentation_image:
+                    old_result.kmeans_segmentation_image.delete(save=False)
+                logger.info(f"已删除旧报告 {old_result.id} 的所有图片文件")
+            except Exception as e:
+                logger.warning(f"删除旧报告 {old_result.id} 的图片文件时出错: {str(e)}")
+            finally:
+                # 删除旧报告
+                old_result.delete()
+        
+        if old_count > 0:
+            logger.info(f"用户 {request.user.id} 创建新报告前，已删除 {old_count} 个旧报告")
+        
         # 先创建 VisualAnalysisResult 记录，保存原图到 TOS
         result_obj = VisualAnalysisResult.objects.create(
             user=request.user,

@@ -76,27 +76,10 @@ export function useExistingResultCheck(
 
         const pendingTask = pendingTaskResponse?.task || null;
 
-        // 如果有进行中的任务，先检查任务状态
-        if (pendingTask) {
-          await handlePendingTask(
-            pendingTask,
-            results,
-            callbacks,
-            isMountedRef,
-            () => {
-              setCheckingExistingResult(false);
-              callbacks.onSetCheckingExistingResult(false);
-            }
-          );
-        }
-
         // 获取用户的分析结果列表
         console.log("[VisualAnalysis] 获取到结果列表:", results?.length || 0, "个结果");
-        if (!isMounted) {
-          console.log("[VisualAnalysis] 组件已卸载，取消检查");
-          return;
-        }
-
+        
+        // 优先显示已有结果（如果有）
         if (results && results.length > 0) {
           await handleExistingResults(
             results,
@@ -108,12 +91,46 @@ export function useExistingResultCheck(
               callbacks.onSetCheckingExistingResult(false);
             }
           );
+          
+          // 已有结果显示后，如果有进行中的任务，静默恢复轮询（不干扰UI）
+          if (pendingTask) {
+            // 延迟处理，确保已有结果已经显示
+            setTimeout(async () => {
+              if (isMounted) {
+                await handlePendingTask(
+                  pendingTask,
+                  results,
+                  callbacks,
+                  isMountedRef,
+                  () => {
+                    // 不改变UI状态，已有结果已经显示了
+                  },
+                  true // 标记为静默模式：不改变UI状态
+                );
+              }
+            }, 100);
+          }
         } else {
-          // 没有找到结果
-          handleNoResults(pendingTask, callbacks, isMountedRef, () => {
-            setCheckingExistingResult(false);
-            callbacks.onSetCheckingExistingResult(false);
-          });
+          // 没有找到结果，处理进行中的任务
+          if (pendingTask) {
+            await handlePendingTask(
+              pendingTask,
+              results,
+              callbacks,
+              isMountedRef,
+              () => {
+                setCheckingExistingResult(false);
+                callbacks.onSetCheckingExistingResult(false);
+              },
+              false // 非静默模式：可以改变UI状态
+            );
+          } else {
+            // 没有结果也没有任务
+            handleNoResults(pendingTask, callbacks, isMountedRef, () => {
+              setCheckingExistingResult(false);
+              callbacks.onSetCheckingExistingResult(false);
+            });
+          }
         }
       } catch (err) {
         if (!isMounted) {
@@ -143,13 +160,15 @@ export function useExistingResultCheck(
 
 /**
  * 处理进行中的任务
+ * @param silentMode 静默模式：如果为true，不改变UI状态（用于已有结果显示后的后台轮询）
  */
 async function handlePendingTask(
   pendingTask: any,
   results: any[],
   callbacks: ExistingResultCheckCallbacks,
   isMountedRef: { current: boolean },
-  onComplete: () => void
+  onComplete: () => void,
+  silentMode: boolean = false
 ) {
   console.log("[VisualAnalysis] 发现进行中的任务，先检查任务状态");
 
@@ -196,26 +215,44 @@ async function handlePendingTask(
     const taskAge = Date.now() - taskCreatedAt;
     const maxTaskAge = 5 * 60 * 1000; // 5分钟
 
-    // 如果任务创建时间超过5分钟但一直是 pending，检查是否有已完成的结果
+    // 如果任务创建时间超过5分钟但一直是 pending
     if (statusResponse.status === "pending" && taskAge > maxTaskAge) {
       const latestResult = getLatestResult(results);
-      if (latestResult && new Date(latestResult.created_at).getTime() >= taskCreatedAt) {
-        await tryLoadResult(latestResult.id, callbacks, onComplete);
+      // 如果有已有结果，说明任务可能已经完成或卡住，但已有结果已经显示了，静默处理
+      if (latestResult || silentMode) {
+        console.log("[VisualAnalysis] 任务卡住但已有结果已显示，静默处理");
+        // 静默恢复轮询，不显示错误
+        callbacks.onSetCurrentTaskId(pendingTask.task_id);
+        callbacks.onStartPolling(pendingTask.task_id, statusResponse.progress || 0);
+        onComplete();
         return;
       }
-      console.warn("[VisualAnalysis] 任务创建时间超过5分钟但仍是pending");
-      callbacks.onSetError("任务似乎卡住了。可能的原因：\n1. Celery worker 未运行\n2. 服务器负载过高\n\n请检查后端日志或联系管理员，或尝试重新上传图片");
-      callbacks.onSetComprehensiveLoading(false);
+      // 没有已有结果且任务卡住，显示错误（只在非静默模式下）
+      if (!silentMode) {
+        console.warn("[VisualAnalysis] 任务创建时间超过5分钟但仍是pending，且没有已完成的结果");
+        callbacks.onSetError("任务似乎卡住了。可能的原因：\n1. Celery worker 未运行\n2. 服务器负载过高\n\n请检查后端日志或联系管理员，或尝试重新上传图片");
+        callbacks.onSetComprehensiveLoading(false);
+      }
+      onComplete();
+      return;
     }
 
     // 任务仍在进行中，恢复轮询
-    console.log("[VisualAnalysis] 任务仍在进行中，恢复轮询");
-    callbacks.onSetCurrentTaskId(pendingTask.task_id);
-    callbacks.onSetComprehensiveLoading(true);
-    callbacks.onSetShowComprehensive(true);
-    callbacks.onSetComprehensiveProgress(statusResponse.progress || 0);
-    callbacks.onSetIsViewMode(true);
-    callbacks.onStartPolling(pendingTask.task_id, statusResponse.progress || 0);
+    if (silentMode) {
+      // 静默模式：不改变UI状态，只恢复轮询
+      console.log("[VisualAnalysis] 静默恢复任务轮询（已有结果已显示）");
+      callbacks.onSetCurrentTaskId(pendingTask.task_id);
+      callbacks.onStartPolling(pendingTask.task_id, statusResponse.progress || 0);
+    } else {
+      // 非静默模式：显示加载状态并恢复轮询
+      console.log("[VisualAnalysis] 任务仍在进行中，恢复轮询");
+      callbacks.onSetCurrentTaskId(pendingTask.task_id);
+      callbacks.onSetComprehensiveLoading(true);
+      callbacks.onSetShowComprehensive(true);
+      callbacks.onSetComprehensiveProgress(statusResponse.progress || 0);
+      callbacks.onSetIsViewMode(true);
+      callbacks.onStartPolling(pendingTask.task_id, statusResponse.progress || 0);
+    }
   } catch (err) {
     console.error("[VisualAnalysis] 检查任务状态失败:", err);
   }

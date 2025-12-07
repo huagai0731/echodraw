@@ -244,6 +244,12 @@ function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
       return;
     }
 
+    // 检查是否已有报告（必须删除已有报告才能创建新报告，控制TOS存储成本）
+    if (savedResultId || savedResultData) {
+      setError("请先删除已有报告，才能创建新的视觉分析报告");
+      return;
+    }
+
     // 清理之前的轮询
     stopPolling();
 
@@ -333,7 +339,7 @@ function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
       setComprehensiveLoading(false);
       setShowComprehensive(true);
     }
-  }, [imageFile, selectedThreshold, stopPolling, startPolling, loadResultWithGrayscaleLevels, setSavedResultData, processSavedResultUrls, setComprehensiveResults, originalImage, results?.step2Grayscale, isMountedRef]);
+  }, [imageFile, selectedThreshold, stopPolling, startPolling, loadResultWithGrayscaleLevels, setSavedResultData, processSavedResultUrls, setComprehensiveResults, originalImage, results?.step2Grayscale, isMountedRef, savedResultId, savedResultData]);
 
   // ==================== 图片处理（使用模块化的工具函数） ====================
   const processImage = async (imageDataUrl: string, _file?: File) => {
@@ -444,9 +450,22 @@ function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
       return;
     }
 
+    // 检查是否已有报告（必须删除已有报告才能创建新报告，控制TOS存储成本）
+    if (savedResultId) {
+      setError("请先删除已有报告，才能创建新的视觉分析报告");
+      return;
+    }
+
+    // 检查是否已有保存的结果数据
+    if (savedResultData) {
+      setError("请先删除已有报告，才能创建新的视觉分析报告");
+      return;
+    }
+
     // 直接执行上传和分析，配额检查由后端统一处理
+    // 后端会自动删除旧报告后再创建新报告
     await executeUploadAndAnalysis();
-  }, [imagePreview, imageFile, executeUploadAndAnalysis]);
+  }, [imagePreview, imageFile, savedResultId, savedResultData, executeUploadAndAnalysis]);
 
   // ==================== 阈值变更处理 ====================
   const handleThresholdChange = (threshold: number) => {
