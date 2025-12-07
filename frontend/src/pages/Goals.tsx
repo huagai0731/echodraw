@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, startTransition } from "react";
 
 import MaterialIcon from "@/components/MaterialIcon";
 import NewChallengeWizard from "@/pages/NewChallengeWizard";
@@ -717,19 +717,15 @@ function Goals() {
   const requestCacheRef = useRef<Map<number, { timestamp: number; promise: Promise<any> }>>(new Map());
   const CACHE_DURATION = 3000; // 3秒内的重复请求使用缓存
 
-  // 当短期目标列表变化时，为每个目标加载任务完成记录
-  useEffect(() => {
-    if (activeGoalIds.length === 0) {
-      // 清除已完成目标的任务完成记录
-      setGoalTaskCompletions({});
+  // 加载任务完成记录的辅助函数
+  const loadGoalTaskCompletions = useCallback(async (goalIds: number[], cancelledRef: { current: boolean }) => {
+    if (goalIds.length === 0) {
       return;
     }
 
-    let cancelled = false;
-
     // 并行加载所有目标的任务完成记录
-    const loadPromises = activeGoalIds.map(async (goalId) => {
-      if (cancelled) return;
+    const loadPromises = goalIds.map(async (goalId) => {
+      if (cancelledRef.current) return;
       
       // 检查是否正在加载中
       if (loadingRequestsRef.current.has(goalId)) {
@@ -761,7 +757,7 @@ function Goals() {
         });
 
         const data = await requestPromise;
-        if (cancelled) return;
+        if (cancelledRef.current) return;
         
         // 提取完成日期
         const completions = data.completions || {};
@@ -780,14 +776,14 @@ function Goals() {
           }
         });
         
-        if (!cancelled) {
+        if (!cancelledRef.current) {
           setGoalTaskCompletions((prev) => ({
             ...prev,
             [goalId]: completedDates,
           }));
         }
       } catch (error) {
-        if (!cancelled) {
+        if (!cancelledRef.current) {
           console.warn(`[Goals] Failed to load task completions for goal ${goalId}`, error);
           // 如果加载失败，设置为空集合
           setGoalTaskCompletions((prev) => ({
@@ -802,15 +798,49 @@ function Goals() {
     });
 
     Promise.all(loadPromises).catch((error) => {
-      if (!cancelled) {
+      if (!cancelledRef.current) {
         console.warn("[Goals] Failed to load some task completions", error);
       }
     });
+  }, []);
+
+  // 当短期目标列表变化时，为每个活跃目标加载任务完成记录
+  useEffect(() => {
+    if (activeGoalIds.length === 0) {
+      return;
+    }
+
+    const cancelledRef = { current: false };
+    loadGoalTaskCompletions(activeGoalIds, cancelledRef);
 
     return () => {
-      cancelled = true;
+      cancelledRef.current = true;
     };
-  }, [activeGoalIds.join(',')]); // 使用字符串化的ID数组作为依赖，更稳定
+  }, [activeGoalIds.join(','), loadGoalTaskCompletions]); // 使用字符串化的ID数组作为依赖，更稳定
+
+  // 当显示已完成目标列表时，为已完成目标加载任务完成记录
+  const completedGoalIds = useMemo(() => {
+    if (!showCompletedShortTermGoals) {
+      return [];
+    }
+    return shortTermGoals
+      .filter((goal) => goal.status === "completed")
+      .map((goal) => goal.id)
+      .sort((a, b) => a - b);
+  }, [showCompletedShortTermGoals, goalsDependencyKey]);
+
+  useEffect(() => {
+    if (completedGoalIds.length === 0) {
+      return;
+    }
+
+    const cancelledRef = { current: false };
+    loadGoalTaskCompletions(completedGoalIds, cancelledRef);
+
+    return () => {
+      cancelledRef.current = true;
+    };
+  }, [completedGoalIds.join(','), loadGoalTaskCompletions]);
 
   // 监听跨标签页的缓存更新（用于同步数据）
   useEffect(() => {
@@ -857,14 +887,24 @@ function Goals() {
           setLongTermGoal(null);
           setLongTermLoading(true);
         } else {
-          // 缓存数据有效，不显示加载状态
+          // 缓存数据有效，使用 startTransition 延迟更新，避免阻塞渲染
+          startTransition(() => {
+            loadLongTermGoalFromServer(active);
+          });
+          return;
         }
       } else {
         setLongTermLoading(true);
       }
 
+      // 没有缓存或缓存无效，立即加载
+      await loadLongTermGoalFromServer(active);
+    }
+
+    async function loadLongTermGoalFromServer(isActive: { current: boolean }) {
       try {
         if (!hasAuthToken()) {
+          if (!isActive.current) return;
           setLongTermGoal(null);
           setLongTermError("登录后可同步长期目标。");
           setLongTermRetryable(false);
@@ -873,7 +913,7 @@ function Goals() {
         }
 
         const goal = await fetchLongTermGoal();
-        if (!active) {
+        if (!isActive.current) {
           return;
         }
         
@@ -900,7 +940,7 @@ function Goals() {
           saveCachedLongTermGoal(null);
         }
       } catch (error) {
-        if (!active) {
+        if (!isActive.current) {
           return;
         }
         const status = (error as { response?: { status?: number } })?.response?.status;
@@ -912,6 +952,7 @@ function Goals() {
         } else {
           console.warn("Failed to load long-term goal", error);
           // 如果出错但有缓存，验证缓存有效性
+          const cached = loadCachedLongTermGoal();
           const validCached = cached && (cached.targetHours ?? 0) > 0 && (cached.checkpointCount ?? 0) > 0;
           if (!validCached) {
             setLongTermGoal(null);
@@ -923,7 +964,7 @@ function Goals() {
           setLongTermRetryable(true);
         }
       } finally {
-        if (active) {
+        if (isActive.current) {
           setLongTermLoading(false);
         }
       }
@@ -2035,19 +2076,28 @@ function Goals() {
               <p className="goals-carousel__message goals-carousel__message--error">
                 {shortTermError}
               </p>
-            ) : shortTermGoals.length === 0 ? (
-              <div className="goals-carousel__empty">
-                <div className="goals-carousel__empty-divider">
-                  <div className="goals-carousel__empty-divider-line"></div>
-                  <div className="goals-carousel__empty-divider-dot"></div>
-                  <div className="goals-carousel__empty-divider-line"></div>
-                </div>
-                <p className="goals-carousel__empty-text">暂无目标</p>
-              </div>
-            ) : (
-              shortTermGoals
-                .filter((goal) => goal.status !== "completed") // 过滤掉已完成的目标
-                .map((goal) => {
+            ) : (() => {
+              // 过滤出进行中或待启动的目标（排除已完成的目标）
+              const activeOrSavedGoals = shortTermGoals.filter(
+                (goal) => goal.status === "active" || goal.status === "saved"
+              );
+              
+              // 如果没有进行中或待启动的目标，显示空状态
+              if (activeOrSavedGoals.length === 0) {
+                return (
+                  <div className="goals-carousel__empty">
+                    <div className="goals-carousel__empty-divider">
+                      <div className="goals-carousel__empty-divider-line"></div>
+                      <div className="goals-carousel__empty-divider-dot"></div>
+                      <div className="goals-carousel__empty-divider-line"></div>
+                    </div>
+                    <p className="goals-carousel__empty-text">暂无目标</p>
+                  </div>
+                );
+              }
+              
+              // 显示进行中或待启动的目标
+              return activeOrSavedGoals.map((goal) => {
                   const statusText = getShortTermGoalStatusText(goal);
                   // 使用任务完成记录计算完成天数（按目标ID隔离）
                   const completedDays = getShortTermGoalCompletedDays(goal, goalTaskCompletions);
@@ -2096,8 +2146,8 @@ function Goals() {
                       </div>
                     </button>
                   );
-                })
-            )}
+                });
+            })()}
           </div>
         </section>
 

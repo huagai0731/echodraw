@@ -732,13 +732,17 @@ function UserApp() {
 
     // 如果页面切换了
     if (previousPageKey !== currentPageKey) {
-      // 保存上一个页面的滚动位置
+      // 保存上一个页面的滚动位置（同步执行，避免丢失）
       if (previousPageKey) {
         saveScrollPosition(previousPageKey);
       }
       
-      // 恢复当前页面的滚动位置
-      restoreScrollPosition(currentPageKey);
+      // 使用 startTransition 包装滚动恢复，避免阻塞渲染
+      // 滚动恢复不是关键操作，可以延迟执行
+      // restoreScrollPosition 内部已经使用了 requestAnimationFrame，这里不需要再包装
+      startTransition(() => {
+        restoreScrollPosition(currentPageKey);
+      });
       
       // 更新当前页面标识
       currentPageKeyRef.current = currentPageKey;
@@ -1299,8 +1303,12 @@ function UserApp() {
       <BottomNav
         activeId={activeNav}
         onChange={(id) => {
-          setActiveNav(id);
-          setActivePage(id);
+          // 使用 startTransition 包装导航切换，避免阻塞渲染
+          // 这样可以让导航栏的视觉反馈立即响应，页面内容在后台加载
+          startTransition(() => {
+            setActiveNav(id);
+            setActivePage(id);
+          });
         }}
       />
       <AddToHomeScreen />

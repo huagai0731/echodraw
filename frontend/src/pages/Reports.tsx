@@ -1,8 +1,8 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, startTransition } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 
 import MaterialIcon from "@/components/MaterialIcon";
-import TopNav, { type TopNavAction } from "@/components/TopNav";
+import TopNav from "@/components/TopNav";
 import { ArtisticLoader } from "@/components/ArtisticLoader";
 import type { Artwork } from "@/types/artwork";
 import WeeklySingleTemplateDesigner from "@/pages/reports/WeeklySingleTemplateDesigner";
@@ -13,8 +13,6 @@ import YearlyTemplateDesigner from "@/pages/reports/YearlyTemplateDesigner";
 import FullMonthlyReport from "@/pages/reports/FullMonthlyReport";
 import {
   fetchUserTestResults,
-  deleteUserTestResult,
-  deleteVisualAnalysisResult,
   hasAuthToken,
   fetchGoalsCalendar,
   fetchVisualAnalysisResults,
@@ -297,10 +295,6 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
   const [testResults, setTestResults] = useState<UserTestResult[]>([]);
   const [visualAnalysisResults, setVisualAnalysisResults] = useState<VisualAnalysisResultRecord[]>([]);
   const [reportsLoading, setReportsLoading] = useState(true);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<ReportItem | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
   
   // 月报相关状态
   const [monthlyReportOpen, setMonthlyReportOpen] = useState(false);
@@ -313,8 +307,9 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
   const [range, setRange] = useState<RangeKey>("weekly");
   const [uploads, setUploads] = useState<Artwork[]>([]);
   const [activeMonth, setActiveMonth] = useState(() => {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1);
+    const todayStr = getTodayInShanghai();
+    const today = parseISODateInShanghai(todayStr) || new Date();
+    return new Date(today.getFullYear(), today.getMonth(), 1);
   });
   const [calendarDays, setCalendarDays] = useState<GoalsCalendarDay[]>([]);
   const [calendarLoading, setCalendarLoading] = useState(false);
@@ -328,13 +323,17 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
 
   // 栏的展开/收起状态
   // 模版和报告栏始终展开，不再需要状态控制
-  const [trendsExpanded, setTrendsExpanded] = useState(false); // 趋势栏默认收起
+  // 趋势栏固定展开，不再需要状态控制
 
   const { checkInDates: localUploadDates } = useCheckInDates();
 
+  // 使用模块级缓存，避免组件重新挂载时丢失数据
+  const reportsCacheKey = 'reports-cache';
+  const CACHE_MAX_AGE = 5 * 60 * 1000; // 5分钟
+
   // 加载测试结果和视觉分析结果
   useEffect(() => {
-    const loadData = async () => {
+    const loadDataInternal = async () => {
       setReportsLoading(true);
       if (!hasAuthToken()) {
         setTestResults([]);
@@ -368,13 +367,36 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
       setReportsLoading(false);
     };
 
-    loadData();
+    // 先检查是否有缓存，如果有缓存则先显示缓存，然后在后台更新
+    const hasCache = (() => {
+      try {
+        if (typeof window !== 'undefined') {
+          const cached = localStorage.getItem(reportsCacheKey);
+          if (cached) {
+            const { timestamp } = JSON.parse(cached);
+            const cacheAge = Date.now() - timestamp;
+            if (cacheAge < CACHE_MAX_AGE) {
+              return true;
+            }
+          }
+        }
+      } catch {
+        // ignore
+      }
+      return false;
+    })();
+
+    // 如果有缓存，延迟加载，避免阻塞渲染
+    if (hasCache) {
+      startTransition(() => {
+        loadDataInternal();
+      });
+    } else {
+      // 没有缓存，立即加载
+      loadDataInternal();
+    }
   }, []);
 
-  // 使用模块级缓存，避免组件重新挂载时丢失数据
-  const reportsCacheKey = 'reports-cache';
-  const CACHE_MAX_AGE = 5 * 60 * 1000; // 5分钟
-  
   // 组件挂载时，先尝试使用缓存数据（立即显示，提升用户体验）
   const useCacheRef = useRef(false);
   useEffect(() => {
@@ -534,7 +556,7 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
 
   // 计算趋势数据
   const todayInShanghai = useMemo(() => {
-    const todayStr = formatISODateInShanghai(new Date());
+    const todayStr = getTodayInShanghai();
     if (todayStr) {
       const parsed = parseISODateInShanghai(todayStr);
       return parsed || new Date();
@@ -781,34 +803,6 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
 
   const hasUnreadReports = unreadReports.length > 0;
 
-  // 处理删除报告
-  const handleDeleteReport = useCallback(async (item: ReportItem) => {
-    if (isDeleting) return;
-    
-    setIsDeleting(true);
-    try {
-      if (item.testResultId !== undefined) {
-        await deleteUserTestResult(item.testResultId);
-        setTestResults((prev) => prev.filter((r) => r.id !== item.testResultId));
-      } else if (item.visualAnalysisResultId !== undefined) {
-        await deleteVisualAnalysisResult(item.visualAnalysisResultId);
-        setVisualAnalysisResults((prev) => prev.filter((r) => r.id !== item.visualAnalysisResultId));
-      }
-      setShowDeleteConfirm(false);
-      setDeleteTarget(null);
-    } catch (err) {
-      console.error("[Reports] Failed to delete report:", err);
-      if (typeof window !== "undefined" && typeof window.alert === "function") {
-        window.alert("删除失败，请稍后重试");
-      }
-    } finally {
-      setIsDeleting(false);
-    }
-  }, [isDeleting]);
-
-  const handleToggleMenu = useCallback(() => {
-    setMenuOpen((prev) => !prev);
-  }, []);
 
   // 处理打开月报
   const handleOpenMonthlyReport = useCallback((year: number, month: number) => {
@@ -823,62 +817,6 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
     console.log("[Reports] Monthly report state updated");
   }, []);
 
-  useEffect(() => {
-    if (!menuOpen) {
-      return;
-    }
-
-    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
-      const target = event.target;
-      if (!(target instanceof Element)) {
-        return;
-      }
-      if (
-        target.closest(".reports-list-menu") ||
-        target.closest(".reports-list-menu__trigger")
-      ) {
-        return;
-      }
-      setMenuOpen(false);
-    };
-
-    document.addEventListener("pointerdown", handlePointerDown);
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-    };
-  }, [menuOpen]);
-
-  useEffect(() => {
-    if (!showDeleteConfirm) {
-      return;
-    }
-
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setShowDeleteConfirm(false);
-        setDeleteTarget(null);
-      }
-    };
-
-    document.addEventListener("keydown", handleEscape);
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", handleEscape);
-      document.body.style.overflow = "";
-    };
-  }, [showDeleteConfirm]);
-
-  const topNavActions = useMemo<TopNavAction[]>(
-    () => [
-      {
-        icon: "more_vert",
-        label: "更多操作",
-        onClick: handleToggleMenu,
-        className: "reports-list-menu__trigger",
-      },
-    ],
-    [handleToggleMenu],
-  );
 
   // 处理报告列表页
   if (reportsPageOpen) {
@@ -899,27 +837,7 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
               label: "返回",
               onClick: () => setReportsPageOpen(false),
             }}
-            trailingActions={topNavActions}
           />
-          {menuOpen ? (
-            <div className="reports-list-menu artwork-details-menu" role="menu">
-              <button
-                type="button"
-                className="artwork-details-menu__item"
-                onClick={() => {
-                  if (reportItems.length > 0) {
-                    setMenuOpen(false);
-                    setDeleteTarget(reportItems[0]);
-                    setShowDeleteConfirm(true);
-                  }
-                }}
-                disabled={reportItems.length === 0}
-              >
-                <MaterialIcon name="delete" className="artwork-details-menu__icon artwork-details-menu__icon--danger" />
-                删除最新报告
-              </button>
-            </div>
-          ) : null}
         </div>
 
         <main className="reports-screen__content">
@@ -972,46 +890,6 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
             targetMonth={`${selectedMonthlyReport.year}-${String(selectedMonthlyReport.month).padStart(2, "0")}`}
           />
         )}
-
-        {showDeleteConfirm && deleteTarget ? (
-          <div className="artwork-delete-confirm-overlay" onClick={() => {
-            setShowDeleteConfirm(false);
-            setDeleteTarget(null);
-          }}>
-            <div className="artwork-delete-confirm-modal" onClick={(e) => e.stopPropagation()}>
-              <h2 className="artwork-delete-confirm-title">要删除这份报告吗？</h2>
-              <div className="artwork-delete-confirm-content">
-                <p className="artwork-delete-confirm-text">
-                  删除后，这份报告将无法恢复。
-                </p>
-                <p className="artwork-delete-confirm-text artwork-delete-confirm-text--highlight">
-                  确认要删除吗？
-                </p>
-              </div>
-              <div className="artwork-delete-confirm-actions">
-                <button
-                  type="button"
-                  className="artwork-delete-confirm-button artwork-delete-confirm-button--cancel"
-                  onClick={() => {
-                    setShowDeleteConfirm(false);
-                    setDeleteTarget(null);
-                  }}
-                  disabled={isDeleting}
-                >
-                  取消
-                </button>
-                <button
-                  type="button"
-                  className="artwork-delete-confirm-button artwork-delete-confirm-button--confirm"
-                  onClick={() => handleDeleteReport(deleteTarget)}
-                  disabled={isDeleting}
-                >
-                  {isDeleting ? "删除中..." : "确认删除"}
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : null}
       </div>
     );
   }
@@ -1165,19 +1043,10 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
 
         {/* 趋势栏 */}
         <section className="reports-collapsible">
-          <button
-            type="button"
-            className="reports-collapsible__header"
-            onClick={() => setTrendsExpanded(!trendsExpanded)}
-          >
+          <div className="reports-collapsible__header">
             <h2 className="reports-collapsible__title">趋势</h2>
-            <MaterialIcon
-              name={trendsExpanded ? "expand_less" : "expand_more"}
-              className="reports-collapsible__icon"
-            />
-          </button>
-          {trendsExpanded && (
-            <div className="reports-collapsible__content">
+          </div>
+          <div className="reports-collapsible__content">
               <section className="goals-section">
                 <div className="goals-card">
                   <div className="goals-toggle">
@@ -1376,8 +1245,7 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
                   </footer>
                 </div>
               </section>
-            </div>
-          )}
+          </div>
         </section>
       </main>
 

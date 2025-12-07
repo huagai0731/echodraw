@@ -6,7 +6,7 @@ import calendar
 import mimetypes
 import os
 import logging
-from datetime import date, timedelta, datetime, timezone as dt_timezone
+from datetime import date, timedelta, datetime, time as dt_time, timezone as dt_timezone
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -46,11 +46,66 @@ except ImportError:
         SHANGHAI_TZ = None
 
 
+def get_now_with_mock() -> datetime:
+    """
+    获取当前时间（datetime）。
+    支持通过环境变量 MOCK_DATE 设置模拟日期（格式：YYYY-MM-DD），用于测试。
+    如果设置了 MOCK_DATE，将返回该日期对应的 datetime（中午12点，上海时区）而不是真实时间。
+    如果没有设置 MOCK_DATE，默认使用 "2026-03-01"（与前端保持一致）。
+    """
+    # 检查是否有模拟日期设置（用于测试）
+    # 默认使用与前端相同的模拟日期
+    mock_date_str = os.getenv("MOCK_DATE", "2026-03-01").strip()
+    if mock_date_str:
+        try:
+            # 解析日期字符串（格式：YYYY-MM-DD）
+            mock_date = datetime.strptime(mock_date_str, "%Y-%m-%d").date()
+            # 创建该日期的中午12点的datetime（上海时区）
+            mock_datetime = datetime.combine(mock_date, dt_time(12, 0, 0))
+            if SHANGHAI_TZ is not None:
+                # 设置为上海时区
+                try:
+                    # pytz 使用 localize
+                    mock_datetime = SHANGHAI_TZ.localize(mock_datetime)
+                except AttributeError:
+                    # zoneinfo 使用 replace
+                    mock_datetime = mock_datetime.replace(tzinfo=SHANGHAI_TZ)
+                # 转换为UTC（如果USE_TZ=True）
+                if settings.USE_TZ:
+                    mock_datetime = mock_datetime.astimezone(dt_timezone.utc)
+                return mock_datetime
+            else:
+                # 如果没有时区库，直接返回本地时间
+                return timezone.make_aware(mock_datetime) if settings.USE_TZ else mock_datetime
+        except ValueError:
+            # 如果格式不正确，记录警告并使用真实时间
+            logger.warning(f"无效的 MOCK_DATE 格式: {mock_date_str}，使用真实时间")
+    
+    # 返回真实时间
+    return timezone.now()
+
+
 def get_today_shanghai() -> date:
     """
     获取中国时区（Asia/Shanghai）的今天日期。
     确保无论服务器系统时区如何，都能正确获取中国时区的日期。
+    
+    支持通过环境变量 MOCK_DATE 设置模拟日期（格式：YYYY-MM-DD），用于测试。
+    如果设置了 MOCK_DATE，将返回该日期而不是真实日期。
+    如果没有设置 MOCK_DATE，默认使用 "2026-03-01"（与前端保持一致）。
     """
+    # 检查是否有模拟日期设置（用于测试）
+    # 默认使用与前端相同的模拟日期
+    mock_date_str = os.getenv("MOCK_DATE", "2026-03-01").strip()
+    if mock_date_str:
+        try:
+            # 解析日期字符串（格式：YYYY-MM-DD）
+            mock_date = datetime.strptime(mock_date_str, "%Y-%m-%d").date()
+            return mock_date
+        except ValueError:
+            # 如果格式不正确，记录警告并使用真实日期
+            logger.warning(f"无效的 MOCK_DATE 格式: {mock_date_str}，使用真实日期")
+    
     # 如果有时区库，使用明确的时区转换
     if SHANGHAI_TZ is not None:
         # timezone.now() 在 USE_TZ=True 时返回 UTC 时间
@@ -1172,10 +1227,10 @@ class UserUploadListCreateView(generics.ListCreateAPIView):
             )
             raise
 
-        # 确保 uploaded_at 有时区信息，如果没有则使用当前时间
+        # 确保 uploaded_at 有时区信息，如果没有则使用当前时间（支持模拟日期）
         uploaded_at = upload.uploaded_at
         if uploaded_at is None:
-            uploaded_at = timezone.now()
+            uploaded_at = get_now_with_mock()
         # 确保是时区感知的 datetime
         elif timezone.is_naive(uploaded_at):
             uploaded_at = timezone.make_aware(uploaded_at)

@@ -549,6 +549,12 @@ class UserUploadSerializer(serializers.ModelSerializer):
         # 处理标签关联（ManyToManyField需要在对象创建后设置）
         tags = validated_data.pop("tags", [])
         logger.info(f"[UserUploadSerializer] create 方法中获取的 tags: {tags}, 类型: {type(tags)}, 长度: {len(tags) if tags else 0}")
+        
+        # 如果没有提供 uploaded_at，使用模拟时间（如果设置了 MOCK_DATE）
+        if "uploaded_at" not in validated_data or validated_data.get("uploaded_at") is None:
+            from core.views import get_now_with_mock
+            validated_data["uploaded_at"] = get_now_with_mock()
+        
         upload = super().create(validated_data)
         if tags:
             logger.info(f"[UserUploadSerializer] 设置 tags 到 upload: {[t.id if hasattr(t, 'id') else t for t in tags]}")
