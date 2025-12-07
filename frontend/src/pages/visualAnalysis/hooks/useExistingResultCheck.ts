@@ -79,8 +79,22 @@ export function useExistingResultCheck(
         // 获取用户的分析结果列表
         console.log("[VisualAnalysis] 获取到结果列表:", results?.length || 0, "个结果");
         
-        // 优先显示已有结果（如果有）
-        if (results && results.length > 0) {
+        // 优先级：进行中的任务 > 已有结果 > 上传页面
+        // 如果有进行中的任务，优先显示加载动画（不管是否有部分结果）
+        if (pendingTask) {
+          await handlePendingTask(
+            pendingTask,
+            results,
+            callbacks,
+            isMountedRef,
+            () => {
+              setCheckingExistingResult(false);
+              callbacks.onSetCheckingExistingResult(false);
+            },
+            false // 非静默模式：显示加载动画
+          );
+        } else if (results && results.length > 0) {
+          // 没有进行中的任务，但有已有结果，显示结果
           await handleExistingResults(
             results,
             pendingTask,
@@ -91,46 +105,12 @@ export function useExistingResultCheck(
               callbacks.onSetCheckingExistingResult(false);
             }
           );
-          
-          // 已有结果显示后，如果有进行中的任务，静默恢复轮询（不干扰UI）
-          if (pendingTask) {
-            // 延迟处理，确保已有结果已经显示
-            setTimeout(async () => {
-              if (isMounted) {
-                await handlePendingTask(
-                  pendingTask,
-                  results,
-                  callbacks,
-                  isMountedRef,
-                  () => {
-                    // 不改变UI状态，已有结果已经显示了
-                  },
-                  true // 标记为静默模式：不改变UI状态
-                );
-              }
-            }, 100);
-          }
         } else {
-          // 没有找到结果，处理进行中的任务
-          if (pendingTask) {
-            await handlePendingTask(
-              pendingTask,
-              results,
-              callbacks,
-              isMountedRef,
-              () => {
-                setCheckingExistingResult(false);
-                callbacks.onSetCheckingExistingResult(false);
-              },
-              false // 非静默模式：可以改变UI状态
-            );
-          } else {
-            // 没有结果也没有任务
-            handleNoResults(pendingTask, callbacks, isMountedRef, () => {
-              setCheckingExistingResult(false);
-              callbacks.onSetCheckingExistingResult(false);
-            });
-          }
+          // 没有任务也没有结果，显示上传页面
+          handleNoResults(pendingTask, callbacks, isMountedRef, () => {
+            setCheckingExistingResult(false);
+            callbacks.onSetCheckingExistingResult(false);
+          });
         }
       } catch (err) {
         if (!isMounted) {
@@ -201,14 +181,23 @@ async function handlePendingTask(
           return;
         } catch (err) {
           console.error("[VisualAnalysis] 加载已完成任务的结果失败:", err);
+          // 即使加载失败，任务已完成，也应该显示错误而不是加载动画
+          callbacks.onSetError("任务已完成，但加载结果失败，请刷新页面重试");
+          callbacks.onSetComprehensiveLoading(false);
+          onComplete();
+          return;
         }
       }
     } else if (statusResponse.status === "failure") {
       console.log("[VisualAnalysis] 任务已失败，显示错误");
       callbacks.onSetError(statusResponse.error || "分析任务失败");
+      callbacks.onSetComprehensiveLoading(false);
       onComplete();
       return;
     }
+    
+    // 任务仍在进行中（pending 或 started），必须显示加载动画
+    // 即使已有部分结果，也不能显示，因为任务还未完成
 
     // 检查任务是否真的在进行中
     const taskCreatedAt = pendingTask.created_at ? new Date(pendingTask.created_at).getTime() : Date.now();
