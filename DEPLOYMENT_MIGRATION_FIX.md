@@ -35,9 +35,26 @@ cd /root/echo/backend
 ```bash
 # 如果使用虚拟环境，先激活
 source venv/bin/activate  # 或其他虚拟环境路径
+# 或者如果使用 conda
+conda activate backend
 ```
 
-### 4. 检查当前迁移状态
+### 4. 安装缺失的 Python 依赖
+
+如果遇到 `ModuleNotFoundError: No module named 'numpy'` 错误，需要安装依赖：
+
+```bash
+# 安装所有依赖
+pip install -r requirements.txt
+
+# 或者只安装缺失的包
+pip install numpy>=1.24.0,<2.0.0
+pip install opencv-python>=4.8.0,<5.0.0
+pip install scikit-image>=0.21.0,<0.23.0
+pip install scipy>=1.10.0,<2.0.0
+```
+
+### 5. 检查当前迁移状态
 
 ```bash
 python manage.py showmigrations core
@@ -45,7 +62,7 @@ python manage.py showmigrations core
 
 这会显示哪些迁移已应用，哪些未应用。
 
-### 5. 解决迁移冲突（如果出现）
+### 6. 解决迁移冲突（如果出现）
 
 如果遇到以下错误：
 ```
@@ -60,7 +77,7 @@ python manage.py makemigrations --merge
 
 这会创建一个新的合并迁移文件（通常是 `0086_merge_xxxxx.py`），解决两个并行迁移分支的冲突。
 
-### 6. 执行数据库迁移
+### 7. 执行数据库迁移
 
 ```bash
 python manage.py migrate
@@ -75,7 +92,21 @@ python manage.py migrate
 - `0085_remove_highfiveclick_user_delete_highfivecounter_and_more.py` - 删除 HighFive 相关模型（如果存在）
 - 合并迁移（如果创建了）
 
-### 7. 验证迁移成功
+### 8. 修复数据库表结构（如果迁移已应用但字段仍缺失）
+
+如果迁移显示已应用，但数据库表仍然缺少字段，运行修复脚本：
+
+```bash
+python3 fix_is_member_field.py
+```
+
+这个脚本会自动检查并添加所有缺失的字段：
+- `is_member`
+- `membership_expires`
+- `membership_started_at`
+- `featured_artwork_ids`
+
+### 9. 验证迁移成功
 
 ```bash
 # 再次检查迁移状态，应该显示所有迁移都已应用
@@ -93,7 +124,7 @@ print(UserProfile._meta.get_field('is_member'))
 # 应该输出：core.UserProfile.is_member
 ```
 
-### 8. 重启服务（如果需要）
+### 10. 重启服务（如果需要）
 
 如果使用 systemd 或其他进程管理器，重启 Django 服务：
 
