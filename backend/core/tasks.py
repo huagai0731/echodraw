@@ -80,12 +80,53 @@ def analyze_image_comprehensive_task(self, result_id: int, image_url: str, user_
         
         # 保存结果到任务对象
         if task_obj:
-            task_obj.status = ImageAnalysisTask.STATUS_SUCCESS
-            task_obj.progress = 100
-            task_obj.result_data = result_data
-            task_obj.completed_at = timezone.now()
-            task_obj.save(update_fields=['status', 'progress', 'result_data', 'completed_at', 'updated_at'])
-            logger.info(f"任务状态已更新为成功: {task_id}, 结果ID: {result_id}")
+            try:
+                task_obj.status = ImageAnalysisTask.STATUS_SUCCESS
+                task_obj.progress = 100
+                task_obj.result_data = result_data
+                task_obj.completed_at = timezone.now()
+                task_obj.save(update_fields=['status', 'progress', 'result_data', 'completed_at', 'updated_at'])
+                logger.info(f"任务状态已更新为成功: {task_id}, 结果ID: {result_id}")
+            except Exception as save_error:
+                logger.error(f"保存任务状态失败: {task_id}, 错误: {str(save_error)}")
+                # 尝试重新获取任务对象并保存
+                try:
+                    task_obj = ImageAnalysisTask.objects.get(task_id=task_id)
+                    task_obj.status = ImageAnalysisTask.STATUS_SUCCESS
+                    task_obj.progress = 100
+                    task_obj.result_data = result_data
+                    task_obj.completed_at = timezone.now()
+                    task_obj.save()
+                    logger.info(f"重新保存任务状态成功: {task_id}")
+                except Exception as retry_error:
+                    logger.error(f"重新保存任务状态也失败: {task_id}, 错误: {str(retry_error)}")
+        else:
+            # 如果任务对象不存在，尝试创建或更新
+            logger.warning(f"任务对象不存在，尝试创建: {task_id}")
+            try:
+                from django.contrib.auth import get_user_model
+                User = get_user_model()
+                user = User.objects.get(id=user_id)
+                task_obj, created = ImageAnalysisTask.objects.get_or_create(
+                    task_id=task_id,
+                    defaults={
+                        'user': user,
+                        'status': ImageAnalysisTask.STATUS_SUCCESS,
+                        'progress': 100,
+                        'result_data': result_data,
+                        'completed_at': timezone.now(),
+                    }
+                )
+                if not created:
+                    # 如果已存在，更新它
+                    task_obj.status = ImageAnalysisTask.STATUS_SUCCESS
+                    task_obj.progress = 100
+                    task_obj.result_data = result_data
+                    task_obj.completed_at = timezone.now()
+                    task_obj.save()
+                logger.info(f"任务对象已{'创建' if created else '更新'}: {task_id}")
+            except Exception as create_error:
+                logger.error(f"创建/更新任务对象失败: {task_id}, 错误: {str(create_error)}")
         
         logger.info(f"图像分析任务完成: {task_id}, 结果ID: {result_id}")
         return result_data

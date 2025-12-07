@@ -56,8 +56,16 @@ def check_task_status(task_id=None):
                     celery_data = celery_result.result
                     if celery_data and isinstance(celery_data, dict):
                         task_obj.result_data = celery_data
-                except:
-                    pass
+                        result_id = celery_data.get('result_id')
+                        if result_id:
+                            # 验证结果是否存在
+                            try:
+                                result = VisualAnalysisResult.objects.get(id=result_id)
+                                print(f"✓ 验证结果存在: result_id={result_id}")
+                            except VisualAnalysisResult.DoesNotExist:
+                                print(f"⚠️  警告: 结果不存在 result_id={result_id}")
+                except Exception as e:
+                    print(f"⚠️  无法从 Celery 结果获取数据: {e}")
                 task_obj.save()
                 print("✓ 已修复任务状态")
             
