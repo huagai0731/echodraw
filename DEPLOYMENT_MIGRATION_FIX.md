@@ -92,19 +92,23 @@ python manage.py migrate
 - `0085_remove_highfiveclick_user_delete_highfivecounter_and_more.py` - 删除 HighFive 相关模型（如果存在）
 - 合并迁移（如果创建了）
 
-### 8. 修复数据库表结构（如果迁移已应用但字段仍缺失）
+### 8. 修复数据库表结构（如果迁移已应用但表/字段仍缺失）
 
-如果迁移显示已应用，但数据库表仍然缺少字段，运行修复脚本：
+如果迁移显示已应用，但数据库表或字段仍然缺失，运行修复脚本：
 
 ```bash
 python3 fix_is_member_field.py
 ```
 
-这个脚本会自动检查并添加所有缺失的字段：
-- `is_member`
-- `membership_expires`
-- `membership_started_at`
-- `featured_artwork_ids`
+这个脚本会自动检查并修复：
+- **创建 `core_visualanalysisquota` 表**（如果不存在）
+- **添加 UserProfile 表的缺失字段**：
+  - `is_member`
+  - `membership_expires`
+  - `membership_started_at`
+  - `featured_artwork_ids`
+
+脚本会智能检测哪些表和字段已存在，只创建/添加缺失的部分。
 
 ### 9. 验证迁移成功
 
@@ -182,40 +186,41 @@ mysql -u your_username -p your_database_name
 然后执行：
 
 ```sql
--- 检查字段是否存在
-SELECT COUNT(*) 
-FROM INFORMATION_SCHEMA.COLUMNS 
-WHERE TABLE_SCHEMA = DATABASE()
-AND TABLE_NAME = 'core_userprofile'
-AND COLUMN_NAME = 'is_member';
+-- 1. 创建 core_visualanalysisquota 表（如果不存在）
+CREATE TABLE IF NOT EXISTS `core_visualanalysisquota` (
+    `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+    `free_quota` INT UNSIGNED NOT NULL DEFAULT 10,
+    `monthly_quota` INT UNSIGNED NOT NULL DEFAULT 0,
+    `current_month` VARCHAR(7) NOT NULL DEFAULT '',
+    `used_free_quota` INT UNSIGNED NOT NULL DEFAULT 0,
+    `used_monthly_quota` INT UNSIGNED NOT NULL DEFAULT 0,
+    `created_at` DATETIME(6) NOT NULL,
+    `updated_at` DATETIME(6) NOT NULL,
+    `user_id` BIGINT NOT NULL UNIQUE,
+    FOREIGN KEY (`user_id`) REFERENCES `auth_user` (`id`) ON DELETE CASCADE,
+    INDEX `core_visual_user_id_07e9af_idx` (`user_id`),
+    INDEX `core_visual_current_7c4742_idx` (`current_month`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- 如果返回 0，则添加字段
+-- 2. 添加 UserProfile 表的缺失字段
+-- 检查并添加 is_member 字段
 ALTER TABLE `core_userprofile`
-ADD COLUMN `is_member` BOOLEAN NOT NULL DEFAULT 0;
+ADD COLUMN IF NOT EXISTS `is_member` BOOLEAN NOT NULL DEFAULT 0;
 
--- 检查其他可能缺失的字段
-SELECT COLUMN_NAME 
-FROM INFORMATION_SCHEMA.COLUMNS 
-WHERE TABLE_SCHEMA = DATABASE()
-AND TABLE_NAME = 'core_userprofile'
-AND COLUMN_NAME IN ('is_member', 'membership_expires', 'membership_started_at', 'featured_artwork_ids');
-```
-
-如果其他字段也缺失，可以添加：
-
-```sql
 -- 添加 membership_expires 字段（如果缺失）
 ALTER TABLE `core_userprofile`
-ADD COLUMN `membership_expires` DATETIME NULL;
+ADD COLUMN IF NOT EXISTS `membership_expires` DATETIME NULL;
 
 -- 添加 membership_started_at 字段（如果缺失）
 ALTER TABLE `core_userprofile`
-ADD COLUMN `membership_started_at` DATETIME NULL;
+ADD COLUMN IF NOT EXISTS `membership_started_at` DATETIME NULL;
 
 -- 添加 featured_artwork_ids 字段（如果缺失）
 ALTER TABLE `core_userprofile`
-ADD COLUMN `featured_artwork_ids` JSON NOT NULL DEFAULT (JSON_ARRAY());
+ADD COLUMN IF NOT EXISTS `featured_artwork_ids` JSON NOT NULL DEFAULT (JSON_ARRAY());
 ```
+
+**注意**：MySQL 5.7+ 不支持 `IF NOT EXISTS` 语法用于 `ALTER TABLE ADD COLUMN`。如果字段已存在，会报错但可以忽略。建议使用修复脚本（方法1），它会自动检测字段是否存在。
 
 ## 如果迁移失败
 

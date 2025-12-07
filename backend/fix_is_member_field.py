@@ -16,6 +16,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 django.setup()
 
 from django.db import connection
+from django.contrib.auth import get_user_model
 
 
 def check_and_add_field(cursor, field_name, sql):
@@ -48,14 +49,71 @@ def check_and_add_field(cursor, field_name, sql):
         raise
 
 
+def check_table_exists(cursor, table_name):
+    """检查表是否存在"""
+    cursor.execute("""
+        SELECT COUNT(*) 
+        FROM INFORMATION_SCHEMA.TABLES 
+        WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = %s
+    """, [table_name])
+    return cursor.fetchone()[0] > 0
+
+
+def create_visual_analysis_quota_table(cursor):
+    """创建 core_visualanalysisquota 表"""
+    table_name = 'core_visualanalysisquota'
+    
+    if check_table_exists(cursor, table_name):
+        print(f"✓ {table_name} 表已存在")
+        return False
+    
+    # 获取用户表名（通常是 auth_user）
+    User = get_user_model()
+    user_table = User._meta.db_table
+    
+    try:
+        # 创建表
+        cursor.execute(f"""
+            CREATE TABLE `{table_name}` (
+                `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+                `free_quota` INT UNSIGNED NOT NULL DEFAULT 10,
+                `monthly_quota` INT UNSIGNED NOT NULL DEFAULT 0,
+                `current_month` VARCHAR(7) NOT NULL DEFAULT '',
+                `used_free_quota` INT UNSIGNED NOT NULL DEFAULT 0,
+                `used_monthly_quota` INT UNSIGNED NOT NULL DEFAULT 0,
+                `created_at` DATETIME(6) NOT NULL,
+                `updated_at` DATETIME(6) NOT NULL,
+                `user_id` BIGINT NOT NULL UNIQUE,
+                FOREIGN KEY (`user_id`) REFERENCES `{user_table}` (`id`) ON DELETE CASCADE,
+                INDEX `core_visual_user_id_07e9af_idx` (`user_id`),
+                INDEX `core_visual_current_7c4742_idx` (`current_month`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """)
+        print(f"✓ 成功创建 {table_name} 表")
+        return True
+    except Exception as e:
+        # 如果表已存在（并发情况），忽略错误
+        if "already exists" in str(e).lower() or "1050" in str(e):
+            print(f"✓ {table_name} 表已存在（并发创建）")
+            return False
+        print(f"✗ 创建 {table_name} 表时出错: {e}")
+        raise
+
+
 def fix_all_missing_fields():
     """在 core_userprofile 表中添加所有缺失的字段"""
     
     with connection.cursor() as cursor:
-        print("检查并添加缺失的字段...")
+        print("检查并修复数据库结构...")
         print("-" * 50)
         
-        # 需要添加的字段列表
+        # 1. 创建 VisualAnalysisQuota 表（如果不存在）
+        print("1. 检查 VisualAnalysisQuota 表...")
+        table_created = create_visual_analysis_quota_table(cursor)
+        
+        # 2. 添加 UserProfile 表的缺失字段
+        print("\n2. 检查 UserProfile 表的字段...")
         fields_to_add = [
             ('is_member', """
                 ALTER TABLE `core_userprofile`
@@ -81,12 +139,12 @@ def fix_all_missing_fields():
                 added_count += 1
         
         print("-" * 50)
-        if added_count > 0:
-            print(f"✓ 共添加了 {added_count} 个字段")
+        if table_created or added_count > 0:
+            print(f"✓ 修复完成：创建了 {1 if table_created else 0} 个表，添加了 {added_count} 个字段")
         else:
-            print("✓ 所有字段都已存在，无需添加")
+            print("✓ 所有表和字段都已存在，无需修复")
         
-        return added_count
+        return table_created or added_count > 0
 
 
 if __name__ == '__main__':
