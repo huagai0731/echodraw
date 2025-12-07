@@ -14,6 +14,7 @@ import { truncateName } from "@/utils/userUtils";
 import { useHomeMessages } from "@/hooks/useHomeMessages";
 import { useCheckIn } from "@/hooks/useCheckIn";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
+import { getTodayInShanghai } from "@/utils/dateUtils";
 
 import "./HomeScreen.css";
 
@@ -66,6 +67,30 @@ function Home({
   );
 
   const hasContent = copy.historyHeadline || messageLines.length > 0;
+
+  // 获取当前时间用于调试（实时更新）
+  const [currentDateTime, setCurrentDateTime] = useState(() => {
+    const today = getTodayInShanghai();
+    const now = new Date();
+    const hours = String(now.getHours()).padStart(2, "0");
+    const minutes = String(now.getMinutes()).padStart(2, "0");
+    const seconds = String(now.getSeconds()).padStart(2, "0");
+    return `${today} ${hours}:${minutes}:${seconds}`;
+  });
+
+  // 每秒更新一次时间
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const today = getTodayInShanghai();
+      const now = new Date();
+      const hours = String(now.getHours()).padStart(2, "0");
+      const minutes = String(now.getMinutes()).padStart(2, "0");
+      const seconds = String(now.getSeconds()).padStart(2, "0");
+      setCurrentDateTime(`${today} ${hours}:${minutes}:${seconds}`);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="home-screen">
@@ -163,6 +188,25 @@ function Home({
           </button> */}
         </section>
       </main>
+      
+      {/* 调试用：显示当前时间 */}
+      <div style={{
+        position: "fixed",
+        bottom: "8px",
+        right: "8px",
+        fontSize: "12px",
+        color: "rgba(152, 219, 198, 0.7)",
+        fontFamily: "monospace",
+        pointerEvents: "none",
+        userSelect: "none",
+        zIndex: 99999,
+        backgroundColor: "rgba(34, 27, 27, 0.6)",
+        padding: "4px 6px",
+        borderRadius: "4px",
+        border: "1px solid rgba(152, 219, 198, 0.2)",
+      }}>
+        {currentDateTime}
+      </div>
     </div>
   );
 }

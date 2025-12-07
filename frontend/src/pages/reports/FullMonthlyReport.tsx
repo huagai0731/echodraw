@@ -548,13 +548,13 @@ function FullMonthlyReport({ open, onClose, targetMonth, adminUserId }: FullMont
 
   // 确定目标月份
   const effectiveTargetMonth = useMemo(() => {
-    if (targetMonth) return targetMonth;
-    const today = getTodayInShanghai();
-    const todayDate = parseISODateInShanghai(today);
-    if (!todayDate) return "";
-    const year = todayDate.getFullYear();
-    const month = String(todayDate.getMonth() + 1).padStart(2, "0");
-    return `${year}-${month}`;
+    if (targetMonth) {
+      console.log("[FullMonthlyReport] Using targetMonth:", targetMonth);
+      return targetMonth;
+    }
+    // 如果没有targetMonth，返回空字符串（不应该发生，因为组件只在有targetMonth时渲染）
+    console.warn("[FullMonthlyReport] No targetMonth provided, using empty string");
+    return "";
   }, [targetMonth]);
 
   // 匹配月报模板（通用版本，支持传入统计对象）
@@ -646,7 +646,24 @@ function FullMonthlyReport({ open, onClose, targetMonth, adminUserId }: FullMont
 
   // 加载上传数据和模板
   useEffect(() => {
-    if (!open || !effectiveTargetMonth) return;
+    console.log("[FullMonthlyReport] useEffect triggered - open:", open, "targetMonth:", targetMonth, "effectiveTargetMonth:", effectiveTargetMonth);
+    
+    // 如果关闭了，重置状态
+    if (!open) {
+      console.log("[FullMonthlyReport] Component closed, resetting state");
+      setFixedReport(null);
+      setUploads([]);
+      setLoading(false);
+      return;
+    }
+    
+    // 如果打开了但没有targetMonth，等待
+    if (!effectiveTargetMonth) {
+      console.log("[FullMonthlyReport] Waiting for effectiveTargetMonth...");
+      return;
+    }
+    
+    console.log("[FullMonthlyReport] Loading report for:", effectiveTargetMonth);
 
     let cancelled = false;
     setLoading(true);
@@ -1341,11 +1358,11 @@ function FullMonthlyReport({ open, onClose, targetMonth, adminUserId }: FullMont
     };
   }, [exportedImageUrl]);
 
+  const creatorType = getCreatorType();
+
   if (!open) {
     return null;
   }
-
-  const creatorType = getCreatorType();
 
   return (
     <div className="full-monthly-report" role="dialog" aria-modal="true" aria-label="完整月报">

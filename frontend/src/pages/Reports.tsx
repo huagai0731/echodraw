@@ -10,6 +10,7 @@ import WeeklyDoubleTemplateDesigner from "@/pages/reports/WeeklyDoubleTemplateDe
 import MonthlySingleTemplateDesigner from "@/pages/reports/MonthlySingleTemplateDesigner";
 import FourImageTemplateDesigner from "@/pages/reports/FourImageTemplateDesigner";
 import YearlyTemplateDesigner from "@/pages/reports/YearlyTemplateDesigner";
+import FullMonthlyReport from "@/pages/reports/FullMonthlyReport";
 import {
   fetchUserTestResults,
   deleteUserTestResult,
@@ -17,6 +18,7 @@ import {
   hasAuthToken,
   fetchGoalsCalendar,
   fetchVisualAnalysisResults,
+  fetchCurrentUser,
   type UserTestResult,
   type GoalsCalendarDay,
   type VisualAnalysisResultRecord,
@@ -29,6 +31,8 @@ import {
   formatISODateInShanghai,
   parseISODateInShanghai,
   startOfWeekInShanghai,
+  getVisibleMonthlyReports,
+  getTodayInShanghai,
 } from "@/utils/dateUtils";
 import { useCheckInDates } from "@/hooks/useCheckInDates";
 
@@ -52,6 +56,8 @@ type ReportItem = {
   glow: number;
   testResultId?: number;
   visualAnalysisResultId?: number;
+  monthlyReportYear?: number;
+  monthlyReportMonth?: number;
   timestamp?: number;
 };
 
@@ -295,6 +301,13 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ReportItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  
+  // 月报相关状态
+  const [monthlyReportOpen, setMonthlyReportOpen] = useState(false);
+  const [selectedMonthlyReport, setSelectedMonthlyReport] = useState<{
+    year: number;
+    month: number;
+  } | null>(null);
 
   // 趋势相关状态
   const [range, setRange] = useState<RangeKey>("weekly");
@@ -665,9 +678,57 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
     touchStartRef.current = null;
   }, []);
 
+  // 获取用户注册日期
+  const [userRegistrationDate, setUserRegistrationDate] = useState<string | null>(null);
+  
+  useEffect(() => {
+    if (!hasAuthToken()) {
+      setUserRegistrationDate(null);
+      return;
+    }
+    
+    fetchCurrentUser()
+      .then((user) => {
+        // 从 ISO 格式中提取日期部分（YYYY-MM-DD）
+        if (user.date_joined) {
+          const dateStr = user.date_joined.split('T')[0]; // 提取日期部分
+          setUserRegistrationDate(dateStr);
+        } else {
+          setUserRegistrationDate(null);
+        }
+      })
+      .catch((err) => {
+        console.warn("[Reports] Failed to fetch user info:", err);
+        setUserRegistrationDate(null);
+      });
+  }, []);
+  
+  // 获取可见的月报列表
+  const visibleMonthlyReports = useMemo(() => {
+    const reports = getVisibleMonthlyReports(userRegistrationDate);
+    // 调试用：输出可见的月报列表
+    console.log("[Reports] 可见的月报列表:", reports);
+    console.log("[Reports] 当前日期:", getTodayInShanghai());
+    console.log("[Reports] 用户注册日期:", userRegistrationDate);
+    return reports;
+  }, [userRegistrationDate]);
+
   // 构建报告列表
   const reportItems = useMemo<ReportItem[]>(() => {
     const items: ReportItem[] = [];
+
+    // 添加月报卡片
+    visibleMonthlyReports.forEach(({ year, month }, index) => {
+      items.push({
+        id: `monthly-report-${year}-${month}`,
+        title: `${month}月月报`,
+        subtitle: `${year}年${month}月`,
+        glow: (month % 7) + 1,
+        monthlyReportYear: year,
+        monthlyReportMonth: month,
+        timestamp: new Date(year, month - 1, 1).getTime(),
+      });
+    });
 
     // 从测试结果中提取
     testResults.forEach((result, index) => {
@@ -682,7 +743,7 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
         id: `test-result-${result.id}`,
         title: result.test_name,
         subtitle: `${year}年${month}月${day}日 ${hours}:${minutes}`,
-        glow: (index % 7) + 1,
+        glow: ((visibleMonthlyReports.length + index) % 7) + 1,
         testResultId: result.id,
         timestamp: date.getTime(),
       });
@@ -710,7 +771,7 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
 
     // 按时间戳排序，最新的在前
     return items.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-  }, [testResults, visualAnalysisResults]);
+  }, [testResults, visualAnalysisResults, visibleMonthlyReports]);
 
   const unreadReports = useMemo(() => {
     if (!hasAuthToken()) return [];
@@ -747,6 +808,19 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
 
   const handleToggleMenu = useCallback(() => {
     setMenuOpen((prev) => !prev);
+  }, []);
+
+  // 处理打开月报
+  const handleOpenMonthlyReport = useCallback((year: number, month: number) => {
+    console.log("[Reports] Opening monthly report:", year, month);
+    const targetMonthStr = `${year}-${String(month).padStart(2, "0")}`;
+    console.log("[Reports] Target month string:", targetMonthStr);
+    // 先设置selectedMonthlyReport，确保targetMonth有值
+    setSelectedMonthlyReport({ year, month });
+    // 立即打开（React会批量更新，但我们需要确保顺序）
+    // 使用flushSync或者确保状态更新顺序
+    setMonthlyReportOpen(true);
+    console.log("[Reports] Monthly report state updated");
   }, []);
 
   useEffect(() => {
@@ -859,20 +933,24 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
                 <article
                   key={item.id}
                   className={`reports-card reports-card--glow-${item.glow} reports-card--full-width`}
-                  onClick={() => {
-                    if (item.testResultId !== undefined && onOpenTestResult) {
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (item.monthlyReportYear && item.monthlyReportMonth) {
+                      handleOpenMonthlyReport(item.monthlyReportYear, item.monthlyReportMonth);
+                    } else if (item.testResultId !== undefined && onOpenTestResult) {
                       onOpenTestResult(item.testResultId);
                     } else if (item.visualAnalysisResultId !== undefined && onOpenVisualAnalysisResult) {
                       onOpenVisualAnalysisResult(item.visualAnalysisResultId);
                     }
                   }}
-                  style={(item.testResultId !== undefined || item.visualAnalysisResultId !== undefined) ? { cursor: "pointer" } : undefined}
+                  style={(item.monthlyReportYear !== undefined || item.testResultId !== undefined || item.visualAnalysisResultId !== undefined) ? { cursor: "pointer" } : undefined}
                 >
                   <div className="reports-card__body">
                     <p className="reports-card__title">{item.title}</p>
                     <p className="reports-card__subtitle">{item.subtitle}</p>
                   </div>
-                  {(item.testResultId !== undefined || item.visualAnalysisResultId !== undefined) && (
+                  {(item.monthlyReportYear !== undefined || item.testResultId !== undefined || item.visualAnalysisResultId !== undefined) && (
                     <MaterialIcon name="chevron_right" className="reports-card__icon" />
                   )}
                 </article>
@@ -882,6 +960,18 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
             )}
           </div>
         </main>
+
+        {selectedMonthlyReport && (
+          <FullMonthlyReport
+            key={`${selectedMonthlyReport.year}-${selectedMonthlyReport.month}`}
+            open={monthlyReportOpen}
+            onClose={() => {
+              setMonthlyReportOpen(false);
+              setSelectedMonthlyReport(null);
+            }}
+            targetMonth={`${selectedMonthlyReport.year}-${String(selectedMonthlyReport.month).padStart(2, "0")}`}
+          />
+        )}
 
         {showDeleteConfirm && deleteTarget ? (
           <div className="artwork-delete-confirm-overlay" onClick={() => {
@@ -1009,7 +1099,7 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
           </button>
           <div className="reports-collapsible__content">
             <div className="reports-templates-scroll">
-              {TEMPLATE_CARDS.map((card) => (
+              {TEMPLATE_CARDS.slice(0, 3).map((card) => (
                 <button
                   key={card.id}
                   type="button"
@@ -1044,20 +1134,26 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
                   <article
                     key={item.id}
                     className={`reports-card reports-card--glow-${item.glow} reports-card--full-width`}
-                    onClick={() => {
-                      if (item.testResultId !== undefined && onOpenTestResult) {
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (item.monthlyReportYear && item.monthlyReportMonth) {
+                        handleOpenMonthlyReport(item.monthlyReportYear, item.monthlyReportMonth);
+                      } else if (item.testResultId !== undefined && onOpenTestResult) {
                         onOpenTestResult(item.testResultId);
                       } else if (item.visualAnalysisResultId !== undefined && onOpenVisualAnalysisResult) {
                         onOpenVisualAnalysisResult(item.visualAnalysisResultId);
                       }
                     }}
-                    style={(item.testResultId !== undefined || item.visualAnalysisResultId !== undefined) ? { cursor: "pointer" } : undefined}
+                    style={(item.monthlyReportYear !== undefined || item.testResultId !== undefined || item.visualAnalysisResultId !== undefined) ? { cursor: "pointer" } : undefined}
                   >
                     <div className="reports-card__body">
                       <p className="reports-card__title">{item.title}</p>
                       <p className="reports-card__subtitle">{item.subtitle}</p>
                     </div>
-                    <MaterialIcon name="chevron_right" className="reports-card__icon" />
+                    {(item.monthlyReportYear !== undefined || item.testResultId !== undefined || item.visualAnalysisResultId !== undefined) && (
+                      <MaterialIcon name="chevron_right" className="reports-card__icon" />
+                    )}
                   </article>
                 ))}
               </div>
@@ -1290,6 +1386,17 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
       <MonthlySingleTemplateDesigner open={monthlySingleTemplateOpen} artworks={artworks} onClose={() => setMonthlySingleTemplateOpen(false)} />
       <FourImageTemplateDesigner open={fourImageTemplateOpen} artworks={artworks} onClose={() => setFourImageTemplateOpen(false)} />
       <YearlyTemplateDesigner open={yearlyTemplateOpen} artworks={artworks} onClose={() => setYearlyTemplateOpen(false)} />
+      {selectedMonthlyReport && (
+        <FullMonthlyReport
+          key={`${selectedMonthlyReport.year}-${selectedMonthlyReport.month}`}
+          open={monthlyReportOpen}
+          onClose={() => {
+            setMonthlyReportOpen(false);
+            setSelectedMonthlyReport(null);
+          }}
+          targetMonth={`${selectedMonthlyReport.year}-${String(selectedMonthlyReport.month).padStart(2, "0")}`}
+        />
+      )}
     </div>
   );
 }

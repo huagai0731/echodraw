@@ -2976,7 +2976,7 @@ def moods_list(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def monthly_report(request):
-    """获取固定月报数据"""
+    """获取固定月报数据，如果不存在且已到可见日期，则按需生成"""
     year = request.query_params.get("year")
     month = request.query_params.get("month")
     
@@ -2997,6 +2997,21 @@ def monthly_report(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
     
+    # 检查月报是否可见（当前日期 >= 下个月1号）
+    today = get_today_shanghai()
+    if month == 12:
+        visible_date = date(year + 1, 1, 1)
+    else:
+        visible_date = date(year, month + 1, 1)
+    
+    if today < visible_date:
+        # 月报尚未可见，返回不存在
+        return Response({
+            "exists": False,
+            "year": year,
+            "month": month,
+        })
+    
     # 查找固定月报
     try:
         report = MonthlyReport.objects.get(
@@ -3004,39 +3019,56 @@ def monthly_report(request):
             year=year,
             month=month,
         )
-        
-        # 返回月报数据
-        return Response({
-            "exists": True,
-            "year": report.year,
-            "month": report.month,
-            "stats": {
-                "totalUploads": report.total_uploads,
-                "totalHours": report.total_hours,
-                "avgHoursPerUpload": report.avg_hours_per_upload,
-                "avgRating": report.avg_rating,
-                "mostUploadDay": {
-                    "date": report.most_upload_day_date.isoformat() if report.most_upload_day_date else None,
-                    "count": report.most_upload_day_count,
-                } if report.most_upload_day_date else None,
-                "currentStreak": report.current_streak,
-                "longestStreak": report.longest_streak,
-            },
-            "timeDistribution": report.time_distribution,
-            "weeklyDistribution": report.weekly_distribution,
-            "tagStats": report.tag_stats,
-            "heatmapCalendar": report.heatmap_calendar,
-            "uploadIds": report.upload_ids,
-            "reportTexts": report.report_texts,
-            "createdAt": report.created_at.isoformat(),
-        })
     except MonthlyReport.DoesNotExist:
-        # 如果没有固定月报，返回不存在
-        return Response({
-            "exists": False,
-            "year": year,
-            "month": month,
-        })
+        # 如果不存在且已到可见日期，按需生成
+        from core.management.commands.generate_monthly_report import Command
+        
+        try:
+            cmd = Command()
+            report_data = cmd._generate_report_data(request.user, year, month)
+            
+            # 保存到数据库
+            with transaction.atomic():
+                report = MonthlyReport.objects.create(
+                    user=request.user,
+                    year=year,
+                    month=month,
+                    **report_data,
+                )
+        except Exception as e:
+            # 生成失败，返回不存在
+            logger.warning(f"Failed to generate monthly report for user {request.user.id}, year {year}, month {month}: {e}")
+            return Response({
+                "exists": False,
+                "year": year,
+                "month": month,
+            })
+    
+    # 返回月报数据
+    return Response({
+        "exists": True,
+        "year": report.year,
+        "month": report.month,
+        "stats": {
+            "totalUploads": report.total_uploads,
+            "totalHours": report.total_hours,
+            "avgHoursPerUpload": report.avg_hours_per_upload,
+            "avgRating": report.avg_rating,
+            "mostUploadDay": {
+                "date": report.most_upload_day_date.isoformat() if report.most_upload_day_date else None,
+                "count": report.most_upload_day_count,
+            } if report.most_upload_day_date else None,
+            "currentStreak": report.current_streak,
+            "longestStreak": report.longest_streak,
+        },
+        "timeDistribution": report.time_distribution,
+        "weeklyDistribution": report.weekly_distribution,
+        "tagStats": report.tag_stats,
+        "heatmapCalendar": report.heatmap_calendar,
+        "uploadIds": report.upload_ids,
+        "reportTexts": report.report_texts,
+        "createdAt": report.created_at.isoformat(),
+    })
 
 
 @api_view(["GET"])
