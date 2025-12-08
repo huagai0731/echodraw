@@ -138,7 +138,6 @@ function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
         const quotaData = await getVisualAnalysisQuota();
         setQuota(quotaData);
       } catch (err) {
-        console.error("获取视觉分析额度失败:", err);
         // 不显示错误，因为这不是关键功能
       } finally {
         setLoadingQuota(false);
@@ -204,10 +203,8 @@ function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
             throw new Error("结果无效");
           }
           await loadResultWithGrayscaleLevels(savedResult);
-          console.log("[VisualAnalysis] 已加载专业分析结果");
         })
         .catch((err) => {
-          console.error("加载视觉分析结果失败:", err);
           setError("加载保存的结果失败，请稍后重试");
         })
         .finally(() => {
@@ -256,14 +253,13 @@ function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
     setComprehensiveLoading(true);
     setShowComprehensive(true);
     setComprehensiveResults(null);
+    setSavedResultData(null);
     setComprehensiveProgress(0);
     setError(null);
-
-    console.log("[图像分析] 开始分析，图片文件:", fileToAnalyze.name, "大小:", fileToAnalyze.size);
+    setLoading(false);
 
     try {
       const taskResponse = await analyzeImageComprehensive(fileToAnalyze, selectedThreshold);
-      console.log("[专业分析] 任务创建成功:", taskResponse);
 
       if (taskResponse.result_id) {
         setSavedResultId(taskResponse.result_id);
@@ -290,13 +286,12 @@ function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
             setComprehensiveLoading(false);
             setComprehensiveProgress(100);
             setIsViewMode(true);
-            console.log("[图像分析] 任务完成，结果已加载");
             // 刷新额度信息
             try {
               const quotaData = await getVisualAnalysisQuota();
               setQuota(quotaData);
             } catch (err) {
-              console.error("刷新额度信息失败:", err);
+              // Failed to refresh quota
             }
           },
           onError: (err: string) => {
@@ -320,7 +315,6 @@ function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
         throw new Error("未知的响应格式");
       }
     } catch (err) {
-      console.error("图像分析失败:", err);
       let errorMessage = "未知错误";
       if (err instanceof Error) {
         errorMessage = err.message;
@@ -337,6 +331,7 @@ function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
       }
       setError(errorMessage);
       setComprehensiveLoading(false);
+      setLoading(false);
       setShowComprehensive(true);
     }
   }, [imageFile, selectedThreshold, stopPolling, startPolling, loadResultWithGrayscaleLevels, setSavedResultData, processSavedResultUrls, setComprehensiveResults, originalImage, results?.step2Grayscale, isMountedRef, savedResultId, savedResultData]);
@@ -363,7 +358,6 @@ function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
         savedResultIdRef.current = savedResult.id;
         setIsViewMode(true);
       } catch (err) {
-        console.error("[VisualAnalysis] 保存基础结果失败:", err);
         // 不显示错误给用户，因为分析可以继续进行
       }
 
@@ -374,7 +368,6 @@ function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
         }
       }, 100);
     } catch (err) {
-      console.error("图像处理错误:", err);
       setError(err instanceof Error ? err.message : "处理图像时出错");
     } finally {
       setLoading(false);
@@ -405,6 +398,7 @@ function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
     // 清除之前的状态，开始新的分析
     setResults(null);
     setComprehensiveResults(null);
+    setSavedResultData(null);
     setShowComprehensive(true);
     setComprehensiveLoading(true);
     setComprehensiveProgress(0);
@@ -413,6 +407,7 @@ function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
     setCurrentTaskId(null);
     setIsViewMode(false);
     setError(null);
+    setLoading(false);
 
     // 清理之前的轮询
     stopPolling();
@@ -427,7 +422,6 @@ function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
       // 直接调用后端分析API（固定5步流程）- 使用文件而不是 base64
       await handleComprehensiveAnalysis(compressedFile);
     } catch (err) {
-      console.error("图片处理失败:", err);
       // 错误已经在 useImageUpload Hook 中处理
       // 如果压缩失败，尝试使用原始文件继续处理
       if (imageFile) {
@@ -436,9 +430,16 @@ function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
           setOriginalImage(originalDataUrl);
           await handleComprehensiveAnalysis(imageFile);
         } catch (fallbackErr) {
-          console.error("使用原始文件也失败:", fallbackErr);
           setError("图片处理失败，请重新上传");
+          setComprehensiveLoading(false);
+          setLoading(false);
+          setShowComprehensive(false);
         }
+      } else {
+        // 如果没有 imageFile，确保状态被重置
+        setComprehensiveLoading(false);
+        setLoading(false);
+        setShowComprehensive(false);
       }
     }
   }, [imagePreview, imageFile, handleImageConfirm, handleComprehensiveAnalysis, stopPolling, opencvReady]);
@@ -501,6 +502,7 @@ function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
       clearUpload();
       setResults(null);
       setComprehensiveResults(null);
+      setSavedResultData(null);
       setShowComprehensive(false);
       setComprehensiveLoading(false);
       setComprehensiveProgress(0);
@@ -510,10 +512,10 @@ function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
       setIsViewMode(false);
       setError(null);
       setCheckingExistingResult(false);
+      setLoading(false);
 
       stopPolling();
     } catch (err) {
-      console.error("[VisualAnalysis] Failed to delete result:", err);
       if (typeof window !== "undefined" && typeof window.alert === "function") {
         window.alert("删除失败，请稍后重试");
       }
@@ -594,16 +596,9 @@ function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
       </div>
 
       <main className="visual-analysis__content">
-        {checkingExistingResult ? (
-          <div className="visual-analysis__loading">
-            <ArtisticLoader size="medium" text="正在检查已有分析..." />
-          </div>
-        ) : loadingSavedResult ? (
-          <div className="visual-analysis__loading">
-            <ArtisticLoader size="medium" text="正在加载保存的结果..." />
-          </div>
-        ) : comprehensiveLoading && showComprehensive && !originalImage && !results ? (
-          // 如果有进行中的任务但没有基础结果，显示进度条
+        {/* 优先级：进度条 > 检查状态 > 加载保存结果 > 上传页面 */}
+        {comprehensiveLoading && showComprehensive && (currentTaskId || comprehensiveProgress > 0) ? (
+          // 如果有进行中的任务，优先显示进度条（即使还在检查状态）
           <div style={{ marginTop: "2rem" }}>
             <div className="visual-analysis__loading">
               <ArtisticLoader size="medium" text="正在进行专业分析，请稍候..." />
@@ -640,7 +635,15 @@ function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
               )}
             </div>
           </div>
-        ) : !originalImage && !results && !loadingSavedResult && !isViewMode && !savedResultId ? (
+        ) : checkingExistingResult ? (
+          <div className="visual-analysis__loading">
+            <ArtisticLoader size="medium" text="正在检查已有分析..." />
+          </div>
+        ) : loadingSavedResult ? (
+          <div className="visual-analysis__loading">
+            <ArtisticLoader size="medium" text="正在加载保存的结果..." />
+          </div>
+        ) : !originalImage && !results && !loadingSavedResult && !isViewMode && !savedResultId && !savedResultData ? (
           <>
             {quota && (
               <div

@@ -134,6 +134,46 @@ function invertImage(imageDataUrl: string): Promise<string> {
   });
 }
 
+// 辅助函数：加载图片
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    // 如果是base64数据URL，直接加载
+    if (src.startsWith('data:')) {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error(`图片加载失败`));
+      img.src = src;
+      return;
+    }
+    
+    // 如果是URL，先转换为base64以避免CORS问题
+    fetch(src)
+      .then(response => response.blob())
+      .then(blob => {
+        return new Promise<string>((resolveBlob, rejectBlob) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolveBlob(reader.result as string);
+          reader.onerror = rejectBlob;
+          reader.readAsDataURL(blob);
+        });
+      })
+      .then(dataUrl => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error(`图片加载失败`));
+        img.src = dataUrl;
+      })
+      .catch(err => {
+        // 如果fetch失败，尝试直接加载（可能已经设置了CORS）
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error(`图片加载失败: ${src}`));
+        img.src = src;
+      });
+  });
+}
+
 type ComprehensiveAnalysisProps = {
   results?: any;
   basicResults?: any; // 基础分析结果（包含二值化、灰度等）
@@ -188,6 +228,7 @@ function VisualAnalysisComprehensive({
   const [invertedHlsImage, setInvertedHlsImage] = useState<string | null>(null);
   const [modalImage, setModalImage] = useState<{ url: string; alt: string } | null>(null);
   const [expandedGuidance, setExpandedGuidance] = useState<{ [key: number]: boolean }>({});
+  const [savingPage, setSavingPage] = useState<number | null>(null);
 
   // 计算反色的HLS图片（优先使用服务器保存的图片）
   useEffect(() => {
@@ -243,7 +284,7 @@ function VisualAnalysisComprehensive({
     );
   }
 
-  // 第一页：原图+二值化图片+3阶层灰度图片+4阶层灰度图片，四宫格排列，无文字，无缝隙
+  // 第一页：四张图拼在一起（原图、二值化、三阶、四阶）
   const renderPage1 = () => {
     // 获取图片数据（优先使用savedResult，然后是basicResults，最后是comprehensiveData）
     const originalImg = savedResult?.original_image || basicResults?.originalImage;
@@ -257,13 +298,12 @@ function VisualAnalysisComprehensive({
           gridTemplateColumns: "1fr 1fr",
           gap: 0
         }}>
-          <div className="visual-analysis-page-image-item">
-            <h3>原图</h3>
+          <div className="visual-analysis-page-image-item" style={{ padding: 0 }}>
             {originalImg ? (
               <img 
                 src={originalImg} 
                 alt="原图"
-                style={{ cursor: "pointer", borderRadius: 0, border: "none" }}
+                style={{ cursor: "pointer", borderRadius: 0, border: "none", width: "100%", height: "auto", display: "block" }}
                 onClick={() => setModalImage({ url: originalImg, alt: "原图" })}
               />
             ) : (
@@ -273,13 +313,12 @@ function VisualAnalysisComprehensive({
             )}
           </div>
           
-          <div className="visual-analysis-page-image-item">
-            <h3>二阶</h3>
+          <div className="visual-analysis-page-image-item" style={{ padding: 0 }}>
             {binaryImg ? (
               <img 
                 src={binaryImg} 
                 alt="二阶"
-                style={{ cursor: "pointer", borderRadius: 0, border: "none" }}
+                style={{ cursor: "pointer", borderRadius: 0, border: "none", width: "100%", height: "auto", display: "block" }}
                 onClick={() => setModalImage({ url: binaryImg, alt: "二阶" })}
               />
             ) : (
@@ -289,12 +328,12 @@ function VisualAnalysisComprehensive({
             )}
           </div>
           
-          <div className="visual-analysis-page-image-item">
+          <div className="visual-analysis-page-image-item" style={{ padding: 0 }}>
             {grayscale3Img ? (
               <img 
                 src={grayscale3Img} 
                 alt="三阶"
-                style={{ cursor: "pointer", borderRadius: 0, border: "none" }}
+                style={{ cursor: "pointer", borderRadius: 0, border: "none", width: "100%", height: "auto", display: "block" }}
                 onClick={() => setModalImage({ url: grayscale3Img, alt: "三阶" })}
               />
             ) : (
@@ -302,15 +341,14 @@ function VisualAnalysisComprehensive({
                 暂无3阶层灰度图片
               </div>
             )}
-            <h3>三阶</h3>
           </div>
           
-          <div className="visual-analysis-page-image-item">
+          <div className="visual-analysis-page-image-item" style={{ padding: 0 }}>
             {grayscale4Img ? (
               <img 
                 src={grayscale4Img} 
                 alt="四阶"
-                style={{ cursor: "pointer", borderRadius: 0, border: "none" }}
+                style={{ cursor: "pointer", borderRadius: 0, border: "none", width: "100%", height: "auto", display: "block" }}
                 onClick={() => setModalImage({ url: grayscale4Img, alt: "四阶" })}
               />
             ) : (
@@ -318,7 +356,6 @@ function VisualAnalysisComprehensive({
                 暂无4阶层灰度图片
               </div>
             )}
-            <h3>四阶</h3>
           </div>
         </div>
         {renderGuidance(1, guidanceContent[1])}
@@ -326,7 +363,7 @@ function VisualAnalysisComprehensive({
     );
   };
 
-  // 第二页：rgb转明度和lab转视觉明度对比，两张图左右排列
+  // 第二页：棕色背景，两张图并排放，顶部薄荷绿色文字
   const renderPage2 = () => {
     // 获取图片数据（优先使用savedResult，然后是basicResults，最后是comprehensiveData）
     // RGB转明度图：从savedResult的step2_grayscale字段获取（新流程中保存到这里）
@@ -335,40 +372,76 @@ function VisualAnalysisComprehensive({
     
     return (
       <div className="visual-analysis-page">
-        <div className="visual-analysis-page-images" style={{ 
-          gridTemplateColumns: "1fr 1fr",
-          gap: 0
+        <div style={{
+          background: "rgba(74, 63, 58, 1)", // 棕色背景
+          padding: "2rem",
+          borderRadius: "0.5rem"
         }}>
-          <div className="visual-analysis-page-image-item">
-            <h3>RGB转明度</h3>
-            {rgbLuminanceImg ? (
-              <img 
-                src={rgbLuminanceImg} 
-                alt="RGB转明度"
-                style={{ cursor: "pointer", borderRadius: 0, border: "none" }}
-                onClick={() => setModalImage({ url: rgbLuminanceImg, alt: "RGB转明度" })}
-              />
-            ) : (
-              <div style={{ padding: "2rem", textAlign: "center", color: "rgba(239, 234, 231, 0.5)" }}>
-                暂无RGB转明度图片
-              </div>
-            )}
-          </div>
-          
-          <div className="visual-analysis-page-image-item">
-            <h3>LAB转视觉明度</h3>
-            {labLuminanceImg ? (
-              <img 
-                src={labLuminanceImg} 
-                alt="LAB转视觉明度"
-                style={{ cursor: "pointer", borderRadius: 0, border: "none" }}
-                onClick={() => setModalImage({ url: labLuminanceImg, alt: "LAB转视觉明度" })}
-              />
-            ) : (
-              <div style={{ padding: "2rem", textAlign: "center", color: "rgba(239, 234, 231, 0.5)" }}>
-                暂无LAB视觉明度图片
-              </div>
-            )}
+          <div className="visual-analysis-page-images" style={{ 
+            gridTemplateColumns: "1fr 1fr",
+            gap: "2rem"
+          }}>
+            <div className="visual-analysis-page-image-item" style={{ padding: 0 }}>
+              <h3 style={{ 
+                color: "#98dbc6", // 薄荷绿色
+                marginBottom: "1rem",
+                fontSize: "1.2rem",
+                fontWeight: 600
+              }}>
+                RGB转明度
+              </h3>
+              {rgbLuminanceImg ? (
+                <img 
+                  src={rgbLuminanceImg} 
+                  alt="RGB转明度"
+                  style={{ 
+                    cursor: "pointer", 
+                    borderRadius: 0, 
+                    border: "none", 
+                    width: "100%", 
+                    height: "auto", 
+                    display: "block",
+                    objectFit: "contain"
+                  }}
+                  onClick={() => setModalImage({ url: rgbLuminanceImg, alt: "RGB转明度" })}
+                />
+              ) : (
+                <div style={{ padding: "2rem", textAlign: "center", color: "rgba(239, 234, 231, 0.5)" }}>
+                  暂无RGB转明度图片
+                </div>
+              )}
+            </div>
+            
+            <div className="visual-analysis-page-image-item" style={{ padding: 0 }}>
+              <h3 style={{ 
+                color: "#98dbc6", // 薄荷绿色
+                marginBottom: "1rem",
+                fontSize: "1.2rem",
+                fontWeight: 600
+              }}>
+                LAB转视觉明度
+              </h3>
+              {labLuminanceImg ? (
+                <img 
+                  src={labLuminanceImg} 
+                  alt="LAB转视觉明度"
+                  style={{ 
+                    cursor: "pointer", 
+                    borderRadius: 0, 
+                    border: "none", 
+                    width: "100%", 
+                    height: "auto", 
+                    display: "block",
+                    objectFit: "contain"
+                  }}
+                  onClick={() => setModalImage({ url: labLuminanceImg, alt: "LAB转视觉明度" })}
+                />
+              ) : (
+                <div style={{ padding: "2rem", textAlign: "center", color: "rgba(239, 234, 231, 0.5)" }}>
+                  暂无LAB视觉明度图片
+                </div>
+              )}
+            </div>
           </div>
         </div>
         {renderGuidance(2, guidanceContent[2])}
@@ -376,11 +449,11 @@ function VisualAnalysisComprehensive({
     );
   };
 
-  // 第三页：hls转饱和度+lab转视觉明度对比（两张，一张正常hls转饱和度，一张反色），左右排列
-  // 用户可以点击"切换反色"按钮，切换两种hls图
+  // 第三页：四张图拼在一起，每张图右上角标注文字
   const renderPage3 = () => {
     // 获取HLS图片（优先使用savedResult）
     const hlsSImg = savedResult?.step4_hls_s || basicResults?.step4HlsS || comprehensiveData?.step3?.hls_saturation;
+    const originalImg = savedResult?.original_image || basicResults?.originalImage;
     const hlsSInvertedImg = savedResult?.step4_hls_s_inverted || invertedHlsImage || comprehensiveData?.step3?.hls_saturation_inverted;
     const labLImg = savedResult?.step3_lab_l || basicResults?.step3LabL || comprehensiveData?.step2?.lab_luminance;
     
@@ -388,40 +461,34 @@ function VisualAnalysisComprehensive({
       <div className="visual-analysis-page">
         <div className="visual-analysis-page-images" style={{ 
           gridTemplateColumns: "1fr 1fr",
-          gap: 0
+          gap: 0,
+          position: "relative"
         }}>
-          <div className="visual-analysis-page-image-item">
-            <div style={{ 
-              display: "flex", 
-              justifyContent: "space-between", 
-              alignItems: "center",
-              marginBottom: "0.5rem",
-              minHeight: "2rem"
-            }}>
-              <h3 style={{ margin: 0 }}>HLS转饱和度</h3>
-              <button
-                type="button"
-                className="visual-analysis__threshold-button"
-                onClick={() => setHlsInverted(!hlsInverted)}
-                style={{ 
-                  padding: "0.4rem 0.8rem",
-                  fontSize: "0.85rem",
-                  flexShrink: 0
-                }}
-              >
-                切换
-              </button>
-            </div>
+          {/* HLS转饱和度 */}
+          <div className="visual-analysis-page-image-item" style={{ padding: 0, position: "relative" }}>
             {hlsSImg ? (
-              <img 
-                src={hlsInverted && hlsSInvertedImg ? hlsSInvertedImg : hlsSImg} 
-                alt={hlsInverted ? "HLS饱和度（反色）" : "HLS饱和度"}
-                style={{ cursor: "pointer", borderRadius: 0, border: "none" }}
-                onClick={() => setModalImage({ 
-                  url: hlsInverted && hlsSInvertedImg ? hlsSInvertedImg : hlsSImg, 
-                  alt: hlsInverted ? "HLS饱和度（反色）" : "HLS饱和度" 
-                })}
-              />
+              <>
+                <img 
+                  src={hlsSImg} 
+                  alt="HLS转饱和度"
+                  style={{ cursor: "pointer", borderRadius: 0, border: "none", width: "100%", height: "auto", display: "block" }}
+                  onClick={() => setModalImage({ url: hlsSImg, alt: "HLS转饱和度" })}
+                />
+                <div style={{
+                  position: "absolute",
+                  top: "10px",
+                  right: "10px",
+                  background: "rgba(0, 0, 0, 0.7)",
+                  color: "#98dbc6",
+                  padding: "0.5rem 1rem",
+                  borderRadius: "0.25rem",
+                  fontSize: "0.9rem",
+                  fontWeight: 600,
+                  pointerEvents: "none"
+                }}>
+                  HLS转饱和度
+                </div>
+              </>
             ) : (
               <div style={{ padding: "2rem", textAlign: "center", color: "rgba(239, 234, 231, 0.5)" }}>
                 暂无HLS饱和度图片
@@ -429,22 +496,95 @@ function VisualAnalysisComprehensive({
             )}
           </div>
           
-          <div className="visual-analysis-page-image-item">
-            <div style={{ 
-              marginBottom: "0.5rem",
-              minHeight: "2rem",
-              display: "flex",
-              alignItems: "center"
-            }}>
-              <h3 style={{ margin: 0 }}>LAB转视觉明度</h3>
-            </div>
+          {/* 原图 */}
+          <div className="visual-analysis-page-image-item" style={{ padding: 0, position: "relative" }}>
+            {originalImg ? (
+              <>
+                <img 
+                  src={originalImg} 
+                  alt="原图"
+                  style={{ cursor: "pointer", borderRadius: 0, border: "none", width: "100%", height: "auto", display: "block" }}
+                  onClick={() => setModalImage({ url: originalImg, alt: "原图" })}
+                />
+                <div style={{
+                  position: "absolute",
+                  top: "10px",
+                  right: "10px",
+                  background: "rgba(0, 0, 0, 0.7)",
+                  color: "#98dbc6",
+                  padding: "0.5rem 1rem",
+                  borderRadius: "0.25rem",
+                  fontSize: "0.9rem",
+                  fontWeight: 600,
+                  pointerEvents: "none"
+                }}>
+                  原图
+                </div>
+              </>
+            ) : (
+              <div style={{ padding: "2rem", textAlign: "center", color: "rgba(239, 234, 231, 0.5)" }}>
+                暂无原图
+              </div>
+            )}
+          </div>
+          
+          {/* HLS转饱和度的反色 */}
+          <div className="visual-analysis-page-image-item" style={{ padding: 0, position: "relative" }}>
+            {hlsSInvertedImg ? (
+              <>
+                <img 
+                  src={hlsSInvertedImg} 
+                  alt="HLS转饱和度的反色"
+                  style={{ cursor: "pointer", borderRadius: 0, border: "none", width: "100%", height: "auto", display: "block" }}
+                  onClick={() => setModalImage({ url: hlsSInvertedImg, alt: "HLS转饱和度的反色" })}
+                />
+                <div style={{
+                  position: "absolute",
+                  top: "10px",
+                  right: "10px",
+                  background: "rgba(0, 0, 0, 0.7)",
+                  color: "#98dbc6",
+                  padding: "0.5rem 1rem",
+                  borderRadius: "0.25rem",
+                  fontSize: "0.9rem",
+                  fontWeight: 600,
+                  pointerEvents: "none"
+                }}>
+                  HLS转饱和度的反色
+                </div>
+              </>
+            ) : (
+              <div style={{ padding: "2rem", textAlign: "center", color: "rgba(239, 234, 231, 0.5)" }}>
+                暂无HLS饱和度反色图片
+              </div>
+            )}
+          </div>
+          
+          {/* LAB转视觉明度 */}
+          <div className="visual-analysis-page-image-item" style={{ padding: 0, position: "relative" }}>
             {labLImg ? (
-              <img 
-                src={labLImg} 
-                alt="LAB视觉明度"
-                style={{ cursor: "pointer", borderRadius: 0, border: "none" }}
-                onClick={() => setModalImage({ url: labLImg, alt: "LAB视觉明度" })}
-              />
+              <>
+                <img 
+                  src={labLImg} 
+                  alt="LAB转视觉明度"
+                  style={{ cursor: "pointer", borderRadius: 0, border: "none", width: "100%", height: "auto", display: "block" }}
+                  onClick={() => setModalImage({ url: labLImg, alt: "LAB转视觉明度" })}
+                />
+                <div style={{
+                  position: "absolute",
+                  top: "10px",
+                  right: "10px",
+                  background: "rgba(0, 0, 0, 0.7)",
+                  color: "#98dbc6",
+                  padding: "0.5rem 1rem",
+                  borderRadius: "0.25rem",
+                  fontSize: "0.9rem",
+                  fontWeight: 600,
+                  pointerEvents: "none"
+                }}>
+                  LAB转视觉明度
+                </div>
+              </>
             ) : (
               <div style={{ padding: "2rem", textAlign: "center", color: "rgba(239, 234, 231, 0.5)" }}>
                 暂无LAB视觉明度图片
@@ -457,7 +597,7 @@ function VisualAnalysisComprehensive({
     );
   };
 
-  // 第四页：色相图+色相直方图
+  // 第四页：左边色相图，右边色相直方图
   const renderPage4 = () => {
     // 获取图片数据（优先使用savedResult，然后是basicResults，最后是comprehensiveData）
     const hueMapImg = savedResult?.step5_hue || basicResults?.step5Hue || comprehensiveData?.step4?.hue_map;
@@ -467,7 +607,7 @@ function VisualAnalysisComprehensive({
       <div className="visual-analysis-page">
         <div className="visual-analysis-page-images" style={{ 
           gridTemplateColumns: "1fr 1fr",
-          gap: 0
+          gap: "1.5rem"
         }}>
           <div className="visual-analysis-page-image-item">
             <h3>色相图</h3>
@@ -475,7 +615,7 @@ function VisualAnalysisComprehensive({
               <img 
                 src={hueMapImg} 
                 alt="色相图"
-                style={{ cursor: "pointer", borderRadius: 0, border: "none" }}
+                style={{ cursor: "pointer", borderRadius: 0, border: "none", width: "100%", height: "auto" }}
                 onClick={() => setModalImage({ url: hueMapImg, alt: "色相图" })}
               />
             ) : (
@@ -533,7 +673,7 @@ function VisualAnalysisComprehensive({
     );
   };
 
-  // 第五页：K-means 色块分割 + 主色调分析（8色和12色）
+  // 第五页：左右结构，左边8色，右边12色
   const renderPage5 = () => {
     // 获取K-means图片（优先使用savedResult，图片已保存到ImageField字段）
     // 8色：优先使用savedResult的ImageField字段
@@ -541,110 +681,113 @@ function VisualAnalysisComprehensive({
     // 12色：使用savedResult的新ImageField字段（从TOS读取）
     const kmeansImg12 = savedResult?.kmeans_segmentation_image_12 || comprehensiveData?.step5?.kmeans_segmentation_12;
     
-    console.log("[VisualAnalysisComprehensive] 第五页图片数据:", {
-      hasKmeans8: !!kmeansImg8,
-      hasKmeans12: !!kmeansImg12,
-      kmeans8Source: kmeansImg8 ? (savedResult?.kmeans_segmentation_image ? 'savedResult' : 'comprehensiveData') : 'none',
-      kmeans12Source: kmeansImg12 ? (savedResult?.kmeans_segmentation_image_12 ? 'savedResult' : 'comprehensiveData') : 'none',
-      savedResultHasKmeans12: !!savedResult?.kmeans_segmentation_image_12,
-    });
-    
     // 获取主色调数据（优先使用savedResult的comprehensive_analysis）
     // 8色：优先使用新字段，否则使用旧字段（向后兼容）
     const dominantPalette8 = comprehensiveData?.step5?.dominant_palette_8 || comprehensiveData?.step5?.dominant_palette || comprehensiveData?.color_block_structure?.dominant_palette;
     // 12色：使用新字段
     const dominantPalette12 = comprehensiveData?.step5?.dominant_palette_12;
     
-    console.log("[VisualAnalysisComprehensive] 主色调数据:", {
-      hasDominantPalette8: !!dominantPalette8,
-      hasDominantPalette12: !!dominantPalette12,
-      palette8Length: dominantPalette8?.palette?.length || 0,
-      palette12Length: dominantPalette12?.palette?.length || 0,
-      palette8Source: dominantPalette8 ? (
-        comprehensiveData?.step5?.dominant_palette_8 ? 'dominant_palette_8' :
-        comprehensiveData?.step5?.dominant_palette ? 'dominant_palette (old)' :
-        'color_block_structure (old)'
-      ) : 'none',
-    });
-    
-    // 渲染主色调分析的辅助函数
-    const renderPalette = (palette: any, title: string) => {
-      if (!palette) {
-        return (
-          <div style={{ padding: "2rem", textAlign: "center", color: "rgba(239, 234, 231, 0.5)" }}>
-            暂无{title}数据
-          </div>
-        );
-      }
-      return (
-        <div className="visual-analysis-page-image-item">
-          <h3>{title}</h3>
-          <div className="visual-analysis__color-palette">
-            <div className="visual-analysis__color-swatches">
-              {palette.palette?.map((color: number[], index: number) => (
-                <div key={index} className="visual-analysis__color-swatch-container">
-                  <div 
-                    className="visual-analysis__color-swatch"
-                    style={{ backgroundColor: `rgb(${color[0]}, ${color[1]}, ${color[2]})` }}
-                  />
-                  {palette.palette_ratios && (
-                    <div className="visual-analysis__color-swatch-label">
-                      {Math.round(palette.palette_ratios[index] * 100)}%
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      );
-    };
-    
     return (
       <div className="visual-analysis-page">
         <div className="visual-analysis-page-images" style={{ 
-          gridTemplateColumns: "1fr",
+          gridTemplateColumns: "1fr 1fr",
           gap: "1.5rem"
         }}>
-          {/* 8色K-means 色块分割 */}
-          {kmeansImg8 ? (
-            <div className="visual-analysis-page-image-item">
-              <h3>8色 色块分割</h3>
-              <img 
-                src={kmeansImg8} 
-                alt="8色 色块分割"
-                style={{ cursor: "pointer" }}
-                onClick={() => setModalImage({ url: kmeansImg8, alt: "8色 色块分割" })}
-              />
-            </div>
-          ) : (
-            <div style={{ padding: "2rem", textAlign: "center", color: "rgba(239, 234, 231, 0.5)" }}>
-              暂无8色K-means色块分割图片
-            </div>
-          )}
+          {/* 左边：8色 */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+            {/* 8色K-means 色块分割 */}
+            {kmeansImg8 ? (
+              <div className="visual-analysis-page-image-item">
+                <h3>8色 色块分割</h3>
+                <img 
+                  src={kmeansImg8} 
+                  alt="8色 色块分割"
+                  style={{ cursor: "pointer", width: "100%", height: "auto" }}
+                  onClick={() => setModalImage({ url: kmeansImg8, alt: "8色 色块分割" })}
+                />
+              </div>
+            ) : (
+              <div style={{ padding: "2rem", textAlign: "center", color: "rgba(239, 234, 231, 0.5)" }}>
+                暂无8色K-means色块分割图片
+              </div>
+            )}
+            
+            {/* 8色主色调分析 */}
+            {dominantPalette8 ? (
+              <div className="visual-analysis-page-image-item">
+                <h3>8色主色调</h3>
+                <div className="visual-analysis__color-palette">
+                  <div className="visual-analysis__color-swatches">
+                    {dominantPalette8.palette?.map((color: number[], index: number) => (
+                      <div key={index} className="visual-analysis__color-swatch-container">
+                        <div 
+                          className="visual-analysis__color-swatch"
+                          style={{ backgroundColor: `rgb(${color[0]}, ${color[1]}, ${color[2]})` }}
+                        />
+                        {dominantPalette8.palette_ratios && (
+                          <div className="visual-analysis__color-swatch-label">
+                            {Math.round(dominantPalette8.palette_ratios[index]! * 100)}%
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ padding: "2rem", textAlign: "center", color: "rgba(239, 234, 231, 0.5)" }}>
+                暂无8色主色调数据
+              </div>
+            )}
+          </div>
           
-          {/* 8色主色调分析 */}
-          {renderPalette(dominantPalette8, "8色主色调")}
-          
-          {/* 12色K-means 色块分割 */}
-          {kmeansImg12 ? (
-            <div className="visual-analysis-page-image-item">
-              <h3>12色 色块分割</h3>
-              <img 
-                src={kmeansImg12} 
-                alt="12色 色块分割"
-                style={{ cursor: "pointer" }}
-                onClick={() => setModalImage({ url: kmeansImg12, alt: "12色 色块分割" })}
-              />
-            </div>
-          ) : (
-            <div style={{ padding: "2rem", textAlign: "center", color: "rgba(239, 234, 231, 0.5)" }}>
-              暂无12色K-means色块分割图片
-            </div>
-          )}
-          
-          {/* 12色主色调分析 */}
-          {renderPalette(dominantPalette12, "12色主色调")}
+          {/* 右边：12色 */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+            {/* 12色K-means 色块分割 */}
+            {kmeansImg12 ? (
+              <div className="visual-analysis-page-image-item">
+                <h3>12色 色块分割</h3>
+                <img 
+                  src={kmeansImg12} 
+                  alt="12色 色块分割"
+                  style={{ cursor: "pointer", width: "100%", height: "auto" }}
+                  onClick={() => setModalImage({ url: kmeansImg12, alt: "12色 色块分割" })}
+                />
+              </div>
+            ) : (
+              <div style={{ padding: "2rem", textAlign: "center", color: "rgba(239, 234, 231, 0.5)" }}>
+                暂无12色K-means色块分割图片
+              </div>
+            )}
+            
+            {/* 12色主色调分析 */}
+            {dominantPalette12 ? (
+              <div className="visual-analysis-page-image-item">
+                <h3>12色主色调</h3>
+                <div className="visual-analysis__color-palette">
+                  <div className="visual-analysis__color-swatches">
+                    {dominantPalette12.palette?.map((color: number[], index: number) => (
+                      <div key={index} className="visual-analysis__color-swatch-container">
+                        <div 
+                          className="visual-analysis__color-swatch"
+                          style={{ backgroundColor: `rgb(${color[0]}, ${color[1]}, ${color[2]})` }}
+                        />
+                        {dominantPalette12.palette_ratios && (
+                          <div className="visual-analysis__color-swatch-label">
+                            {Math.round(dominantPalette12.palette_ratios[index]! * 100)}%
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ padding: "2rem", textAlign: "center", color: "rgba(239, 234, 231, 0.5)" }}>
+                暂无12色主色调数据
+              </div>
+            )}
+          </div>
         </div>
 
         {renderGuidance(5, guidanceContent[5])}
@@ -679,16 +822,360 @@ function VisualAnalysisComprehensive({
     );
   };
 
+  // 生成每页图片的函数
+  const generatePageImage = async (pageNumber: number): Promise<string> => {
+    setSavingPage(pageNumber);
+    try {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        throw new Error("无法创建canvas上下文");
+      }
+
+      // 设置canvas尺寸（A4比例，宽度2000px）
+      const canvasWidth = 2000;
+      const canvasHeight = 2800; // A4比例
+      canvas.width = canvasWidth;
+      canvas.height = canvasHeight;
+
+      // 根据页面号生成不同的内容
+      if (pageNumber === 1) {
+        // 第一页：四张图拼在一起（原图、二值化、三阶、四阶）
+        const originalImg = savedResult?.original_image || basicResults?.originalImage;
+        const binaryImg = savedResult?.step1_binary || basicResults?.step1Binary || comprehensiveData?.step1?.binary;
+        const grayscale3Img = savedResult?.step2_grayscale_3_level || basicResults?.step2Grayscale3Level || comprehensiveData?.step1?.grayscale_3_level;
+        const grayscale4Img = savedResult?.step2_grayscale_4_level || basicResults?.step2Grayscale4Level || comprehensiveData?.step1?.grayscale_4_level;
+
+        const images = [originalImg, binaryImg, grayscale3Img, grayscale4Img].filter(Boolean);
+        if (images.length === 0) throw new Error("没有可用的图片");
+
+        const gridCols = 2;
+        const gridRows = 2;
+        const cellWidth = canvasWidth / gridCols;
+        const cellHeight = canvasHeight / gridRows;
+
+        for (let i = 0; i < images.length && i < 4; i++) {
+          const img = await loadImage(images[i]!);
+          const col = i % gridCols;
+          const row = Math.floor(i / gridCols);
+          const x = col * cellWidth;
+          const y = row * cellHeight;
+          
+          // 计算图片缩放以填充单元格
+          const scale = Math.min(cellWidth / img.width, cellHeight / img.height);
+          const scaledWidth = img.width * scale;
+          const scaledHeight = img.height * scale;
+          const offsetX = (cellWidth - scaledWidth) / 2;
+          const offsetY = (cellHeight - scaledHeight) / 2;
+          
+          ctx.drawImage(img, x + offsetX, y + offsetY, scaledWidth, scaledHeight);
+        }
+      } else if (pageNumber === 2) {
+        // 第二页：棕色背景，两张图并排放，顶部薄荷绿色文字
+        ctx.fillStyle = "rgba(74, 63, 58, 1)"; // 棕色背景
+        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+        const rgbLuminanceImg = savedResult?.step2_grayscale || comprehensiveData?.step2?.rgb_luminance;
+        const labLuminanceImg = savedResult?.step3_lab_l || basicResults?.step3LabL || comprehensiveData?.step2?.lab_luminance;
+
+        const padding = 100;
+        const topPadding = 150;
+        const textHeight = 80;
+        const imageAreaHeight = canvasHeight - topPadding - textHeight - padding * 2;
+        const imageAreaWidth = (canvasWidth - padding * 3) / 2;
+
+        // 绘制文字
+        ctx.fillStyle = "#98dbc6"; // 薄荷绿色
+        ctx.font = "bold 60px 'Manrope', sans-serif";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "top";
+
+        if (rgbLuminanceImg) {
+          ctx.fillText("RGB转明度", padding, topPadding);
+        }
+        if (labLuminanceImg) {
+          ctx.fillText("LAB转视觉明度", padding * 2 + imageAreaWidth, topPadding);
+        }
+
+        // 绘制图片
+        const imageY = topPadding + textHeight + padding;
+        
+        if (rgbLuminanceImg) {
+          const img = await loadImage(rgbLuminanceImg);
+          const scale = Math.min(imageAreaWidth / img.width, imageAreaHeight / img.height);
+          const scaledWidth = img.width * scale;
+          const scaledHeight = img.height * scale;
+          const offsetX = (imageAreaWidth - scaledWidth) / 2;
+          const offsetY = (imageAreaHeight - scaledHeight) / 2;
+          ctx.drawImage(img, padding + offsetX, imageY + offsetY, scaledWidth, scaledHeight);
+        }
+
+        if (labLuminanceImg) {
+          const img = await loadImage(labLuminanceImg);
+          const scale = Math.min(imageAreaWidth / img.width, imageAreaHeight / img.height);
+          const scaledWidth = img.width * scale;
+          const scaledHeight = img.height * scale;
+          const offsetX = (imageAreaWidth - scaledWidth) / 2;
+          const offsetY = (imageAreaHeight - scaledHeight) / 2;
+          ctx.drawImage(img, padding * 2 + imageAreaWidth + offsetX, imageY + offsetY, scaledWidth, scaledHeight);
+        }
+      } else if (pageNumber === 3) {
+        // 第三页：四张图拼在一起，每张图右上角标注文字
+        const hlsSImg = savedResult?.step4_hls_s || basicResults?.step4HlsS || comprehensiveData?.step3?.hls_saturation;
+        const originalImg = savedResult?.original_image || basicResults?.originalImage;
+        const hlsSInvertedImg = savedResult?.step4_hls_s_inverted || invertedHlsImage || comprehensiveData?.step3?.hls_saturation_inverted;
+        const labLImg = savedResult?.step3_lab_l || basicResults?.step3LabL || comprehensiveData?.step2?.lab_luminance;
+
+        const images = [
+          { img: hlsSImg, label: "HLS转饱和度" },
+          { img: originalImg, label: "原图" },
+          { img: hlsSInvertedImg, label: "HLS转饱和度的反色" },
+          { img: labLImg, label: "LAB转视觉明度" }
+        ].filter(item => item.img);
+
+        if (images.length === 0) throw new Error("没有可用的图片");
+
+        const gridCols = 2;
+        const gridRows = 2;
+        const cellWidth = canvasWidth / gridCols;
+        const cellHeight = canvasHeight / gridRows;
+
+        for (let i = 0; i < images.length && i < 4; i++) {
+          const { img: imgSrc, label } = images[i]!;
+          const img = await loadImage(imgSrc!);
+          const col = i % gridCols;
+          const row = Math.floor(i / gridCols);
+          const x = col * cellWidth;
+          const y = row * cellHeight;
+          
+          // 计算图片缩放以填充单元格
+          const scale = Math.min(cellWidth / img.width, cellHeight / img.height);
+          const scaledWidth = img.width * scale;
+          const scaledHeight = img.height * scale;
+          const offsetX = (cellWidth - scaledWidth) / 2;
+          const offsetY = (cellHeight - scaledHeight) / 2;
+          
+          ctx.drawImage(img, x + offsetX, y + offsetY, scaledWidth, scaledHeight);
+          
+          // 在右上角绘制文字
+          ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+          ctx.fillRect(x + cellWidth - 400, y + 20, 380, 60);
+          ctx.fillStyle = "#98dbc6";
+          ctx.font = "bold 40px 'Manrope', sans-serif";
+          ctx.textAlign = "right";
+          ctx.textBaseline = "top";
+          ctx.fillText(label, x + cellWidth - 20, y + 30);
+        }
+      } else if (pageNumber === 4) {
+        // 第四页：左边色相图，右边色相直方图
+        const hueMapImg = savedResult?.step5_hue || basicResults?.step5Hue || comprehensiveData?.step4?.hue_map;
+        const hueHistogram = comprehensiveData?.step4?.hue_histogram || comprehensiveData?.color_quality?.hue_distribution?.hue_histogram;
+
+        const padding = 50;
+        const leftWidth = (canvasWidth - padding * 3) / 2;
+        const rightWidth = (canvasWidth - padding * 3) / 2;
+        const imageHeight = canvasHeight - padding * 2;
+
+        // 左边：色相图
+        if (hueMapImg) {
+          const img = await loadImage(hueMapImg);
+          const scale = Math.min(leftWidth / img.width, imageHeight / img.height);
+          const scaledWidth = img.width * scale;
+          const scaledHeight = img.height * scale;
+          const offsetX = (leftWidth - scaledWidth) / 2;
+          const offsetY = (imageHeight - scaledHeight) / 2;
+          ctx.drawImage(img, padding + offsetX, padding + offsetY, scaledWidth, scaledHeight);
+        }
+
+        // 右边：色相直方图
+        if (hueHistogram && Array.isArray(hueHistogram)) {
+          const histogramWidth = rightWidth - 100;
+          const histogramHeight = imageHeight - 200;
+          const barWidth = histogramWidth / hueHistogram.length;
+          const maxValue = Math.max(...hueHistogram);
+          const x = padding * 2 + leftWidth + 50;
+          const y = padding + 100;
+
+          // 绘制背景
+          ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
+          ctx.fillRect(x, y, histogramWidth, histogramHeight);
+
+          // 绘制柱状图
+          for (let i = 0; i < hueHistogram.length; i++) {
+            const value = hueHistogram[i]!;
+            const barHeight = maxValue > 0 ? (value / maxValue) * histogramHeight : 0;
+            const hue = (i * 10 + 5) / 360;
+            const rgb = hslToRgb(hue, 1, 0.5);
+            ctx.fillStyle = `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+            ctx.fillRect(
+              x + i * barWidth,
+              y + histogramHeight - barHeight,
+              barWidth - 1,
+              barHeight
+            );
+          }
+        }
+      } else if (pageNumber === 5) {
+        // 第五页：左右结构，8色和12色色块分割图及主色调
+        const kmeansImg8 = savedResult?.kmeans_segmentation_image || comprehensiveData?.step5?.kmeans_segmentation_8 || comprehensiveData?.step5?.kmeans_segmentation;
+        const kmeansImg12 = savedResult?.kmeans_segmentation_image_12 || comprehensiveData?.step5?.kmeans_segmentation_12;
+        const dominantPalette8 = comprehensiveData?.step5?.dominant_palette_8 || comprehensiveData?.step5?.dominant_palette || comprehensiveData?.color_block_structure?.dominant_palette;
+        const dominantPalette12 = comprehensiveData?.step5?.dominant_palette_12;
+
+        const padding = 50;
+        const leftWidth = (canvasWidth - padding * 3) / 2;
+        const rightWidth = (canvasWidth - padding * 3) / 2;
+        const imageHeight = (canvasHeight - padding * 3) / 2;
+        const paletteHeight = (canvasHeight - padding * 3) / 2;
+
+        // 左边：8色
+        let currentY = padding;
+        if (kmeansImg8) {
+          const img = await loadImage(kmeansImg8);
+          const scale = Math.min(leftWidth / img.width, imageHeight / img.height);
+          const scaledWidth = img.width * scale;
+          const scaledHeight = img.height * scale;
+          const offsetX = (leftWidth - scaledWidth) / 2;
+          const offsetY = (imageHeight - scaledHeight) / 2;
+          ctx.drawImage(img, padding + offsetX, currentY + offsetY, scaledWidth, scaledHeight);
+        }
+        currentY += imageHeight + padding;
+
+        // 8色主色调
+        if (dominantPalette8?.palette) {
+          const palette = dominantPalette8.palette;
+          const ratios = dominantPalette8.palette_ratios || [];
+          const swatchSize = 80;
+          const swatchSpacing = 20;
+          const totalWidth = palette.length * (swatchSize + swatchSpacing) - swatchSpacing;
+          let startX = padding + (leftWidth - totalWidth) / 2;
+
+          for (let i = 0; i < palette.length; i++) {
+            const color = palette[i]!;
+            const x = startX + i * (swatchSize + swatchSpacing);
+            const y = currentY + 50;
+
+            // 绘制色块
+            ctx.fillStyle = `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
+            ctx.fillRect(x, y, swatchSize, swatchSize);
+
+            // 绘制比例文字
+            ctx.fillStyle = "#efeae7";
+            ctx.font = "bold 30px 'Manrope', sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "top";
+            const ratio = ratios[i] ? Math.round(ratios[i]! * 100) : 0;
+            ctx.fillText(`${ratio}%`, x + swatchSize / 2, y + swatchSize + 10);
+          }
+        }
+
+        // 右边：12色
+        currentY = padding;
+        if (kmeansImg12) {
+          const img = await loadImage(kmeansImg12);
+          const scale = Math.min(rightWidth / img.width, imageHeight / img.height);
+          const scaledWidth = img.width * scale;
+          const scaledHeight = img.height * scale;
+          const offsetX = (rightWidth - scaledWidth) / 2;
+          const offsetY = (imageHeight - scaledHeight) / 2;
+          ctx.drawImage(img, padding * 2 + leftWidth + offsetX, currentY + offsetY, scaledWidth, scaledHeight);
+        }
+        currentY += imageHeight + padding;
+
+        // 12色主色调
+        if (dominantPalette12?.palette) {
+          const palette = dominantPalette12.palette;
+          const ratios = dominantPalette12.palette_ratios || [];
+          const swatchSize = 60;
+          const swatchSpacing = 15;
+          const totalWidth = palette.length * (swatchSize + swatchSpacing) - swatchSpacing;
+          let startX = padding * 2 + leftWidth + (rightWidth - totalWidth) / 2;
+
+          for (let i = 0; i < palette.length; i++) {
+            const color = palette[i]!;
+            const x = startX + i * (swatchSize + swatchSpacing);
+            const y = currentY + 50;
+
+            // 绘制色块
+            ctx.fillStyle = `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
+            ctx.fillRect(x, y, swatchSize, swatchSize);
+
+            // 绘制比例文字
+            ctx.fillStyle = "#efeae7";
+            ctx.font = "bold 24px 'Manrope', sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "top";
+            const ratio = ratios[i] ? Math.round(ratios[i]! * 100) : 0;
+            ctx.fillText(`${ratio}%`, x + swatchSize / 2, y + swatchSize + 10);
+          }
+        }
+      }
+
+      return canvas.toDataURL("image/png");
+    } catch (error) {
+      console.error(`生成第${pageNumber}页图片失败:`, error);
+      throw error;
+    } finally {
+      setSavingPage(null);
+    }
+  };
+
+  // 处理保存本页内容
+  const handleSavePage = async (pageNumber: number) => {
+    try {
+      const imageDataUrl = await generatePageImage(pageNumber);
+      setModalImage({ url: imageDataUrl, alt: `第${pageNumber}页内容` });
+    } catch (error) {
+      console.error("保存页面失败:", error);
+      alert("生成图片失败，请稍后重试");
+    }
+  };
+
   // 解读说明组件
   const renderGuidance = (pageNumber: number, content: string) => {
     const isExpanded = expandedGuidance[pageNumber] || false;
     
     return (
-      <div style={{ 
-        marginTop: "1.5rem", 
-        paddingTop: "1.5rem",
-        borderTop: "1px solid rgba(152, 219, 198, 0.2)"
-      }}>
+      <div>
+        {/* 保存本页内容按钮 */}
+        <div style={{
+          marginTop: "1.5rem",
+          marginBottom: "1.5rem",
+          display: "flex",
+          justifyContent: "center"
+        }}>
+          <button
+            type="button"
+            className="visual-analysis__threshold-button"
+            onClick={() => handleSavePage(pageNumber)}
+            disabled={savingPage === pageNumber}
+            style={{
+              padding: "0.75rem 2rem",
+              fontSize: "1rem",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem"
+            }}
+          >
+            {savingPage === pageNumber ? (
+              <>
+                <MaterialIcon name="hourglass_empty" style={{ animation: "spin 1s linear infinite" }} />
+                正在生成...
+              </>
+            ) : (
+              <>
+                <MaterialIcon name="save" />
+                保存本页内容
+              </>
+            )}
+          </button>
+        </div>
+        
+        {/* 分割线和解读说明 */}
+        <div style={{ 
+          paddingTop: "1.5rem",
+          borderTop: "1px solid rgba(152, 219, 198, 0.2)"
+        }}>
         <button
           type="button"
           onClick={() => setExpandedGuidance(prev => ({ ...prev, [pageNumber]: !prev[pageNumber] }))}
@@ -750,6 +1237,7 @@ function VisualAnalysisComprehensive({
             )}
           </div>
         )}
+        </div>
       </div>
     );
   };

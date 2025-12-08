@@ -829,10 +829,11 @@ class ShortTermGoalSerializer(serializers.ModelSerializer):
             "plan_type",
             "schedule",
             "status",
+            "started_at",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "created_at", "updated_at"]
+        read_only_fields = ["id", "started_at", "created_at", "updated_at"]
 
     def validate_title(self, value: str) -> str:
         text = (value or "").strip()

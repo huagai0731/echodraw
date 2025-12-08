@@ -22,7 +22,7 @@ export function loadStoredAuth(): StoredAuthPayload | null {
       return parsed;
     }
   } catch (error) {
-    console.warn("[Echo] Failed to parse stored auth payload:", error);
+    // Failed to parse stored auth payload
   }
   return null;
 }
@@ -39,7 +39,7 @@ export function storeAuth(payload: StoredAuthPayload | null) {
       window.localStorage.removeItem(AUTH_STORAGE_KEY);
     }
   } catch (error) {
-    console.warn("[Echo] Failed to persist auth payload:", error);
+    // Failed to persist auth payload
   }
 }
 
@@ -47,6 +47,7 @@ export function getActiveUserEmail(): string | null {
   const payload = loadStoredAuth();
   return payload?.user?.email ?? null;
 }
+
 
 
 

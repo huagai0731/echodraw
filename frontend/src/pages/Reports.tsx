@@ -352,7 +352,6 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
       if (results.status === 'fulfilled') {
         setTestResults(results.value);
       } else {
-        console.warn("[Reports] Failed to load test results:", results.reason);
         setTestResults([]);
       }
 
@@ -360,7 +359,6 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
       if (visualResults.status === 'fulfilled') {
         setVisualAnalysisResults(visualResults.value);
       } else {
-        console.warn("[Reports] Failed to load visual analysis results:", visualResults.reason);
         setVisualAnalysisResults([]);
       }
       
@@ -411,11 +409,10 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
             setTestResults(data.testResults || []);
             setVisualAnalysisResults(data.visualAnalysisResults || []);
             setReportsLoading(false);
-            console.log("[Reports] 使用缓存数据，立即显示（后台会更新）");
           }
         }
       } catch (err) {
-        console.warn("[Reports] 读取缓存失败:", err);
+        // Failed to read cache
       }
     }
   }, []);
@@ -433,7 +430,7 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
             timestamp: Date.now(),
           }));
         } catch (err) {
-          console.warn("[Reports] 保存缓存失败:", err);
+          // Failed to save cache
         }
       }
     }
@@ -476,7 +473,6 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
         setCalendarError(null);
       } catch (error) {
         if (!isMounted) return;
-        console.warn("Failed to load goals calendar", error);
         setCalendarDays([]);
         setCalendarError("获取打卡记录失败，请稍后重试。");
       } finally {
@@ -720,7 +716,6 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
         }
       })
       .catch((err) => {
-        console.warn("[Reports] Failed to fetch user info:", err);
         setUserRegistrationDate(null);
       });
   }, []);
@@ -728,10 +723,6 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
   // 获取可见的月报列表
   const visibleMonthlyReports = useMemo(() => {
     const reports = getVisibleMonthlyReports(userRegistrationDate);
-    // 调试用：输出可见的月报列表
-    console.log("[Reports] 可见的月报列表:", reports);
-    console.log("[Reports] 当前日期:", getTodayInShanghai());
-    console.log("[Reports] 用户注册日期:", userRegistrationDate);
     return reports;
   }, [userRegistrationDate]);
 
@@ -806,15 +797,12 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
 
   // 处理打开月报
   const handleOpenMonthlyReport = useCallback((year: number, month: number) => {
-    console.log("[Reports] Opening monthly report:", year, month);
     const targetMonthStr = `${year}-${String(month).padStart(2, "0")}`;
-    console.log("[Reports] Target month string:", targetMonthStr);
     // 先设置selectedMonthlyReport，确保targetMonth有值
     setSelectedMonthlyReport({ year, month });
     // 立即打开（React会批量更新，但我们需要确保顺序）
     // 使用flushSync或者确保状态更新顺序
     setMonthlyReportOpen(true);
-    console.log("[Reports] Monthly report state updated");
   }, []);
 
 

@@ -1673,9 +1673,14 @@ def start_short_term_goal(request, goal_id):
             status=status.HTTP_400_BAD_REQUEST,
         )
     
-    # 更新状态为active
+    # 更新状态为active，并记录启动时间
     goal.status = ShortTermGoal.STATUS_ACTIVE
-    goal.save(update_fields=["status"])
+    # 如果 started_at 为空，记录当前时间作为启动时间
+    if goal.started_at is None:
+        goal.started_at = timezone.now()
+        goal.save(update_fields=["status", "started_at"])
+    else:
+        goal.save(update_fields=["status"])
     
     # 序列化并返回
     serializer = ShortTermGoalSerializer(goal)

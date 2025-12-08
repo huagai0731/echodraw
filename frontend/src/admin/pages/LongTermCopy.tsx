@@ -137,7 +137,6 @@ function readLocalCopies(): AdminLongTermCopy[] {
     }
     return mapped;
   } catch (error) {
-    console.warn("[Admin] Failed to read local long-term copies", error);
     return [];
   }
 }
@@ -158,7 +157,7 @@ function persistLocalCopies(copies: AdminLongTermCopy[]) {
   try {
     window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(payload));
   } catch (error) {
-    console.warn("[Admin] Failed to persist local long-term copies", error);
+    // Failed to persist local long-term copies
   }
 }
 

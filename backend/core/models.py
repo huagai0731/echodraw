@@ -556,6 +556,11 @@ class ShortTermGoal(models.Model):
         default=STATUS_SAVED,
         help_text="目标状态：已保存未进行、进行中、已完成。",
     )
+    started_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="目标启动时间，当状态从saved变为active时记录。",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

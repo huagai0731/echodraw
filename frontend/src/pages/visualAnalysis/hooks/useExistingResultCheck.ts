@@ -46,7 +46,6 @@ export function useExistingResultCheck(
   useEffect(() => {
     if (resultId) {
       // 如果提供了resultId，不需要检查
-      console.log("[VisualAnalysis] 提供了 resultId，跳过检查:", resultId);
       setCheckingExistingResult(false);
       callbacks.onSetCheckingExistingResult(false);
       return;
@@ -55,49 +54,90 @@ export function useExistingResultCheck(
     let isMounted = true;
 
     async function checkExistingResult() {
-      console.log("[VisualAnalysis] 开始检查已有结果和进行中的任务...");
+      // 添加超时机制，避免长时间阻塞（最多等待10秒）
+      const timeoutPromise = new Promise<null>((resolve) => {
+        setTimeout(() => resolve(null), 10000);
+      });
+
       try {
-        // 并行执行：同时检查进行中的任务和已有结果
-        const [pendingTaskResponse, results] = await Promise.all([
-          getPendingImageAnalysisTask().catch((err) => {
-            console.warn("[VisualAnalysis] 查询进行中任务失败:", err);
-            return { task: null };
-          }),
-          fetchVisualAnalysisResults().catch((err) => {
-            console.warn("[VisualAnalysis] 查询结果列表失败:", err);
-            return [];
-          }),
+        // 优化：先快速检查进行中的任务，如果发现任务，立即显示进度条
+        // 这样可以避免用户看到"正在检查已有分析..."的提示
+        const pendingTaskPromise = getPendingImageAnalysisTask().catch((err) => {
+          return { task: null };
+        });
+
+        // 先检查任务（优先级最高）
+        const pendingTaskResponse = await Promise.race([
+          pendingTaskPromise,
+          timeoutPromise.then(() => ({ task: null })),
         ]);
 
         if (!isMounted) {
-          console.log("[VisualAnalysis] 组件已卸载，取消检查");
           return;
         }
 
         const pendingTask = pendingTaskResponse?.task || null;
 
-        // 获取用户的分析结果列表
-        console.log("[VisualAnalysis] 获取到结果列表:", results?.length || 0, "个结果");
-        
-        // 优先级：进行中的任务 > 已有结果 > 上传页面
-        // 如果有进行中的任务，优先显示加载动画（不管是否有部分结果）
+        // 如果发现进行中的任务，立即显示进度条，不再显示"正在检查已有分析..."
         if (pendingTask) {
+          // 立即停止显示检查状态，开始显示进度条
+          setCheckingExistingResult(false);
+          callbacks.onSetCheckingExistingResult(false);
+          
+          // 立即设置进度条状态，让用户看到进度条而不是检查提示
+          callbacks.onSetCurrentTaskId(pendingTask.task_id);
+          callbacks.onSetComprehensiveLoading(true);
+          callbacks.onSetShowComprehensive(true);
+          callbacks.onSetComprehensiveProgress(0); // 初始进度为0，等待获取实际进度
+          
+          // 在后台继续获取结果列表（用于任务完成后的处理）
+          const resultsPromise = fetchVisualAnalysisResults().catch((err) => {
+            return [];
+          });
+          
+          // 处理进行中的任务，同时获取结果列表
+          const results = await Promise.race([
+            resultsPromise,
+            timeoutPromise.then(() => []),
+          ]);
+
+          if (!isMounted) {
+            return;
+          }
+
           await handlePendingTask(
             pendingTask,
             results,
             callbacks,
             isMountedRef,
             () => {
-              setCheckingExistingResult(false);
-              callbacks.onSetCheckingExistingResult(false);
+              // 任务处理完成
             },
             false // 非静默模式：显示加载动画
           );
-        } else if (results && results.length > 0) {
+          return;
+        }
+
+        // 没有进行中的任务，检查已有结果
+        const resultsPromise = fetchVisualAnalysisResults().catch((err) => {
+          return [];
+        });
+
+        const results = await Promise.race([
+          resultsPromise,
+          timeoutPromise.then(() => []),
+        ]);
+
+        if (!isMounted) {
+          return;
+        }
+
+        // 优先级：进行中的任务 > 已有结果 > 上传页面
+        if (results && results.length > 0) {
           // 没有进行中的任务，但有已有结果，显示结果
           await handleExistingResults(
             results,
-            pendingTask,
+            null,
             callbacks,
             isMountedRef,
             () => {
@@ -107,20 +147,17 @@ export function useExistingResultCheck(
           );
         } else {
           // 没有任务也没有结果，显示上传页面
-          handleNoResults(pendingTask, callbacks, isMountedRef, () => {
+          handleNoResults(null, callbacks, isMountedRef, () => {
             setCheckingExistingResult(false);
             callbacks.onSetCheckingExistingResult(false);
           });
         }
       } catch (err) {
         if (!isMounted) {
-          console.log("[VisualAnalysis] 组件已卸载，取消错误处理");
           return;
         }
-        console.error("[VisualAnalysis] 检查已有结果失败:", err);
         const error = err as any;
         if (error?.response?.status === 401 || error?.response?.status === 403) {
-          console.warn("[VisualAnalysis] 认证失败，可能需要重新登录");
         }
         if (isMounted) {
           setCheckingExistingResult(false);
@@ -132,7 +169,6 @@ export function useExistingResultCheck(
     checkExistingResult();
 
     return () => {
-      console.log("[VisualAnalysis] 清理检查逻辑");
       isMounted = false;
     };
   }, [resultId]); // 只在 resultId 变化时执行
@@ -150,11 +186,8 @@ async function handlePendingTask(
   onComplete: () => void,
   silentMode: boolean = false
 ) {
-  console.log("[VisualAnalysis] 发现进行中的任务，先检查任务状态");
-
   try {
     const statusResponse = await getImageAnalysisTaskStatus(pendingTask.task_id);
-    console.log(`[VisualAnalysis] 任务状态检查: ${statusResponse.status}, 进度: ${statusResponse.progress}%`);
 
     // 如果任务已完成，直接加载结果
     if (statusResponse.status === "success") {
@@ -180,7 +213,6 @@ async function handlePendingTask(
           onComplete();
           return;
         } catch (err) {
-          console.error("[VisualAnalysis] 加载已完成任务的结果失败:", err);
           // 即使加载失败，任务已完成，也应该显示错误而不是加载动画
           callbacks.onSetError("任务已完成，但加载结果失败，请刷新页面重试");
           callbacks.onSetComprehensiveLoading(false);
@@ -189,7 +221,6 @@ async function handlePendingTask(
         }
       }
     } else if (statusResponse.status === "failure") {
-      console.log("[VisualAnalysis] 任务已失败，显示错误");
       callbacks.onSetError(statusResponse.error || "分析任务失败");
       callbacks.onSetComprehensiveLoading(false);
       onComplete();
@@ -209,7 +240,6 @@ async function handlePendingTask(
       const latestResult = getLatestResult(results);
       // 如果有已有结果，说明任务可能已经完成或卡住，但已有结果已经显示了，静默处理
       if (latestResult || silentMode) {
-        console.log("[VisualAnalysis] 任务卡住但已有结果已显示，静默处理");
         // 静默恢复轮询，不显示错误
         callbacks.onSetCurrentTaskId(pendingTask.task_id);
         callbacks.onStartPolling(pendingTask.task_id, statusResponse.progress || 0);
@@ -218,7 +248,6 @@ async function handlePendingTask(
       }
       // 没有已有结果且任务卡住，显示错误（只在非静默模式下）
       if (!silentMode) {
-        console.warn("[VisualAnalysis] 任务创建时间超过5分钟但仍是pending，且没有已完成的结果");
         callbacks.onSetError("任务似乎卡住了。可能的原因：\n1. Celery worker 未运行\n2. 服务器负载过高\n\n请检查后端日志或联系管理员，或尝试重新上传图片");
         callbacks.onSetComprehensiveLoading(false);
       }
@@ -229,12 +258,10 @@ async function handlePendingTask(
     // 任务仍在进行中，恢复轮询
     if (silentMode) {
       // 静默模式：不改变UI状态，只恢复轮询
-      console.log("[VisualAnalysis] 静默恢复任务轮询（已有结果已显示）");
       callbacks.onSetCurrentTaskId(pendingTask.task_id);
       callbacks.onStartPolling(pendingTask.task_id, statusResponse.progress || 0);
     } else {
       // 非静默模式：显示加载状态并恢复轮询
-      console.log("[VisualAnalysis] 任务仍在进行中，恢复轮询");
       callbacks.onSetCurrentTaskId(pendingTask.task_id);
       callbacks.onSetComprehensiveLoading(true);
       callbacks.onSetShowComprehensive(true);
@@ -243,7 +270,7 @@ async function handlePendingTask(
       callbacks.onStartPolling(pendingTask.task_id, statusResponse.progress || 0);
     }
   } catch (err) {
-    console.error("[VisualAnalysis] 检查任务状态失败:", err);
+    // Failed to check task status
   }
 }
 
@@ -259,8 +286,6 @@ async function handleExistingResults(
 ) {
   const latestResult = getLatestResult(results);
   if (!latestResult) return;
-
-  console.log("[VisualAnalysis] 找到最新结果，ID:", latestResult.id, "创建时间:", latestResult.created_at);
 
   if (!isMountedRef.current) return;
 
@@ -312,7 +337,6 @@ async function handleExistingResults(
   } catch (err) {
     if (!isMountedRef.current) return;
     
-    console.error("[VisualAnalysis] 加载最新结果失败:", err);
     if (!pendingTask) {
       callbacks.onSetLoadingSavedResult(false);
       callbacks.onSetIsViewMode(false);
@@ -344,11 +368,8 @@ function handleNoResults(
     const maxTaskAge = 5 * 60 * 1000; // 5分钟
 
     if (taskAge > maxTaskAge) {
-      console.log("[VisualAnalysis] 任务超过5分钟但没有结果，显示上传页面");
       callbacks.onSetComprehensiveLoading(false);
     }
-  } else {
-    console.log("[VisualAnalysis] 没有找到已有结果，显示上传页面");
   }
   
   onComplete();
@@ -381,7 +402,7 @@ async function tryLoadResult(
     await callbacks.onLoadResult(processedResult);
     onComplete();
   } catch (err) {
-    console.error("[VisualAnalysis] 加载结果失败:", err);
+    // Failed to load result
   }
 }
 

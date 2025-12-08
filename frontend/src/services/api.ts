@@ -632,6 +632,7 @@ type ShortTermGoalResponse = {
   plan_type: "same" | "different";
   schedule: ShortTermGoalDayResponse[];
   status: "saved" | "active" | "completed";
+  started_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -705,6 +706,7 @@ export type ShortTermGoal = {
   planType: "same" | "different";
   schedule: ShortTermGoalDay[];
   status: "saved" | "active" | "completed";
+  startedAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -728,6 +730,7 @@ function mapShortTermGoal(goal: ShortTermGoalResponse): ShortTermGoal {
       dayIndex: day.day_index,
       tasks: day.tasks.map(mapShortTermGoalTask),
     })),
+    startedAt: goal.started_at,
     createdAt: goal.created_at,
     updatedAt: goal.updated_at,
   };

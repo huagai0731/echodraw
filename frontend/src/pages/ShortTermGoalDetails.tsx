@@ -52,35 +52,61 @@ function getToleranceDays(cycleDays: number): number {
   return cycleDays + 2;
 }
 
-// 根据创建日期计算第几天的日期
-function getDayDate(createdAt: string, dayIndex: number): Date | null {
-  // 尝试解析日期（可能是 YYYY-MM-DD 或 ISO 日期时间字符串）
-  let createdDate = parseISODateInShanghai(createdAt);
+// 获取目标的启动日期（优先使用 startedAt，如果没有则使用 createdAt）
+// 保留精确的小时分钟秒
+function getGoalStartDate(goal: ShortTermGoal): Date | null {
+  // 优先使用 startedAt
+  const startDateStr = goal.startedAt || goal.createdAt;
+  if (!startDateStr) {
+    return null;
+  }
+  
+  // 尝试直接解析 ISO 日期时间字符串（保留精确时间）
+  try {
+    const parsed = new Date(startDateStr);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed;
+    }
+  } catch {
+    // 继续尝试其他方法
+  }
+  
+  // 如果是 YYYY-MM-DD 格式，使用 parseISODateInShanghai（会重置为 00:00:00）
+  let startDate = parseISODateInShanghai(startDateStr);
   
   // 如果失败，尝试从 ISO 日期时间字符串提取日期部分
-  if (!createdDate) {
-    // 提取日期部分（YYYY-MM-DD）
-    const datePart = createdAt.split('T')[0];
-    createdDate = parseISODateInShanghai(datePart);
+  if (!startDate) {
+    const datePart = startDateStr.split('T')[0];
+    startDate = parseISODateInShanghai(datePart);
   }
   
   // 如果还是失败，尝试使用 formatISODateInShanghai 从原始字符串转换
-  if (!createdDate) {
-    const dateStr = formatISODateInShanghai(createdAt);
+  if (!startDate) {
+    const dateStr = formatISODateInShanghai(startDateStr);
     if (dateStr) {
-      createdDate = parseISODateInShanghai(dateStr);
+      startDate = parseISODateInShanghai(dateStr);
     }
   }
   
   // 如果仍然失败，使用当前日期作为fallback
-  if (!createdDate) {
-    createdDate = parseISODateInShanghai(getTodayInShanghai()) || new Date();
-    createdDate.setHours(0, 0, 0, 0);
+  if (!startDate) {
+    startDate = parseISODateInShanghai(getTodayInShanghai()) || new Date();
   }
   
-  const dayDate = new Date(createdDate);
+  return startDate;
+}
+
+// 根据启动日期计算第几天的日期（保留精确时间）
+function getDayDate(goal: ShortTermGoal, dayIndex: number): Date | null {
+  const startDate = getGoalStartDate(goal);
+  if (!startDate) {
+    return null;
+  }
+  
+  // 保留原始时间的精确值，只增加天数
+  const dayDate = new Date(startDate);
   dayDate.setDate(dayDate.getDate() + dayIndex);
-  dayDate.setHours(0, 0, 0, 0);
+  // 注意：不调用 setHours，保留精确的小时分钟秒
   return dayDate;
 }
 
@@ -89,46 +115,39 @@ function deriveCycleState(
   goal: ShortTermGoal,
   uploadDates: Set<string>
 ): CycleState {
+  // 获取当前时间（使用测试日期，保留精确时间）
   const todayStr = getTodayInShanghai();
-  const today = parseISODateInShanghai(todayStr) || new Date();
-  today.setHours(0, 0, 0, 0);
+  const todayDate = parseISODateInShanghai(todayStr);
+  const now = todayDate || new Date();
 
-  // 解析创建日期，如果失败使用当前日期作为fallback
-  let createdDate = parseISODateInShanghai(goal.createdAt);
-  if (!createdDate) {
-    // 尝试从 ISO 日期时间字符串提取日期部分
-    const datePart = goal.createdAt.split('T')[0];
-    createdDate = parseISODateInShanghai(datePart);
+  // 获取启动日期（优先使用 startedAt，保留精确时间）
+  const startDate = getGoalStartDate(goal);
+  if (!startDate) {
+    // 如果无法获取启动日期，返回空状态
+    return {
+      status: "expired",
+      days: [],
+      progressPercent: 0,
+      daysRemaining: 0,
+      completedCount: 0,
+    };
   }
-  if (!createdDate) {
-    // 尝试使用 formatISODateInShanghai 转换
-    const dateStr = formatISODateInShanghai(goal.createdAt);
-    if (dateStr) {
-      createdDate = parseISODateInShanghai(dateStr);
-    }
-  }
-  // 如果仍然失败，使用当前日期
-  if (!createdDate) {
-    createdDate = parseISODateInShanghai(getTodayInShanghai()) || new Date();
-  }
-  createdDate.setHours(0, 0, 0, 0);
 
   // 计算容错天数
   const toleranceDays = getToleranceDays(goal.durationDays);
   
-  // 计算已过天数（从创建日期到今天）
-  const daysSinceCreation = Math.floor(
-    (today.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24)
-  );
-
-  // 判断周期状态
+  // 计算截止时间（启动时间 + 容错天数，保留精确时间）
+  const deadline = new Date(startDate);
+  deadline.setDate(deadline.getDate() + toleranceDays);
+  
+  // 判断周期状态（使用精确时间比较）
   let cycleStatus: CycleStatus;
-  if (daysSinceCreation > toleranceDays) {
+  if (now.getTime() > deadline.getTime()) {
     cycleStatus = "expired";
   } else {
     // 检查是否全部完成
     const completedCount = Array.from({ length: goal.durationDays }, (_, index) => {
-      const dayDate = getDayDate(goal.createdAt, index);
+      const dayDate = getDayDate(goal, index);
       if (!dayDate) return false;
       const dateKey = formatISODateInShanghai(dayDate);
       return dateKey ? uploadDates.has(dateKey) : false;
@@ -151,7 +170,7 @@ function deriveCycleState(
 
   const days: DayCard[] = Array.from({ length: goal.durationDays }, (_, index) => {
     const dayNumber = index + 1;
-    const dayDate = getDayDate(goal.createdAt, index);
+    const dayDate = getDayDate(goal, index);
     const dateKey = dayDate ? formatISODateInShanghai(dayDate) : null;
 
     // 获取任务列表
@@ -184,16 +203,16 @@ function deriveCycleState(
       if (index === 0) {
         cardStatus = "available";
       } else {
-        // Day 2 及以后：需要满足"今天是该天或该天之前"
-        // 即：today >= dayDate
-        if (dayDate && today.getTime() >= dayDate.getTime()) {
+        // Day 2 及以后：需要满足"当前时间 >= 该天的开始时间"
+        // 使用精确时间比较
+        if (dayDate && now.getTime() >= dayDate.getTime()) {
           cardStatus = "available";
         } else {
           cardStatus = "locked";
           // 判断是否是"明日继续"的情况：今天的卡片已完成，但明天因日期未到而锁定
           if (index > 0) {
             const previousDayIndex = index - 1;
-            const previousDayDate = getDayDate(goal.createdAt, previousDayIndex);
+            const previousDayDate = getDayDate(goal, previousDayIndex);
             if (previousDayDate) {
               const previousDateKey = formatISODateInShanghai(previousDayDate);
               if (previousDateKey && uploadDates.has(previousDateKey)) {
@@ -527,8 +546,11 @@ function ShortTermGoalDetails({
           }));
         }
 
-        // 保存完成时间（从服务器返回的时间，如果没有则使用当前时间）
-        const completionTime = result.checked_at || result.checked_date || new Date().toISOString();
+        // 保存完成时间（从服务器返回的时间，如果没有则使用测试日期）
+        const todayStr = getTodayInShanghai();
+        const todayDate = parseISODateInShanghai(todayStr);
+        const now = todayDate || new Date();
+        const completionTime = result.checked_at || result.checked_date || now.toISOString();
         setCheckInTimes((prev) => ({
           ...prev,
           [checkedDate]: completionTime,
@@ -660,29 +682,23 @@ function ShortTermGoalDetails({
     }
   }, []);
 
-  // 计算截止日期（建立时间 + 容错天数）
+  // 计算截止日期（启动时间 + 容错天数，保留精确时间）
   const deadlineDate = useMemo(() => {
     const toleranceDays = getToleranceDays(goal.durationDays);
-    let createdDate = parseISODateInShanghai(goal.createdAt);
-    if (!createdDate) {
-      const datePart = goal.createdAt.split('T')[0];
-      createdDate = parseISODateInShanghai(datePart);
+    const startDate = getGoalStartDate(goal);
+    if (!startDate) {
+      // 如果无法获取启动日期，使用测试日期作为fallback
+      const todayStr = getTodayInShanghai();
+      const todayDate = parseISODateInShanghai(todayStr);
+      return todayDate || new Date();
     }
-    if (!createdDate) {
-      const dateStr = formatISODateInShanghai(goal.createdAt);
-      if (dateStr) {
-        createdDate = parseISODateInShanghai(dateStr);
-      }
-    }
-    if (!createdDate) {
-      createdDate = parseISODateInShanghai(getTodayInShanghai()) || new Date();
-    }
-    createdDate.setHours(0, 0, 0, 0);
     
-    const deadline = new Date(createdDate);
+    // 保留启动时间的精确值，只增加天数
+    const deadline = new Date(startDate);
     deadline.setDate(deadline.getDate() + toleranceDays);
+    // 注意：不调用 setHours，保留精确的小时分钟秒
     return deadline;
-  }, [goal.createdAt, goal.durationDays]);
+  }, [goal.startedAt, goal.createdAt, goal.durationDays]);
 
   // 获取状态提示文案
   const getStatusHint = useCallback(() => {
@@ -693,14 +709,23 @@ function ShortTermGoalDetails({
       return "恭喜！已完成所有任务";
     }
     const toleranceDays = getToleranceDays(goal.durationDays);
-    const todayDate = parseISODateInShanghai(getTodayInShanghai());
-    const createdDate = parseISODateInShanghai(goal.createdAt);
-    if (!todayDate || !createdDate) {
+    // 获取当前时间（使用测试日期）
+    const todayStr = getTodayInShanghai();
+    const todayDate = parseISODateInShanghai(todayStr);
+    const now = todayDate || new Date();
+    const startDate = getGoalStartDate(goal);
+    if (!startDate) {
       return "";
     }
-    const daysRemaining = toleranceDays - Math.floor(
-      (todayDate.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24)
-    );
+    
+    // 计算截止时间（启动时间 + 容错天数，保留精确时间）
+    const deadline = new Date(startDate);
+    deadline.setDate(deadline.getDate() + toleranceDays);
+    
+    // 计算剩余时间（使用精确时间，转换为天数）
+    const remainingMs = deadline.getTime() - now.getTime();
+    const daysRemaining = Math.ceil(remainingMs / (1000 * 60 * 60 * 24));
+    
     if (daysRemaining <= 0) {
       return "周期即将结束";
     }
