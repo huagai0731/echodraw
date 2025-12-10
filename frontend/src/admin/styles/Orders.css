@@ -1,0 +1,322 @@
+.admin-orders {
+  padding: 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.admin-orders__header {
+  margin-bottom: 2rem;
+}
+
+.admin-orders__header h2 {
+  margin: 0 0 1.5rem 0;
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: #efeae7;
+}
+
+.admin-orders__stats {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.admin-orders__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem 1.5rem;
+  background: rgba(239, 234, 231, 0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(239, 234, 231, 0.1);
+  min-width: 120px;
+}
+
+.admin-orders__stat-label {
+  font-size: 0.875rem;
+  color: rgba(239, 234, 231, 0.6);
+}
+
+.admin-orders__stat-value {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #efeae7;
+}
+
+.admin-orders__stat-value--success {
+  color: #4caf50;
+}
+
+.admin-orders__stat-value--warning {
+  color: #ff9800;
+}
+
+.admin-orders__stat-value--error {
+  color: #f44336;
+}
+
+.admin-orders__stat-value--amount {
+  color: #2196f3;
+}
+
+.admin-orders__filters {
+  margin-bottom: 1.5rem;
+}
+
+.admin-orders__search {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: rgba(239, 234, 231, 0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(239, 234, 231, 0.1);
+  max-width: 500px;
+}
+
+.admin-orders__search .material-icon {
+  color: rgba(239, 234, 231, 0.5);
+  font-size: 1.25rem;
+}
+
+.admin-orders__search input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #efeae7;
+  font-size: 0.9375rem;
+  outline: none;
+}
+
+.admin-orders__search input::placeholder {
+  color: rgba(239, 234, 231, 0.4);
+}
+
+.admin-orders__list {
+  background: rgba(239, 234, 231, 0.03);
+  border-radius: 12px;
+  border: 1px solid rgba(239, 234, 231, 0.1);
+  overflow: hidden;
+}
+
+.admin-orders__loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 4rem 2rem;
+  color: rgba(239, 234, 231, 0.6);
+}
+
+.admin-orders__spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(239, 234, 231, 0.1);
+  border-top-color: #efeae7;
+  border-radius: 50%;
+  animation: admin-orders-spin 0.8s linear infinite;
+}
+
+@keyframes admin-orders-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.admin-orders__table-wrapper {
+  overflow-x: auto;
+}
+
+.admin-orders__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.admin-orders__table thead {
+  background: rgba(239, 234, 231, 0.05);
+}
+
+.admin-orders__table th {
+  padding: 1rem;
+  text-align: left;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: rgba(239, 234, 231, 0.8);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid rgba(239, 234, 231, 0.1);
+}
+
+.admin-orders__table tbody tr {
+  border-bottom: 1px solid rgba(239, 234, 231, 0.05);
+  transition: background 0.2s;
+}
+
+.admin-orders__table tbody tr:hover {
+  background: rgba(239, 234, 231, 0.03);
+}
+
+.admin-orders__table td {
+  padding: 1rem;
+  font-size: 0.9375rem;
+  color: #efeae7;
+  vertical-align: middle;
+}
+
+.admin-orders__order-number {
+  font-family: "Courier New", monospace;
+  font-size: 0.875rem;
+  color: rgba(239, 234, 231, 0.8);
+}
+
+.admin-orders__email {
+  color: rgba(239, 234, 231, 0.9);
+}
+
+.admin-orders__amount {
+  font-weight: 600;
+  color: #2196f3;
+}
+
+.admin-orders__transaction-id {
+  font-family: "Courier New", monospace;
+  font-size: 0.875rem;
+  color: rgba(239, 234, 231, 0.7);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  background: rgba(239, 234, 231, 0.1);
+  color: rgba(239, 234, 231, 0.7);
+}
+
+.status--success {
+  background: rgba(76, 175, 80, 0.2);
+  color: #4caf50;
+}
+
+.status--warning {
+  background: rgba(255, 152, 0, 0.2);
+  color: #ff9800;
+}
+
+.status--error {
+  background: rgba(244, 67, 54, 0.2);
+  color: #f44336;
+}
+
+.status--disabled {
+  background: rgba(239, 234, 231, 0.1);
+  color: rgba(239, 234, 231, 0.4);
+}
+
+.admin-orders__empty {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: rgba(239, 234, 231, 0.5);
+  font-style: italic;
+}
+
+.admin-orders__actions {
+  white-space: nowrap;
+}
+
+.admin-orders__sync-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: rgba(33, 150, 243, 0.2);
+  border: 1px solid rgba(33, 150, 243, 0.3);
+  border-radius: 4px;
+  color: #2196f3;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.admin-orders__sync-btn:hover:not(:disabled) {
+  background: rgba(33, 150, 243, 0.3);
+  border-color: rgba(33, 150, 243, 0.5);
+}
+
+.admin-orders__sync-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.admin-orders__sync-btn .material-icon {
+  font-size: 1rem;
+  animation: admin-orders-spin 1s linear infinite;
+}
+
+.admin-orders__sync-btn:disabled .material-icon {
+  animation: admin-orders-spin 1s linear infinite;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .admin-orders {
+    padding: 1rem;
+  }
+
+  .admin-orders__stats {
+    gap: 1rem;
+  }
+
+  .admin-orders__stat {
+    min-width: 100px;
+    padding: 0.75rem 1rem;
+  }
+
+  .admin-orders__stat-value {
+    font-size: 1.25rem;
+  }
+
+  .admin-orders__table {
+    font-size: 0.875rem;
+  }
+
+  .admin-orders__table th,
+  .admin-orders__table td {
+    padding: 0.75rem 0.5rem;
+  }
+
+  .admin-orders__table thead {
+    display: none;
+  }
+
+  .admin-orders__table tbody tr {
+    display: block;
+    margin-bottom: 1rem;
+    border: 1px solid rgba(239, 234, 231, 0.1);
+    border-radius: 8px;
+    padding: 1rem;
+    background: rgba(239, 234, 231, 0.02);
+  }
+
+  .admin-orders__table tbody td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border: none;
+  }
+
+  .admin-orders__table tbody td::before {
+    content: attr(data-title);
+    font-weight: 600;
+    color: rgba(239, 234, 231, 0.6);
+    margin-right: 1rem;
+  }
+}
+

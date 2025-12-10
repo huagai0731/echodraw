@@ -18,6 +18,7 @@ import {
   createUserTaskPreset,
   deleteUserTaskPreset,
   fetchShortTermTaskPresets,
+  hasAuthToken,
   type ShortTermGoal,
   type ShortTermGoalDay,
   type ShortTermTaskPreset,
@@ -34,6 +35,7 @@ type NewChallengeWizardProps = {
   onSaved: (goal: ShortTermGoal) => void;
   initialGoal?: ShortTermGoal | null;
   mode?: "create" | "edit";
+  onNavigateToProfile?: () => void;
 };
 
 type PlanType = "same" | "different";
@@ -180,7 +182,7 @@ const FALLBACK_TASK_LIBRARY: TaskItem[] = [
 const STEPS: StepKey[] = ["duration", "type", "tasks", "confirm"];
 const DEFAULT_PLAN_NAME = "我的短期目标";
 
-function NewChallengeWizard({ onClose, onSaved, initialGoal, mode = "create" }: NewChallengeWizardProps) {
+function NewChallengeWizard({ onClose, onSaved, initialGoal, mode = "create", onNavigateToProfile }: NewChallengeWizardProps) {
   const [stepIndex, setStepIndex] = useState(0);
   const [durationIndex, setDurationIndex] = useState(0);
   const [planType, setPlanType] = useState<PlanType>("same");
@@ -203,6 +205,7 @@ function NewChallengeWizard({ onClose, onSaved, initialGoal, mode = "create" }: 
   const [saveError, setSaveError] = useState<string | null>(null);
   const [showMissingTasksAlert, setShowMissingTasksAlert] = useState(false);
   const [missingTaskDays, setMissingTaskDays] = useState<number[]>([]);
+  const [showLoginConfirm, setShowLoginConfirm] = useState(false);
   const taskInstanceCounter = useRef(0);
   const goalIdRef = useRef<number | null>(initialGoal?.id ?? null);
 
@@ -703,6 +706,12 @@ function NewChallengeWizard({ onClose, onSaved, initialGoal, mode = "create" }: 
       return;
     }
 
+    // 检查登录状态
+    if (!hasAuthToken()) {
+      setShowLoginConfirm(true);
+      return;
+    }
+
     setIsSaving(true);
     setSaveError(null);
 
@@ -927,6 +936,56 @@ function NewChallengeWizard({ onClose, onSaved, initialGoal, mode = "create" }: 
           </button>
         </footer>
       </div>
+
+      {showLoginConfirm ? (
+        <div className="artwork-delete-confirm-overlay" onClick={() => setShowLoginConfirm(false)}>
+          <div className="artwork-delete-confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <h2 className="artwork-delete-confirm-title">必须登录才能保存目标</h2>
+            <div className="artwork-delete-confirm-content">
+              <p className="artwork-delete-confirm-text">
+                保存目标需要登录账号。
+              </p>
+              <p className="artwork-delete-confirm-text artwork-delete-confirm-text--highlight">
+                请先登录后再保存目标
+              </p>
+            </div>
+            <div className="artwork-delete-confirm-actions">
+              <button
+                type="button"
+                className="artwork-delete-confirm-button artwork-delete-confirm-button--cancel"
+                onClick={() => setShowLoginConfirm(false)}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="artwork-delete-confirm-button artwork-delete-confirm-button--confirm"
+                onClick={() => {
+                  setShowLoginConfirm(false);
+                  if (onNavigateToProfile) {
+                    onNavigateToProfile();
+                  }
+                }}
+                style={{
+                  background: "rgba(152, 219, 198, 0.2)",
+                  color: "#98dbc6",
+                  border: "1px solid rgba(152, 219, 198, 0.35)",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "rgba(152, 219, 198, 0.3)";
+                  e.currentTarget.style.borderColor = "rgba(152, 219, 198, 0.5)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "rgba(152, 219, 198, 0.2)";
+                  e.currentTarget.style.borderColor = "rgba(152, 219, 198, 0.35)";
+                }}
+              >
+                前往登录
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

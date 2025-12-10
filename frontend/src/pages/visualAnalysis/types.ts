@@ -19,6 +19,7 @@ export type VisualAnalysisProps = {
   onBack: () => void;
   onSave?: (result: VisualAnalysisResult) => void;
   resultId?: number; // 如果提供resultId，则显示已保存的结果
+  onNavigateToProfile?: () => void;
 };
 
 export type BinaryThresholdOption = {

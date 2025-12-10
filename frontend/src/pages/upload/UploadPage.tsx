@@ -14,9 +14,11 @@ import { useDuration } from "./hooks/useDuration";
 import { useMood } from "./hooks/useMood";
 import { useDraft } from "./hooks/useDraft";
 import { UploadLimitConfirmModal } from "../visualAnalysis/components/UploadLimitConfirmModal";
+import { hasAuthToken } from "@/services/api";
 import type { Artwork } from "../Gallery";
 
 import "../Upload.css";
+import "../ArtworkDetails.css";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB（用于提示，不阻止选择）
 
@@ -41,14 +43,16 @@ type UploadPageProps = {
   userArtworks?: Artwork[];
   isMember?: boolean;
   onJoinMembership?: () => void;
+  onNavigateToProfile?: () => void;
 };
 
-export function UploadPage({ onClose, onSave, userArtworks = [], isMember = true, onJoinMembership }: UploadPageProps) {
+export function UploadPage({ onClose, onSave, userArtworks = [], isMember = true, onJoinMembership, onNavigateToProfile }: UploadPageProps) {
   const [showRating, setShowRating] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [showUploadLimitConfirm, setShowUploadLimitConfirm] = useState(false);
+  const [showLoginConfirm, setShowLoginConfirm] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const hasUnsavedChangesRef = useRef(false);
   const pendingSaveRef = useRef<(() => Promise<void>) | null>(null);
@@ -242,6 +246,13 @@ export function UploadPage({ onClose, onSave, userArtworks = [], isMember = true
         );
         input?.click();
       }
+      return;
+    }
+
+    // 检查登录状态
+    if (!hasAuthToken()) {
+      // 显示登录确认弹窗
+      setShowLoginConfirm(true);
       return;
     }
 
@@ -495,6 +506,56 @@ export function UploadPage({ onClose, onSave, userArtworks = [], isMember = true
         onCancel={handleCancelUploadLimit}
         onJoinMembership={onJoinMembership ? handleJoinMembership : undefined}
       />
+
+      {showLoginConfirm ? (
+        <div className="artwork-delete-confirm-overlay" onClick={() => setShowLoginConfirm(false)}>
+          <div className="artwork-delete-confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <h2 className="artwork-delete-confirm-title">必须登录才能上传</h2>
+            <div className="artwork-delete-confirm-content">
+              <p className="artwork-delete-confirm-text">
+                上传作品需要登录账号。
+              </p>
+              <p className="artwork-delete-confirm-text artwork-delete-confirm-text--highlight">
+                请先登录后再上传作品
+              </p>
+            </div>
+            <div className="artwork-delete-confirm-actions">
+              <button
+                type="button"
+                className="artwork-delete-confirm-button artwork-delete-confirm-button--cancel"
+                onClick={() => setShowLoginConfirm(false)}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="artwork-delete-confirm-button artwork-delete-confirm-button--confirm"
+                onClick={() => {
+                  setShowLoginConfirm(false);
+                  if (onNavigateToProfile) {
+                    onNavigateToProfile();
+                  }
+                }}
+                style={{
+                  background: "rgba(152, 219, 198, 0.2)",
+                  color: "#98dbc6",
+                  border: "1px solid rgba(152, 219, 198, 0.35)",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "rgba(152, 219, 198, 0.3)";
+                  e.currentTarget.style.borderColor = "rgba(152, 219, 198, 0.5)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "rgba(152, 219, 198, 0.2)";
+                  e.currentTarget.style.borderColor = "rgba(152, 219, 198, 0.35)";
+                }}
+              >
+                前往登录
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

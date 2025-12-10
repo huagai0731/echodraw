@@ -29,6 +29,7 @@ from core.models import (
     LongTermPlanCopy,
     Mood,
     MonthlyReportTemplate,
+    PointsOrder,
     ShortTermGoal,
     ShortTermTaskPreset,
     Tag,
@@ -2543,4 +2544,37 @@ class VisualAnalysisResultSerializer(serializers.ModelSerializer):
                     data[field_name] = ""
         
         return data
+
+
+class PointsOrderSerializer(serializers.ModelSerializer):
+    """订单序列化器"""
+    user_email = serializers.EmailField(source="user.email", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    payment_method_display = serializers.CharField(source="get_payment_method_display", read_only=True)
+    
+    class Meta:
+        model = PointsOrder
+        fields = [
+            "id",
+            "order_number",
+            "user",
+            "user_email",
+            "points",
+            "amount",
+            "payment_method",
+            "payment_method_display",
+            "status",
+            "status_display",
+            "payment_transaction_id",
+            "paid_at",
+            "created_at",
+            "updated_at",
+            "metadata",
+        ]
+        read_only_fields = [
+            "id",
+            "order_number",
+            "created_at",
+            "updated_at",
+        ]
 

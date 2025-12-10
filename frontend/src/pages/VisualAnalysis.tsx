@@ -17,6 +17,7 @@ import {
   analyzeImageComprehensive,
   deleteVisualAnalysisResult,
   getVisualAnalysisQuota,
+  hasAuthToken,
   type VisualAnalysisQuota,
 } from "@/services/api";
 import VisualAnalysisComprehensive from "./VisualAnalysisComprehensive";
@@ -46,7 +47,7 @@ import {
   type VisualAnalysisResult,
 } from "./visualAnalysis/index";
 
-function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
+function VisualAnalysis({ onBack, onSave, resultId, onNavigateToProfile }: VisualAnalysisProps) {
   // ==================== 基础状态 ====================
   const [originalImage, setOriginalImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -645,51 +646,101 @@ function VisualAnalysis({ onBack, onSave, resultId }: VisualAnalysisProps) {
           </div>
         ) : !originalImage && !results && !loadingSavedResult && !isViewMode && !savedResultId && !savedResultData ? (
           <>
-            {quota && (
+            {!hasAuthToken() ? (
               <div
                 style={{
-                  padding: "1rem",
-                  marginBottom: "1.5rem",
+                  padding: "1.5rem",
+                  marginTop: "2rem",
                   background: "rgba(152, 219, 198, 0.1)",
                   border: "1px solid rgba(152, 219, 198, 0.3)",
-                  borderRadius: "0.5rem",
+                  borderRadius: "0.75rem",
                   color: "rgba(239, 234, 231, 0.9)",
+                  textAlign: "center",
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
-                  <MaterialIcon name="info" style={{ fontSize: "1.2rem" }} />
-                  <strong style={{ fontSize: "0.95rem" }}>视觉分析剩余次数</strong>
-                </div>
-                <div style={{ fontSize: "0.9rem", lineHeight: "1.6" }}>
-                  {quota.is_member ? (
-                    <>
-                      <div>会员月度额度：{quota.remaining_monthly_quota} / {quota.monthly_quota} 次</div>
-                      {quota.remaining_free_quota > 0 && (
-                        <div style={{ marginTop: "0.25rem", opacity: 0.8 }}>
-                          赠送额度：{quota.remaining_free_quota} 次
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <div>剩余次数：{quota.total_remaining_quota} 次（赠送额度）</div>
-                      <div style={{ marginTop: "0.5rem", fontSize: "0.85rem", opacity: 0.8 }}>
-                        加入EchoDraw会员可享受每月60次额度
-                      </div>
-                    </>
-                  )}
-                </div>
+                <MaterialIcon name="info" style={{ fontSize: "2rem", color: "rgba(152, 219, 198, 0.9)", marginBottom: "1rem" }} />
+                <p style={{ fontSize: "1rem", lineHeight: "1.6", margin: "0 0 1rem 0" }}>
+                  登录后即可使用视觉分析功能
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onNavigateToProfile) {
+                      onNavigateToProfile();
+                    }
+                  }}
+                  style={{
+                    padding: "0.75rem 1.5rem",
+                    borderRadius: "0.5rem",
+                    background: "rgba(152, 219, 198, 0.2)",
+                    border: "1px solid rgba(152, 219, 198, 0.35)",
+                    color: "#98dbc6",
+                    fontSize: "0.95rem",
+                    fontWeight: 500,
+                    cursor: "pointer",
+                    transition: "background 0.2s ease, border-color 0.2s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "rgba(152, 219, 198, 0.3)";
+                    e.currentTarget.style.borderColor = "rgba(152, 219, 198, 0.5)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "rgba(152, 219, 198, 0.2)";
+                    e.currentTarget.style.borderColor = "rgba(152, 219, 198, 0.35)";
+                  }}
+                >
+                  前往登录
+                </button>
               </div>
+            ) : (
+              <>
+                {quota && (
+                  <div
+                    style={{
+                      padding: "1rem",
+                      marginBottom: "1.5rem",
+                      background: "rgba(152, 219, 198, 0.1)",
+                      border: "1px solid rgba(152, 219, 198, 0.3)",
+                      borderRadius: "0.5rem",
+                      color: "rgba(239, 234, 231, 0.9)",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
+                      <MaterialIcon name="info" style={{ fontSize: "1.2rem" }} />
+                      <strong style={{ fontSize: "0.95rem" }}>视觉分析剩余次数</strong>
+                    </div>
+                    <div style={{ fontSize: "0.9rem", lineHeight: "1.6" }}>
+                      {quota.is_member ? (
+                        <>
+                          <div>会员月度额度：{quota.remaining_monthly_quota} / {quota.monthly_quota} 次</div>
+                          {quota.remaining_free_quota > 0 && (
+                            <div style={{ marginTop: "0.25rem", opacity: 0.8 }}>
+                              赠送额度：{quota.remaining_free_quota} 次
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <div>剩余次数：{quota.total_remaining_quota} 次（赠送额度）</div>
+                          <div style={{ marginTop: "0.5rem", fontSize: "0.85rem", opacity: 0.8 }}>
+                            加入EchoDraw会员可享受每月60次额度
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+                <ImageUploadArea
+                  onFileSelect={handleFileSelectWrapped}
+                  preview={imagePreview}
+                  onConfirm={handleConfirmAndProcess}
+                  onCancel={clearUpload}
+                  opencvReady={opencvReady}
+                  loading={loading}
+                  compressing={isCompressing}
+                />
+              </>
             )}
-            <ImageUploadArea
-              onFileSelect={handleFileSelectWrapped}
-              preview={imagePreview}
-              onConfirm={handleConfirmAndProcess}
-              onCancel={clearUpload}
-              opencvReady={opencvReady}
-              loading={loading}
-              compressing={isCompressing}
-            />
           </>
         ) : (
           <>

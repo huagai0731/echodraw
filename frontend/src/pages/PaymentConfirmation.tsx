@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, memo } from "react";
+import { useMemo, useState, useCallback, memo, useRef, useEffect } from "react";
 import clsx from "clsx";
 
 import TopNav from "@/components/TopNav";
@@ -17,6 +17,8 @@ type PaymentConfirmationProps = {
     tier: MembershipTier;
     expiresAt: string;
     paymentMethod: PaymentMethod;
+    quantity: number;
+    totalAmount: number;
   }) => void;
 };
 
@@ -57,10 +59,14 @@ type ConfirmButtonProps = {
   planId: MembershipTier;
   expiresAt: string;
   paymentMethod: PaymentMethod;
+  quantity: number;
+  totalAmount: number;
   onConfirm: (payload: {
     tier: MembershipTier;
     expiresAt: string;
     paymentMethod: PaymentMethod;
+    quantity: number;
+    totalAmount: number;
   }) => void;
 };
 
@@ -68,23 +74,57 @@ const ConfirmButton = memo(function ConfirmButton({
   planId,
   expiresAt,
   paymentMethod,
+  quantity,
+  totalAmount,
   onConfirm,
 }: ConfirmButtonProps) {
+  const [submitting, setSubmitting] = useState(false);
+
+  // 检查是否从支付宝返回，如果是则重置按钮状态
+  useEffect(() => {
+    const checkReturnFromPayment = () => {
+      // 如果当前不在支付宝页面，但之前可能跳转过，重置状态
+      if (!window.location.href.includes("alipay.com") && 
+          !window.location.href.includes("alipaydev.com") &&
+          submitting) {
+        // 延迟重置，给页面一些时间处理
+        const timer = setTimeout(() => {
+          setSubmitting(false);
+        }, 1000);
+        return () => clearTimeout(timer);
+      }
+    };
+    
+    checkReturnFromPayment();
+  }, [submitting]);
+
   const handleClick = useCallback(() => {
-    onConfirm({
-      tier: planId,
-      expiresAt,
-      paymentMethod,
-    });
-  }, [planId, expiresAt, paymentMethod, onConfirm]);
+    if (submitting) {
+      return; // 防止重复点击
+    }
+    setSubmitting(true);
+    try {
+      onConfirm({
+        tier: planId,
+        expiresAt,
+        paymentMethod,
+        quantity,
+        totalAmount,
+      });
+      // 注意：如果跳转到支付宝，这个组件会被卸载，所以不需要重置状态
+    } catch (error) {
+      setSubmitting(false);
+    }
+  }, [planId, expiresAt, paymentMethod, quantity, totalAmount, onConfirm, submitting]);
 
   return (
     <button
       type="button"
       className="payment-confirmation__confirm"
       onClick={handleClick}
+      disabled={submitting}
     >
-      确认支付
+      {submitting ? "处理中..." : "确认支付"}
     </button>
   );
 });
@@ -252,6 +292,8 @@ function PaymentConfirmation({ plan, currentMembershipExpires, onBack, onConfirm
             planId={plan.id}
             expiresAt={expirationInfo.iso}
             paymentMethod={paymentMethod}
+            quantity={quantity}
+            totalAmount={totalAmount}
             onConfirm={onConfirm}
           />
         </footer>

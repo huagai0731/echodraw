@@ -21,6 +21,8 @@ const NAV_ITEMS = [
   { to: "test-management", label: "测试管理", description: "管理测试、题目和选项" },
   { to: "daily-quiz", label: "每日小测", description: "管理每日小测题目和选项" },
   { to: "test-accounts", label: "测试账号", description: "管理测试账号与历史数据" },
+  { to: "concurrent-test", label: "并发测试", description: "多账号并发测试工具（上传、视觉分析）" },
+  { to: "orders", label: "订单管理", description: "查看所有支付订单，包括金额、时间、状态等信息" },
 ];
 
 function AdminLayout() {

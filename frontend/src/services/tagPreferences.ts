@@ -170,6 +170,17 @@ export async function buildTagOptionsAsync(preferences: TagPreferences): Promise
   // 导入预设标签配置
   const { PRESET_TAGS } = await import("@/constants/tagPresets");
   
+  // 如果未登录或没有标签，使用预设标签
+  if (!hasAuthToken() || tags.length === 0) {
+    // 为预设标签生成临时ID（负数，避免与真实ID冲突）
+    return PRESET_TAGS.map((preset, index) => ({
+      id: -(index + 1), // 使用负数作为临时ID
+      name: preset.name,
+      isCustom: false,
+      defaultActive: preset.defaultActive,
+    }));
+  }
+  
   // 构建标签选项（统一处理，不再区分预设和自定义）
   // 根据预设标签的defaultActive属性设置标签选项的defaultActive
   const options: TagOption[] = tags.map((tag) => {

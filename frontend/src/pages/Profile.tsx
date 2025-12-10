@@ -16,6 +16,7 @@ import {
   updateProfilePreferences,
   subscribeMembership,
 } from "@/services/api";
+import api from "@/services/api";
 import { clearAllUserCache } from "@/utils/clearUserCache";
 import TopNav from "@/components/TopNav";
 import { loadFeaturedArtworkIds, loadFeaturedArtworkIdsFromServer } from "@/services/featuredArtworks";
@@ -48,6 +49,7 @@ const STORAGE_KEY = "echodraw-auth";
 const DEFAULT_SIGNATURE = "一副完整的画，一个崭新落成的次元";
 const PREFS_STORAGE_KEY = "echodraw-profile-preferences";
 const STATS_STORAGE_KEY = "echodraw-profile-stats";
+const PENDING_ORDER_KEY = "echodraw-pending-order";
 
 type StoredPreferences = {
   email: string;
@@ -287,6 +289,7 @@ function Profile({
   const [pendingTier, setPendingTier] = useState<MembershipTier | null>(null);
   const [membershipTierLoading, setMembershipTierLoading] = useState(true);
   const [membershipExpires, setMembershipExpires] = useState<string | null>(null);
+  const [checkingPayment, setCheckingPayment] = useState(false);
 
   useEffect(() => {
     if (auth) {
@@ -352,6 +355,128 @@ function Profile({
   }, []);
 
   const userEmail = auth?.user.email ?? null;
+
+  // 检查并处理待支付的订单
+  useEffect(() => {
+    if (!auth || checkingPayment) {
+      return;
+    }
+
+    // 检查是否有待处理的订单
+    let pendingOrder: { order_id: number; order_number: string; timestamp: number } | null = null;
+    try {
+      const stored = window.localStorage.getItem(PENDING_ORDER_KEY);
+      if (stored) {
+        pendingOrder = JSON.parse(stored);
+        // 检查订单是否超过30分钟（可能已过期）
+        if (pendingOrder && Date.now() - pendingOrder.timestamp > 30 * 60 * 1000) {
+          window.localStorage.removeItem(PENDING_ORDER_KEY);
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn("[Echo] Failed to load pending order:", e);
+      window.localStorage.removeItem(PENDING_ORDER_KEY);
+      return;
+    }
+
+    if (!pendingOrder) {
+      return;
+    }
+
+    // 开始检查订单状态
+    setCheckingPayment(true);
+    let pollCount = 0;
+    const maxPolls = 60; // 最多轮询60次（约5分钟）
+    const pollInterval = 5000; // 每5秒轮询一次
+
+    const checkOrderStatus = async () => {
+      try {
+        const response = await api.get<{
+          order_id: number;
+          order_number: string;
+          status: string;
+          amount: string;
+          payment_method: string;
+          paid_at: string | null;
+          created_at: string;
+        }>(`/payments/orders/${pendingOrder!.order_id}/status/`);
+
+        if (response.data.status === "paid") {
+          // 支付成功，清除待处理订单
+          window.localStorage.removeItem(PENDING_ORDER_KEY);
+          setCheckingPayment(false);
+          
+          // 强制同步会员状态（确保会员状态已更新）
+          setMembershipTierLoading(true);
+          try {
+            // 先调用同步接口，强制更新会员状态
+            try {
+              await api.post(`/payments/orders/${pendingOrder.order_id}/sync-membership/`);
+              console.log("[Echo] Membership status synced successfully");
+            } catch (syncError: any) {
+              console.warn("[Echo] Failed to sync membership status:", syncError);
+              // 即使同步失败，也继续刷新会员状态
+            }
+            
+            // 然后刷新会员状态
+            const preferences = await fetchProfilePreferences();
+            if (preferences.isMember) {
+              setMembershipTier("premium");
+              setMembershipExpires(preferences.membershipExpires);
+            } else {
+              setMembershipTier("pending");
+              setMembershipExpires(null);
+            }
+          } catch (e) {
+            console.error("[Echo] Failed to refresh membership status:", e);
+          } finally {
+            setMembershipTierLoading(false);
+          }
+
+          // 显示成功消息并返回会员选项页面
+          alert("支付成功！您的会员已激活。");
+          setPendingTier(null);
+          setView("membership-options");
+          return;
+        }
+
+        // 如果还没支付，继续轮询
+        pollCount++;
+        if (pollCount < maxPolls) {
+          setTimeout(checkOrderStatus, pollInterval);
+        } else {
+          // 轮询超时，清除待处理订单
+          window.localStorage.removeItem(PENDING_ORDER_KEY);
+          setCheckingPayment(false);
+          console.warn("[Echo] Order status polling timeout");
+        }
+      } catch (error: any) {
+        console.error("[Echo] Failed to check order status:", error);
+        // 如果订单不存在或出错，清除待处理订单
+        if (error?.response?.status === 404) {
+          window.localStorage.removeItem(PENDING_ORDER_KEY);
+          setCheckingPayment(false);
+        } else {
+          // 其他错误，继续重试几次
+          pollCount++;
+          if (pollCount < maxPolls) {
+            setTimeout(checkOrderStatus, pollInterval);
+          } else {
+            window.localStorage.removeItem(PENDING_ORDER_KEY);
+            setCheckingPayment(false);
+          }
+        }
+      }
+    };
+
+    // 延迟1秒后开始第一次检查（给页面一些时间加载）
+    const timeoutId = setTimeout(checkOrderStatus, 1000);
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [auth, checkingPayment]);
 
   useEffect(() => {
     if (!userEmail) {
@@ -644,25 +769,56 @@ function Profile({
         plan={nextPlan}
         currentMembershipExpires={membershipExpires}
         onBack={() => setView("membership-options")}
-        onConfirm={async ({ tier, expiresAt }) => {
+        onConfirm={async ({ tier, expiresAt, paymentMethod, quantity, totalAmount }) => {
+          // 防止重复提交：如果正在跳转，不再处理
+          if (window.location.href.includes("alipay.com") || window.location.href.includes("alipaydev.com")) {
+            return;
+          }
+
           try {
-            // 调用 API 保存会员状态和到期时间
-            await subscribeMembership({
-              tier: tier as "premium",
-              expiresAt: expiresAt,
+            // 调用创建支付订单接口
+            const response = await api.post<{
+              order_id: number;
+              order_number: string;
+              pay_url: string;
+              payment_method: string;
+            }>("/payments/orders/create/", {
+              payment_method: paymentMethod,
+              amount: totalAmount,
+              tier: tier,
+              expires_at: expiresAt,
             });
-            // 更新本地状态
-            setMembershipTier(tier);
+
+            if (paymentMethod === "alipay") {
+              // 支付宝支付：跳转到支付页面
+              if (response.data.pay_url) {
+                // 保存订单ID到 localStorage，用于支付完成后检测
+                try {
+                  window.localStorage.setItem(PENDING_ORDER_KEY, JSON.stringify({
+                    order_id: response.data.order_id,
+                    order_number: response.data.order_number,
+                    timestamp: Date.now(),
+                  }));
+                } catch (e) {
+                  console.warn("[Echo] Failed to save pending order:", e);
+                }
+                // 立即跳转，避免重复点击
+                window.location.href = response.data.pay_url;
+              } else {
+                throw new Error("未获取到支付链接");
+              }
+            } else if (paymentMethod === "wechat") {
+              // 微信支付：显示二维码（暂未实现）
+              alert("微信支付暂未实现");
+              setPendingTier(null);
+              setView("membership-options");
+            }
+          } catch (error: any) {
+            console.error("[Echo] Failed to create payment order:", error);
+            const errorMessage = error?.response?.data?.detail || error?.message || "创建支付订单失败，请重试";
+            alert(errorMessage);
             setPendingTier(null);
-            setView("dashboard");
-          } catch (error) {
-            console.error("[Echo] Failed to subscribe membership:", error);
-            // 即使 API 调用失败，也更新本地状态（因为用户已经"支付"了）
-            // 但应该显示错误提示
-            alert("保存会员状态失败，请刷新页面重试");
-            setMembershipTier(tier);
-            setPendingTier(null);
-            setView("dashboard");
+            setView("membership-options");
           }
         }}
       />

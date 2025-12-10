@@ -20,6 +20,7 @@ from core.models import (
     HolidayMessage,
     LongTermPlanCopy,
     MonthlyReportTemplate,
+    PointsOrder,
     ShortTermTaskPreset,
     Test,
     TestAccountProfile,
@@ -52,6 +53,7 @@ from core.serializers import (
     TestSerializer,
     UploadConditionalMessageSerializer,
     UserTestResultSerializer,
+    PointsOrderSerializer,
 )
 
 User = get_user_model()
@@ -310,5 +312,14 @@ class DailyQuizOptionAdminViewSet(viewsets.ModelViewSet):
     def get_parser_classes(self):
         from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
         return [MultiPartParser, FormParser, JSONParser]
+
+
+# ==================== 订单管理 ====================
+
+class PointsOrderAdminViewSet(viewsets.ModelViewSet):
+    queryset = PointsOrder.objects.select_related("user").all().order_by("-created_at")
+    serializer_class = PointsOrderSerializer
+    permission_classes = [IsStaffUser]
+    pagination_class = None
 
 

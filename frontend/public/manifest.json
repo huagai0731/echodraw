@@ -1,13 +1,13 @@
 {
-  "name": "Echo",
-  "short_name": "Echo",
-  "description": "Echo - 您的创作与目标管理应用",
+  "name": "EchoDraw",
+  "short_name": "EchoDraw",
+  "description": "EchoDraw - 您的创作与目标管理应用",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "display_override": ["standalone", "fullscreen"],
-  "background_color": "#ffffff",
-  "theme_color": "#000000",
+  "background_color": "#221b1b",
+  "theme_color": "#221b1b",
   "orientation": "portrait",
   "prefer_related_applications": false,
   "icons": [

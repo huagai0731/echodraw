@@ -1,0 +1,223 @@
+.time-control-panel {
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  z-index: 1000;
+  background: rgba(34, 27, 27, 0.95);
+  border: 2px solid #efeae7;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+}
+
+.time-control-panel--collapsed {
+  padding: 0;
+}
+
+.time-control-panel--expanded {
+  min-width: 280px;
+  max-width: 320px;
+}
+
+.time-control-panel__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  color: #efeae7;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background 0.2s;
+}
+
+.time-control-panel__toggle:hover {
+  background: rgba(239, 234, 231, 0.1);
+  border-radius: 8px;
+}
+
+.time-control-panel__badge {
+  display: inline-block;
+  padding: 2px 6px;
+  background: #ff6b6b;
+  color: white;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: bold;
+  margin-left: 4px;
+}
+
+.time-control-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(239, 234, 231, 0.2);
+}
+
+.time-control-panel__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #efeae7;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.time-control-panel__simulated-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  background: #ff6b6b;
+  color: white;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: bold;
+  margin-left: 8px;
+}
+
+.time-control-panel__close {
+  background: transparent;
+  border: none;
+  color: #efeae7;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+  border-radius: 4px;
+}
+
+.time-control-panel__close:hover {
+  background: rgba(239, 234, 231, 0.1);
+}
+
+.time-control-panel__content {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.time-control-panel__current {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #efeae7;
+  font-size: 14px;
+}
+
+.time-control-panel__current label {
+  font-weight: 500;
+}
+
+.time-control-panel__date-display {
+  font-family: monospace;
+  font-size: 15px;
+  color: #a8e6cf;
+  font-weight: 600;
+}
+
+.time-control-panel__date-input {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.time-control-panel__date-input label {
+  color: #efeae7;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.time-control-panel__date-input input[type="date"] {
+  padding: 8px 12px;
+  background: rgba(239, 234, 231, 0.1);
+  border: 1px solid rgba(239, 234, 231, 0.3);
+  border-radius: 4px;
+  color: #efeae7;
+  font-size: 14px;
+  font-family: monospace;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.time-control-panel__date-input input[type="date"]:focus {
+  outline: none;
+  border-color: #a8e6cf;
+}
+
+.time-control-panel__date-input input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  cursor: pointer;
+}
+
+.time-control-panel__quick-actions {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.time-control-panel__quick-btn {
+  padding: 8px 12px;
+  background: rgba(239, 234, 231, 0.1);
+  border: 1px solid rgba(239, 234, 231, 0.3);
+  border-radius: 4px;
+  color: #efeae7;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.time-control-panel__quick-btn:hover {
+  background: rgba(239, 234, 231, 0.2);
+  border-color: #a8e6cf;
+}
+
+.time-control-panel__reset {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: rgba(255, 107, 107, 0.2);
+  border: 1px solid #ff6b6b;
+  border-radius: 4px;
+  color: #ff6b6b;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.time-control-panel__reset:hover {
+  background: rgba(255, 107, 107, 0.3);
+}
+
+.time-control-panel__refresh-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(168, 230, 207, 0.1);
+  border: 1px solid rgba(168, 230, 207, 0.3);
+  border-radius: 4px;
+  color: #a8e6cf;
+  font-size: 12px;
+}
+
+.time-control-panel__refresh-hint .material-symbols-outlined {
+  font-size: 16px;
+}
+
+@media (max-width: 768px) {
+  .time-control-panel {
+    top: 60px;
+    right: 10px;
+    left: 10px;
+    max-width: none;
+  }
+}
+

@@ -19,6 +19,8 @@ const ShortTermTaskPresetsPage = lazy(() => import("@/admin/pages/ShortTermTaskP
 const TestManagementPage = lazy(() => import("@/admin/pages/TestManagement"));
 const DailyQuizPage = lazy(() => import("@/admin/pages/DailyQuiz"));
 const LongTermCopyPage = lazy(() => import("@/admin/pages/LongTermCopy"));
+const ConcurrentTestPage = lazy(() => import("@/admin/pages/ConcurrentTest"));
+const OrdersPage = lazy(() => import("@/admin/pages/Orders"));
 
 // 加载占位符组件
 function LoadingFallback() {
@@ -63,6 +65,8 @@ function App() {
               <Route path="daily-quiz" element={<DailyQuizPage />} />
               <Route path="test-accounts" element={<TestAccountsPage />} />
               <Route path="test-accounts/:profileId" element={<TestAccountDetailPage />} />
+              <Route path="concurrent-test" element={<ConcurrentTestPage />} />
+              <Route path="orders" element={<OrdersPage />} />
             </Route>
             <Route path="/*" element={<UserApp />} />
           </Routes>

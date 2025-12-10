@@ -1967,6 +1967,11 @@ class PointsOrder(models.Model):
         blank=True,
         help_text="支付完成时间。",
     )
+    metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="附加元数据，用于存储会员信息等。",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     

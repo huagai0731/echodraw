@@ -1523,6 +1523,11 @@ function Goals() {
         onSaved={handleGoalSaved}
         initialGoal={editingGoal}
         mode={editingGoal ? "edit" : "create"}
+        onNavigateToProfile={() => {
+          handleWizardClose();
+          // 通过事件通知UserApp跳转到我的页面
+          window.dispatchEvent(new CustomEvent("navigate-to-profile"));
+        }}
       />
     );
   }

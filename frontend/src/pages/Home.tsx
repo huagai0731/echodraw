@@ -23,12 +23,14 @@ type HomeProps = {
   onOpenMentalStateAssessment?: () => void;
   onOpenColorPerceptionTest?: () => void;
   onOpenVisualAnalysis?: () => void;
+  onNavigateToProfile?: () => void;
 };
 
 function Home({
   onOpenMentalStateAssessment,
   onOpenColorPerceptionTest: _onOpenColorPerceptionTest,
   onOpenVisualAnalysis,
+  onNavigateToProfile,
 }: HomeProps) {
   const [authVersion, setAuthVersion] = useState(0);
 
@@ -170,6 +172,7 @@ function Home({
               error={checkInError}
               onCheckIn={handleCheckIn}
               onRetry={retryCheckIn}
+              onNavigateToProfile={onNavigateToProfile}
             />
           </div>
 

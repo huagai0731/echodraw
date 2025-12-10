@@ -523,6 +523,21 @@ function UserApp() {
     };
   }, []);
 
+  // 监听跳转到我的页面的事件
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    
+    const handleNavigateToProfile = () => {
+      setActiveNav("profile");
+      setActivePage("profile");
+    };
+    
+    window.addEventListener("navigate-to-profile", handleNavigateToProfile);
+    return () => {
+      window.removeEventListener("navigate-to-profile", handleNavigateToProfile);
+    };
+  }, []);
+
   // 获取用户会员状态
   useEffect(() => {
     const loadMembershipStatus = async () => {
@@ -1267,6 +1282,11 @@ function UserApp() {
             onBack={handleCloseVisualAnalysis}
             onSave={handleVisualAnalysisSave}
             resultId={currentVisualAnalysisResultId ?? undefined}
+            onNavigateToProfile={() => {
+              handleCloseVisualAnalysis();
+              setActiveNav("profile");
+              setActivePage("profile");
+            }}
           />
         ) : activeNav === "home" ? (
           <Home
@@ -1274,6 +1294,10 @@ function UserApp() {
             onOpenMentalStateAssessment={handleOpenTestList}
             onOpenColorPerceptionTest={handleOpenColorPerceptionTest}
             onOpenVisualAnalysis={handleOpenVisualAnalysis}
+            onNavigateToProfile={() => {
+              setActiveNav("profile");
+              setActivePage("profile");
+            }}
           />
         ) : activeNav === "gallery" ? (
           <Gallery

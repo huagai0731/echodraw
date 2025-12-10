@@ -12,6 +12,7 @@ type CheckInCardProps = {
   error: string | null;
   onCheckIn: () => void;
   onRetry?: () => void;
+  onNavigateToProfile?: () => void;
 };
 
 export default function CheckInCard({
@@ -21,6 +22,7 @@ export default function CheckInCard({
   error,
   onCheckIn,
   onRetry,
+  onNavigateToProfile,
 }: CheckInCardProps) {
   const totalCheckins = checkInStatus?.total_checkins ?? 0;
 
@@ -65,7 +67,16 @@ export default function CheckInCard({
       {error && (
         <div className="check-in-card__error" role="alert">
           <p className="check-in-card__error-text">{error}</p>
-          {onRetry && !checkedIn && (
+          {error === "请登录后打卡。" && onNavigateToProfile ? (
+            <button
+              type="button"
+              className="check-in-card__login-button"
+              onClick={onNavigateToProfile}
+              aria-label="前往登录"
+            >
+              前往登录
+            </button>
+          ) : onRetry && !checkedIn ? (
             <button
               type="button"
               className="check-in-card__retry-button"
@@ -74,7 +85,7 @@ export default function CheckInCard({
             >
               重试
             </button>
-          )}
+          ) : null}
         </div>
       )}
     </div>

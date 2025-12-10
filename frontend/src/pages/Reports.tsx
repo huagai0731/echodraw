@@ -459,9 +459,11 @@ function Reports({ artworks = [], onOpenTestResult, onOpenVisualAnalysisResult }
     let isMounted = true;
 
     async function loadCalendar(year: number, month: number) {
+      // 未登录时也显示日历（使用空数据，但显示界面）
       if (!hasAuthToken()) {
         setCalendarDays([]);
         setCalendarError(null);
+        setCalendarLoading(false);
         return;
       }
 

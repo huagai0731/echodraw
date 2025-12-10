@@ -777,4 +777,45 @@ export async function deleteMonthlyReportTemplate(id: number) {
   await api.delete(`/admin/reports/monthly-templates/${id}/`);
 }
 
+// ==================== 订单管理 ====================
+
+export type AdminOrder = {
+  id: number;
+  order_number: string;
+  user: number;
+  user_email: string;
+  points: number;
+  amount: string;
+  payment_method: string;
+  payment_method_display: string;
+  status: string;
+  status_display: string;
+  payment_transaction_id: string | null;
+  paid_at: string | null;
+  created_at: string;
+  updated_at: string;
+  metadata: Record<string, unknown>;
+};
+
+export async function listOrders() {
+  const response = await api.get<AdminOrder[]>("/admin/orders/");
+  return response.data;
+}
+
+export async function getOrder(id: number) {
+  const response = await api.get<AdminOrder>(`/admin/orders/${id}/`);
+  return response.data;
+}
+
+export async function queryAndSyncOrder(id: number) {
+  const response = await api.post<{
+    success: boolean;
+    message: string;
+    order_status?: string;
+    trade_no?: string;
+    alipay_status?: string;
+  }>(`/payments/orders/${id}/query-and-sync/`);
+  return response.data;
+}
+
 

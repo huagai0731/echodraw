@@ -1,0 +1,530 @@
+.concurrent-test-page {
+  padding: 2rem;
+  min-height: 100vh;
+  background: #0c0f1a;
+  color: #f5f7ff;
+}
+
+.concurrent-test-page__header {
+  margin-bottom: 2rem;
+}
+
+.concurrent-test-page__header h1 {
+  margin: 0 0 0.5rem;
+  font-size: 2rem;
+  font-weight: 600;
+  color: #f5f7ff;
+}
+
+.concurrent-test-page__subtitle {
+  margin: 0;
+  color: rgba(245, 247, 255, 0.6);
+  font-size: 0.95rem;
+}
+
+.concurrent-test-page__content {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  max-width: 1400px;
+}
+
+.concurrent-test-section {
+  background: rgba(18, 23, 48, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+
+.concurrent-test-section h2 {
+  margin: 0 0 1.5rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #f5f7ff;
+}
+
+/* 表单样式 */
+.concurrent-test-form {
+  margin-bottom: 1.5rem;
+}
+
+.concurrent-test-form__row {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.concurrent-test-input {
+  flex: 1;
+  min-width: 200px;
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: #f5f7ff;
+  font-size: 0.95rem;
+  transition: all 0.2s ease;
+}
+
+.concurrent-test-input:focus {
+  outline: none;
+  border-color: rgba(123, 140, 255, 0.5);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.concurrent-test-input::placeholder {
+  color: rgba(245, 247, 255, 0.4);
+}
+
+/* 按钮样式 */
+.concurrent-test-button {
+  padding: 0.75rem 1.25rem;
+  background: rgba(123, 140, 255, 0.15);
+  border: 1px solid rgba(123, 140, 255, 0.3);
+  border-radius: 8px;
+  color: #f5f7ff;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.concurrent-test-button:hover:not(:disabled) {
+  background: rgba(123, 140, 255, 0.25);
+  border-color: rgba(123, 140, 255, 0.5);
+}
+
+.concurrent-test-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.concurrent-test-button--primary {
+  background: rgba(123, 140, 255, 0.3);
+  border-color: rgba(123, 140, 255, 0.5);
+}
+
+.concurrent-test-button--primary:hover:not(:disabled) {
+  background: rgba(123, 140, 255, 0.4);
+  border-color: rgba(123, 140, 255, 0.7);
+}
+
+.concurrent-test-button--large {
+  padding: 1rem 2rem;
+  font-size: 1.1rem;
+}
+
+.concurrent-test-button--small {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+}
+
+.concurrent-test-button--danger {
+  background: rgba(255, 87, 87, 0.15);
+  border-color: rgba(255, 87, 87, 0.3);
+}
+
+.concurrent-test-button--danger:hover:not(:disabled) {
+  background: rgba(255, 87, 87, 0.25);
+  border-color: rgba(255, 87, 87, 0.5);
+}
+
+/* 账号列表 */
+.concurrent-test-accounts {
+  margin-top: 1rem;
+}
+
+.concurrent-test-empty {
+  padding: 2rem;
+  text-align: center;
+  color: rgba(245, 247, 255, 0.5);
+}
+
+.concurrent-test-accounts__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.concurrent-test-accounts__count {
+  font-size: 0.9rem;
+  color: rgba(245, 247, 255, 0.6);
+}
+
+.concurrent-test-accounts__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.concurrent-test-account {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.concurrent-test-account:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.concurrent-test-account--selected {
+  background: rgba(123, 140, 255, 0.1);
+  border-color: rgba(123, 140, 255, 0.3);
+}
+
+.concurrent-test-account__status {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.concurrent-test-account__actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* 状态标签 */
+.concurrent-test-status {
+  padding: 0.25rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(245, 247, 255, 0.7);
+}
+
+.concurrent-test-status--loading {
+  background: rgba(255, 193, 7, 0.15);
+  color: #ffc107;
+}
+
+.concurrent-test-status--success {
+  background: rgba(76, 175, 80, 0.15);
+  color: #4caf50;
+}
+
+.concurrent-test-status--error {
+  background: rgba(255, 87, 87, 0.15);
+  color: #ff5757;
+}
+
+.concurrent-test-task-status {
+  padding: 0.25rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.concurrent-test-task-status--running {
+  background: rgba(123, 140, 255, 0.15);
+  color: #7b8cff;
+}
+
+.concurrent-test-task-status--success {
+  background: rgba(76, 175, 80, 0.15);
+  color: #4caf50;
+}
+
+.concurrent-test-task-status--error {
+  background: rgba(255, 87, 87, 0.15);
+  color: #ff5757;
+}
+
+.concurrent-test-duration {
+  margin-left: 0.5rem;
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
+/* 复选框和单选框 */
+.concurrent-test-checkbox,
+.concurrent-test-radio-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.concurrent-test-checkbox input[type="checkbox"],
+.concurrent-test-radio-group input[type="radio"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #7b8cff;
+}
+
+.concurrent-test-checkbox input[type="checkbox"]:disabled,
+.concurrent-test-radio-group input[type="radio"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 操作配置 */
+.concurrent-test-operation {
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.concurrent-test-file-selector {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.concurrent-test-concurrency-settings {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+}
+
+.concurrent-test-setting {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.concurrent-test-setting__label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: rgba(245, 247, 255, 0.9);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.concurrent-test-setting__hint {
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: rgba(245, 247, 255, 0.5);
+  font-style: italic;
+}
+
+.concurrent-test-input--number {
+  width: 100%;
+  max-width: 200px;
+}
+
+.concurrent-test-file-label {
+  flex: 1;
+}
+
+.concurrent-test-file-input {
+  display: none;
+}
+
+.concurrent-test-file-button {
+  display: inline-block;
+  padding: 0.75rem 1.25rem;
+  background: rgba(123, 140, 255, 0.15);
+  border: 1px solid rgba(123, 140, 255, 0.3);
+  border-radius: 8px;
+  color: #f5f7ff;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.concurrent-test-file-button:hover {
+  background: rgba(123, 140, 255, 0.25);
+  border-color: rgba(123, 140, 255, 0.5);
+}
+
+.concurrent-test-actions {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+/* 统计信息 */
+.concurrent-test-stats {
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.concurrent-test-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 1rem 1.5rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  min-width: 100px;
+}
+
+.concurrent-test-stat__label {
+  font-size: 0.85rem;
+  color: rgba(245, 247, 255, 0.6);
+}
+
+.concurrent-test-stat__value {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #f5f7ff;
+}
+
+.concurrent-test-stat__value--success {
+  color: #4caf50;
+}
+
+.concurrent-test-stat__value--error {
+  color: #ff5757;
+}
+
+.concurrent-test-stat__value--running {
+  color: #7b8cff;
+}
+
+/* 结果列表 */
+.concurrent-test-results {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.concurrent-test-result {
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+}
+
+.concurrent-test-result--success {
+  border-color: rgba(76, 175, 80, 0.3);
+  background: rgba(76, 175, 80, 0.05);
+}
+
+.concurrent-test-result--error {
+  border-color: rgba(255, 87, 87, 0.3);
+  background: rgba(255, 87, 87, 0.05);
+}
+
+.concurrent-test-result__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.concurrent-test-result__email {
+  font-weight: 500;
+  color: #f5f7ff;
+}
+
+.concurrent-test-result__status {
+  padding: 0.25rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.concurrent-test-result__status--success {
+  background: rgba(76, 175, 80, 0.15);
+  color: #4caf50;
+}
+
+.concurrent-test-result__status--error {
+  background: rgba(255, 87, 87, 0.15);
+  color: #ff5757;
+}
+
+.concurrent-test-result__status--running {
+  background: rgba(123, 140, 255, 0.15);
+  color: #7b8cff;
+}
+
+.concurrent-test-result__error {
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  background: rgba(255, 87, 87, 0.1);
+  border-left: 3px solid #ff5757;
+  border-radius: 4px;
+  color: #ff5757;
+  font-size: 0.9rem;
+}
+
+.concurrent-test-result__time {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: rgba(245, 247, 255, 0.6);
+}
+
+.concurrent-test-result__details {
+  margin-top: 0.75rem;
+}
+
+.concurrent-test-result__details summary {
+  cursor: pointer;
+  padding: 0.5rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  font-size: 0.9rem;
+  color: rgba(245, 247, 255, 0.8);
+  user-select: none;
+}
+
+.concurrent-test-result__details summary:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.concurrent-test-result__json {
+  margin-top: 0.5rem;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: rgba(245, 247, 255, 0.8);
+  overflow-x: auto;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+  .concurrent-test-page {
+    padding: 1rem;
+  }
+
+  .concurrent-test-form__row {
+    flex-direction: column;
+  }
+
+  .concurrent-test-account {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .concurrent-test-account__status {
+    width: 100%;
+  }
+
+  .concurrent-test-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+

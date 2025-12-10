@@ -111,20 +111,115 @@ export function parseISODateInShanghai(dateStr: string): Date | null {
 }
 
 /**
- * 获取上海时区的当前日期字符串（YYYY-MM-DD）
+ * 模拟时间的 localStorage key
  */
+const SIMULATED_DATE_KEY = "echo-simulated-date";
 
-export function getTodayInShanghai(): string {
-  return "2026-03-01"; // 测试用，模拟1月1日
-  // const today = formatISODateInShanghai(new Date());
-  // return today || "";
+/**
+ * 检查是否允许使用模拟日期（仅在开发环境）
+ * @returns 如果是开发环境返回 true，否则返回 false
+ */
+function isSimulatedDateAllowed(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  
+  // 检查是否为开发环境
+  // 1. 检查 Vite 环境变量（如果可用）
+  try {
+    // @ts-ignore - import.meta 在 Vite 中总是可用
+    if (import.meta?.env) {
+      // @ts-ignore
+      if (import.meta.env.DEV || import.meta.env.MODE === "development") {
+        return true;
+      }
+    }
+  } catch {
+    // 如果 import.meta 不可用，继续检查其他条件
+  }
+  
+  // 2. 检查 hostname（本地开发环境）
+  const hostname = window.location.hostname;
+  if (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "0.0.0.0" ||
+    hostname.startsWith("192.168.") ||
+    hostname.startsWith("10.") ||
+    hostname.startsWith("172.")
+  ) {
+    return true;
+  }
+  
+  // 生产环境不允许使用模拟日期
+  return false;
 }
-/*
+
+/**
+ * 设置模拟日期
+ * @param dateStr 日期字符串（YYYY-MM-DD），如果为 null 则清除模拟
+ */
+export function setSimulatedDate(dateStr: string | null): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  
+  // 生产环境不允许设置模拟日期
+  if (!isSimulatedDateAllowed()) {
+    console.warn("[Echo] 模拟日期功能仅在开发环境可用，已忽略设置请求");
+    // 如果尝试设置，同时清除可能存在的旧数据
+    window.localStorage.removeItem(SIMULATED_DATE_KEY);
+    return;
+  }
+  
+  if (dateStr === null) {
+    window.localStorage.removeItem(SIMULATED_DATE_KEY);
+  } else {
+    window.localStorage.setItem(SIMULATED_DATE_KEY, dateStr);
+  }
+}
+
+/**
+ * 获取模拟日期
+ * @returns 模拟日期字符串（YYYY-MM-DD），如果未设置或不在开发环境返回 null
+ */
+export function getSimulatedDate(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  
+  // 生产环境不允许使用模拟日期
+  if (!isSimulatedDateAllowed()) {
+    // 清除可能存在的模拟日期（防止之前开发时留下的数据）
+    const existing = window.localStorage.getItem(SIMULATED_DATE_KEY);
+    if (existing) {
+      window.localStorage.removeItem(SIMULATED_DATE_KEY);
+    }
+    return null;
+  }
+  
+  const simulated = window.localStorage.getItem(SIMULATED_DATE_KEY);
+  if (simulated && isValidISODate(simulated)) {
+    return simulated;
+  }
+  return null;
+}
+
+/**
+ * 获取上海时区的当前日期字符串（YYYY-MM-DD）
+ * 如果设置了模拟日期且允许使用，则返回模拟日期；否则返回真实日期
+ */
 export function getTodayInShanghai(): string {
+  // 优先使用模拟日期（仅在开发环境）
+  const simulated = getSimulatedDate();
+  if (simulated) {
+    return simulated;
+  }
+  
+  // 返回真实日期
   const today = formatISODateInShanghai(new Date());
   return today || "";
 }
-*/
 /**
  * 标准化上传日期 - 统一使用上海时区
  * @param uploadedDate 已格式化的日期字符串（YYYY-MM-DD）
@@ -178,7 +273,7 @@ export function startOfWeekInShanghai(reference: Date): Date {
 
 /**
  * 判断某年某月的月报是否可见
- * 月报在下个月1号及之后可见
+ * 月报在当月1号及之后可见
  * @param year 年份
  * @param month 月份（1-12）
  * @returns 如果月报可见返回 true，否则返回 false
@@ -198,17 +293,9 @@ export function isMonthlyReportVisible(year: number, month: number): boolean {
   const todayMonth = today.getMonth() + 1; // 1-12
   const todayDay = today.getDate();
   
-  // 计算该月报的可见日期（下个月1号）
-  let visibleYear: number;
-  let visibleMonth: number;
-  
-  if (month === 12) {
-    visibleYear = year + 1;
-    visibleMonth = 1;
-  } else {
-    visibleYear = year;
-    visibleMonth = month + 1;
-  }
+  // 计算该月报的可见日期（当月1号）
+  const visibleYear = year;
+  const visibleMonth = month;
   
   // 如果当前日期 >= 可见日期，则可见
   if (todayYear > visibleYear) {
@@ -226,7 +313,7 @@ export function isMonthlyReportVisible(year: number, month: number): boolean {
 
 /**
  * 获取应该显示的月报月份列表
- * 从用户注册日期的下个月开始，到当前月份
+ * 从用户注册日期所在的月份开始，到当前月份
  * @param userRegistrationDate 用户注册日期（ISO格式字符串，如 "2025-12-07"），如果未提供则从当前月份往前推12个月
  * @returns 应该显示的月报月份列表，格式为 {year: number, month: number}[]
  */
@@ -246,7 +333,7 @@ export function getVisibleMonthlyReports(userRegistrationDate?: string | null): 
   
   const reports: Array<{ year: number; month: number }> = [];
   
-  // 确定起始月份：从用户注册日期的下个月开始
+  // 确定起始月份：从用户注册日期所在的月份开始
   let startYear: number;
   let startMonth: number;
   
@@ -257,7 +344,7 @@ export function getVisibleMonthlyReports(userRegistrationDate?: string | null): 
     
     if (registrationDate) {
       // 起始月份是用户注册日期所在的月份
-      // 例如：用户12月7日注册，第一个月报是12月月报（在1月1日可见）
+      // 例如：用户9月12日注册，第一个月报是9月月报（在9月1日可见）
       startYear = registrationDate.getFullYear();
       startMonth = registrationDate.getMonth() + 1; // 1-12
     } else {
@@ -279,11 +366,11 @@ export function getVisibleMonthlyReports(userRegistrationDate?: string | null): 
     }
   }
   
-  // 从起始月份开始，到当前月份的上一个月（因为当前月份的月报要等到下个月1号才可见）
+  // 从起始月份开始，到当前月份（因为当前月份的月报在当月1号即可可见）
   let year = startYear;
   let month = startMonth;
   const endYear = currentYear;
-  const endMonth = currentMonth - 1; // 当前月份的上一个月
+  const endMonth = currentMonth; // 当前月份
   
   // 如果起始月份已经超过结束月份，直接返回空数组
   if (year > endYear || (year === endYear && month > endMonth)) {

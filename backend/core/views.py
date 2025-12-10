@@ -27,6 +27,7 @@ from rest_framework.views import APIView
 from rest_framework.pagination import PageNumberPagination
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
+from django.views.decorators.csrf import csrf_exempt
 from core.email_utils import send_mail_async
 
 # 配置日志记录器
@@ -51,11 +52,10 @@ def get_now_with_mock() -> datetime:
     获取当前时间（datetime）。
     支持通过环境变量 MOCK_DATE 设置模拟日期（格式：YYYY-MM-DD），用于测试。
     如果设置了 MOCK_DATE，将返回该日期对应的 datetime（中午12点，上海时区）而不是真实时间。
-    如果没有设置 MOCK_DATE，默认使用 "2026-03-01"（与前端保持一致）。
+    如果没有设置 MOCK_DATE，则使用真实时间。
     """
     # 检查是否有模拟日期设置（用于测试）
-    # 默认使用与前端相同的模拟日期
-    mock_date_str = os.getenv("MOCK_DATE", "2026-03-01").strip()
+    mock_date_str = os.getenv("MOCK_DATE", "").strip()
     if mock_date_str:
         try:
             # 解析日期字符串（格式：YYYY-MM-DD）
@@ -92,11 +92,10 @@ def get_today_shanghai() -> date:
     
     支持通过环境变量 MOCK_DATE 设置模拟日期（格式：YYYY-MM-DD），用于测试。
     如果设置了 MOCK_DATE，将返回该日期而不是真实日期。
-    如果没有设置 MOCK_DATE，默认使用 "2026-03-01"（与前端保持一致）。
+    如果没有设置 MOCK_DATE，则使用真实日期。
     """
     # 检查是否有模拟日期设置（用于测试）
-    # 默认使用与前端相同的模拟日期
-    mock_date_str = os.getenv("MOCK_DATE", "2026-03-01").strip()
+    mock_date_str = os.getenv("MOCK_DATE", "").strip()
     if mock_date_str:
         try:
             # 解析日期字符串（格式：YYYY-MM-DD）
@@ -195,6 +194,7 @@ from core.models import (
     LongTermPlanCopy,
     Mood,
     MonthlyReport,
+    PointsOrder,
     ShortTermGoal,
     ShortTermGoalTaskCompletion,
     ShortTermTaskPreset,
@@ -1121,13 +1121,23 @@ class UserUploadListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer: UserUploadSerializer):
         # 检查用户是否为有效会员（包括检查会员是否过期）
         user = self.request.user
-        profile = getattr(user, 'profile', None)
+        
+        # 使用select_for_update锁定用户记录，防止并发上传时的竞态条件
+        # 这样可以确保在检查限制和创建上传记录之间，其他请求无法同时通过检查
+        try:
+            # 锁定用户记录，防止并发问题
+            locked_user = get_user_model().objects.select_for_update().get(pk=user.pk)
+        except get_user_model().DoesNotExist:
+            raise serializers.ValidationError("用户不存在")
+        
+        profile = getattr(locked_user, 'profile', None)
         is_member = is_valid_member(profile)
         
         # 非会员用户只能上传1张图片
         # 注意：这里检查的是总上传数量，不会删除已有图片
+        # 在锁定用户记录后检查，确保并发安全
         if not is_member:
-            total_uploads_count = UserUpload.objects.filter(user=user).count()
+            total_uploads_count = UserUpload.objects.filter(user=locked_user).count()
             if total_uploads_count >= 1:
                 raise serializers.ValidationError(
                     "非会员用户只能上传1张图片。加入EchoDraw会员可享受无限制上传。"
@@ -1137,7 +1147,7 @@ class UserUploadListCreateView(generics.ListCreateAPIView):
         # 使用 created_at 字段检查本月实际上传的数量，而不是 uploaded_at（用户可能设置为过去的日期）
         month_start, month_end = get_current_month_range_shanghai()
         monthly_uploads_count = UserUpload.objects.filter(
-            user=user,
+            user=locked_user,
             created_at__date__gte=month_start,
             created_at__date__lte=month_end
         ).count()
@@ -1149,7 +1159,32 @@ class UserUploadListCreateView(generics.ListCreateAPIView):
             )
         
         try:
-            upload = serializer.save(user=self.request.user)
+            # 使用锁定的用户对象保存上传记录
+            upload = serializer.save(user=locked_user)
+            
+            # 保存后再次验证限制（双重检查，防止在保存过程中出现并发问题）
+            if not is_member:
+                total_uploads_count_after = UserUpload.objects.filter(user=locked_user).count()
+                if total_uploads_count_after > 1:
+                    # 如果超过限制，删除刚创建的上传记录并抛出错误
+                    upload.delete()
+                    raise serializers.ValidationError(
+                        "非会员用户只能上传1张图片。加入EchoDraw会员可享受无限制上传。"
+                    )
+            
+            if is_member:
+                monthly_uploads_count_after = UserUpload.objects.filter(
+                    user=locked_user,
+                    created_at__date__gte=month_start,
+                    created_at__date__lte=month_end
+                ).count()
+                if monthly_uploads_count_after > MAX_MONTHLY_UPLOADS:
+                    # 如果超过限制，删除刚创建的上传记录并抛出错误
+                    upload.delete()
+                    raise serializers.ValidationError(
+                        f"本月已上传 {monthly_uploads_count_after} 张图片，已达到每月上限 {MAX_MONTHLY_UPLOADS} 张。"
+                    )
+            
             # 记录上传成功信息，包括图片URL和存储位置
             image_url = None
             storage_backend = None
@@ -1215,6 +1250,20 @@ class UserUploadListCreateView(generics.ListCreateAPIView):
                         "upload_id": upload.id,
                     }
                 )
+        except IntegrityError as e:
+            # 处理数据库完整性错误（可能是并发冲突）
+            logger.error(
+                f"Failed to create user upload due to integrity error (possibly concurrent request)",
+                extra={
+                    "user_id": self.request.user.id,
+                    "error": str(e),
+                },
+                exc_info=True
+            )
+            # 将IntegrityError转换为ValidationError，返回400而不是500
+            raise serializers.ValidationError(
+                "上传失败，可能是由于并发请求冲突。请稍后重试。"
+            )
         except Exception as e:
             # 记录上传失败的错误
             logger.error(
@@ -1222,6 +1271,7 @@ class UserUploadListCreateView(generics.ListCreateAPIView):
                 extra={
                     "user_id": self.request.user.id,
                     "error": str(e),
+                    "error_type": type(e).__name__,
                 },
                 exc_info=True
             )
@@ -1251,7 +1301,7 @@ class UserUploadListCreateView(generics.ListCreateAPIView):
         # 使用事务和异常处理防止并发竞态条件
         try:
             checkin, created = DailyCheckIn.objects.get_or_create(
-                user=self.request.user,
+                user=locked_user,
                 date=checkin_date,
                 defaults={"source": "upload"},
             )
@@ -1269,7 +1319,7 @@ class UserUploadListCreateView(generics.ListCreateAPIView):
                 # 如果仍然不存在，记录错误并重新抛出
                 logger.error(
                     f"上传作品时打卡记录并发冲突后无法获取记录",
-                    extra={"user_id": self.request.user.id, "date": checkin_date.isoformat()},
+                    extra={"user_id": locked_user.id, "date": checkin_date.isoformat()},
                     exc_info=True
                 )
                 raise
@@ -3834,4 +3884,565 @@ def proxy_visual_analysis_image(request):
         return Response(
             {"detail": "服务器内部错误"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
+# ==================== 支付相关接口 ====================
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_payment_order(request):
+    """
+    创建支付订单
+    
+    请求体：
+    {
+        "payment_method": "alipay",  # 或 "wechat"
+        "amount": 99.00,
+        "tier": "premium",
+        "expires_at": "2025-12-31"
+    }
+    """
+    from decimal import Decimal
+    from core.payment.alipay import create_alipay_payment_url
+    
+    user = request.user
+    payment_method = request.data.get('payment_method')
+    amount_str = request.data.get('amount')
+    tier = request.data.get('tier')
+    expires_at = request.data.get('expires_at')
+    
+    # 验证参数
+    if not payment_method or payment_method not in [PointsOrder.PAYMENT_METHOD_ALIPAY, PointsOrder.PAYMENT_METHOD_WECHAT]:
+        return Response(
+            {"detail": "无效的支付方式"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    if not amount_str:
+        return Response(
+            {"detail": "必须提供订单金额"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    try:
+        amount = Decimal(str(amount_str))
+        if amount <= 0:
+            raise ValueError("金额必须大于0")
+    except (ValueError, TypeError):
+        return Response(
+            {"detail": "无效的金额格式"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    if not tier:
+        return Response(
+            {"detail": "必须提供会员等级"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    if not expires_at:
+        return Response(
+            {"detail": "必须提供到期时间"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # 检查用户是否有未支付的相同订单（防止重复创建）
+    # 检查最近5分钟内是否有相同金额和会员等级的待支付订单
+    from datetime import timedelta
+    recent_orders = PointsOrder.objects.filter(
+        user=user,
+        status=PointsOrder.ORDER_STATUS_PENDING,
+        amount=amount,
+        payment_method=payment_method,
+        created_at__gte=timezone.now() - timedelta(minutes=5),
+    ).order_by('-created_at')
+    
+    # 检查是否有相同会员信息的订单
+    for recent_order in recent_orders:
+        recent_metadata = recent_order.metadata or {}
+        if (recent_metadata.get('order_type') == 'membership' and
+            recent_metadata.get('tier') == tier and
+            recent_metadata.get('expires_at') == expires_at):
+            # 返回已存在的订单
+            logger.info(f"用户 {user.email} 在5分钟内已创建相同订单 {recent_order.order_number}，返回已有订单")
+            try:
+                if payment_method == PointsOrder.PAYMENT_METHOD_ALIPAY:
+                    subject = f"EchoDraw会员-{tier}"
+                    pay_url = create_alipay_payment_url(
+                        order_number=recent_order.order_number,
+                        amount=str(amount),
+                        subject=subject,
+                    )
+                    return Response({
+                        'order_id': recent_order.id,
+                        'order_number': recent_order.order_number,
+                        'pay_url': pay_url,
+                        'payment_method': payment_method,
+                        'message': '已返回您最近创建的订单',
+                    })
+            except Exception as e:
+                logger.exception(f"为已有订单生成支付URL失败: {e}")
+                # 如果生成支付URL失败，继续创建新订单
+    
+    # 生成唯一订单号
+    import uuid
+    order_number = f"{datetime.now().strftime('%Y%m%d%H%M%S')}{uuid.uuid4().hex[:8]}"
+    
+    # 创建订单
+    order = PointsOrder.objects.create(
+        user=user,
+        order_number=order_number,
+        points=0,  # 会员订单，点数为0
+        amount=amount,
+        payment_method=payment_method,
+        status=PointsOrder.ORDER_STATUS_PENDING,
+        metadata={
+            "tier": tier,
+            "expires_at": expires_at,
+            "order_type": "membership",  # 标识这是会员订单
+        }
+    )
+    
+    if payment_method == PointsOrder.PAYMENT_METHOD_ALIPAY:
+        try:
+            # 调用支付宝接口
+            subject = f"EchoDraw会员-{tier}"
+            pay_url = create_alipay_payment_url(
+                order_number=order_number,
+                amount=str(amount),
+                subject=subject,
+            )
+            
+            return Response({
+                'order_id': order.id,
+                'order_number': order_number,
+                'pay_url': pay_url,
+                'payment_method': payment_method,
+            })
+        except Exception as e:
+            logger.exception(f"创建支付宝支付失败: {e}")
+            # 删除订单
+            order.delete()
+            return Response(
+                {"detail": f"创建支付订单失败: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    elif payment_method == PointsOrder.PAYMENT_METHOD_WECHAT:
+        # 微信支付暂未实现
+        order.delete()
+        return Response(
+            {"detail": "微信支付暂未实现"},
+            status=status.HTTP_501_NOT_IMPLEMENTED
+        )
+    
+    return Response(
+        {"detail": "不支持的支付方式"},
+        status=status.HTTP_400_BAD_REQUEST
+    )
+
+
+@api_view(['GET', 'POST'])
+@csrf_exempt  # 支付宝回调不需要CSRF验证
+@permission_classes([AllowAny])  # 支付宝回调不需要认证
+def alipay_notify(request):
+    """
+    支付宝支付回调接口
+    
+    GET请求：返回接口信息（用于测试和调试）
+    POST请求：处理支付宝回调
+    """
+    # 如果是GET请求，返回友好提示
+    if request.method == 'GET':
+        return Response({
+            'message': '支付宝支付回调接口',
+            'method': '此接口仅接受POST请求',
+            'description': '支付宝会在用户支付完成后，通过POST请求调用此接口',
+            'url': request.build_absolute_uri(),
+        })
+    
+    from core.payment.alipay import verify_alipay_notify
+    
+    # 获取回调数据（支付宝使用POST表单数据，Content-Type: application/x-www-form-urlencoded）
+    # 优先使用 request.POST（Django会自动解析表单数据）
+    data = {}
+    if hasattr(request, 'POST') and request.POST:
+        data = dict(request.POST)
+        # Django的QueryDict返回列表，需要转换为单个值
+        data = {k: v[0] if isinstance(v, list) and len(v) > 0 else v for k, v in data.items()}
+    # 如果没有POST数据，尝试从请求体解析
+    elif hasattr(request, 'body') and request.body:
+        try:
+            import urllib.parse
+            body_str = request.body.decode('utf-8')
+            parsed_data = urllib.parse.parse_qs(body_str, keep_blank_values=True)
+            # parse_qs 返回的是列表，需要转换为单个值
+            data = {k: v[0] if isinstance(v, list) and len(v) > 0 else v for k, v in parsed_data.items()}
+        except Exception as e:
+            logger.warning(f"解析回调请求体失败: {e}, body: {request.body[:500] if request.body else 'empty'}")
+            # 尝试使用DRF的request.data
+            if hasattr(request, 'data') and request.data:
+                if hasattr(request.data, 'dict'):
+                    data = request.data.dict()
+                else:
+                    data = dict(request.data)
+    # 最后尝试使用DRF的request.data
+    elif hasattr(request, 'data') and request.data:
+        if hasattr(request.data, 'dict'):
+            data = request.data.dict()
+        else:
+            data = dict(request.data)
+    
+    if not data:
+        logger.warning(f"支付宝回调数据为空, Content-Type: {request.META.get('CONTENT_TYPE', 'unknown')}, Method: {request.method}")
+        return Response('fail')
+    
+    logger.info(f"收到支付宝回调: 订单号={data.get('out_trade_no', 'N/A')}, 交易状态={data.get('trade_status', 'N/A')}, Content-Type: {request.META.get('CONTENT_TYPE', 'unknown')}")
+    
+    sign = data.pop('sign', None)
+    
+    if not sign:
+        logger.warning("支付宝回调缺少签名")
+        return Response('fail')
+    
+    # 验证签名
+    success = verify_alipay_notify(data, sign)
+    
+    if not success:
+        logger.warning(f"支付宝回调签名验证失败: {data}")
+        return Response('fail')
+    
+    # 检查交易状态
+    trade_status = data.get('trade_status')
+    order_number = data.get('out_trade_no')  # 获取订单号
+    trade_no = data.get('trade_no')
+    
+    logger.info(f"支付宝回调 - 订单号: {order_number}, 交易状态: {trade_status}")
+    
+    if not order_number:
+        logger.warning("支付宝回调缺少订单号")
+        return Response('fail')
+    
+    if trade_status not in ('TRADE_SUCCESS', 'TRADE_FINISHED'):
+        logger.info(f"支付宝回调交易状态不是成功: {trade_status}, 订单号: {order_number}")
+        return Response('success')  # 即使不是成功状态，也返回success，避免支付宝重复通知
+    
+    # 支付成功
+    
+    try:
+        order = PointsOrder.objects.get(order_number=order_number)
+        
+        # 更新订单状态（如果还未支付）
+        order_was_paid = order.status == PointsOrder.ORDER_STATUS_PAID
+        if not order_was_paid:
+            # 更新订单状态
+            order.status = PointsOrder.ORDER_STATUS_PAID
+            order.payment_transaction_id = trade_no
+            order.paid_at = timezone.now()
+            order.save()
+            logger.info(f"订单 {order_number} 状态已更新为已支付")
+        else:
+            logger.info(f"订单 {order_number} 已经支付过，检查会员状态是否需要更新")
+        
+        # 如果是会员订单，更新用户会员状态（即使订单已经支付过，也要检查会员状态）
+        metadata = order.metadata or {}
+        if metadata.get('order_type') == 'membership':
+            tier = metadata.get('tier')
+            expires_at_str = metadata.get('expires_at')
+            
+            if tier and expires_at_str:
+                try:
+                    # 解析到期时间
+                    expires_at = datetime.strptime(expires_at_str, "%Y-%m-%d").date()
+                    expires_at_datetime = timezone.make_aware(
+                        datetime.combine(expires_at, datetime.max.time())
+                    )
+                    
+                    # 更新用户会员状态
+                    profile, _ = UserProfile.objects.get_or_create(user=order.user)
+                    
+                    # 检查会员状态是否需要更新
+                    needs_update = False
+                    if not profile.is_member:
+                        needs_update = True
+                        logger.info(f"用户 {order.user.email} 当前不是会员，需要更新")
+                    elif not profile.membership_expires or profile.membership_expires < expires_at_datetime:
+                        needs_update = True
+                        logger.info(f"用户 {order.user.email} 会员到期时间需要更新: 当前={profile.membership_expires}, 应该={expires_at_datetime}")
+                    else:
+                        logger.info(f"用户 {order.user.email} 会员状态检查: is_member={profile.is_member}, expires={profile.membership_expires}, 订单到期时间={expires_at_datetime}")
+                    
+                    # 总是更新会员状态，确保状态正确（即使看起来已经是最新的）
+                    # 这样可以修复任何可能的同步问题
+                    # 如果用户之前不是会员，或者会员已过期，记录新的开通时间
+                    was_member = profile.is_member and profile.membership_expires and profile.membership_expires > timezone.now()
+                    if not was_member:
+                        profile.membership_started_at = timezone.now()
+                        # 重置视觉分析额度周期
+                        try:
+                            from core.models import VisualAnalysisQuota
+                            quota = VisualAnalysisQuota.objects.filter(user=order.user).first()
+                            if quota:
+                                quota.current_month = ""
+                                quota.save(update_fields=["current_month"])
+                        except Exception:
+                            pass
+                    
+                    profile.is_member = True
+                    profile.membership_expires = expires_at_datetime
+                    profile.save(update_fields=["is_member", "membership_expires", "membership_started_at", "updated_at"])
+                    logger.info(f"订单 {order_number} 支付成功，已更新用户 {order.user.email} 的会员状态，到期时间: {expires_at_datetime}")
+                except Exception as e:
+                    logger.exception(f"更新会员状态失败: {e}, 订单号: {order_number}, 用户: {order.user.email}")
+                    # 即使会员状态更新失败，也返回success，避免支付宝重复通知
+        else:
+            logger.info(f"订单 {order_number} 不是会员订单，跳过会员状态更新")
+        
+        return Response('success')
+        
+    except PointsOrder.DoesNotExist:
+        logger.warning(f"订单不存在: {order_number}")
+        return Response('fail')
+    except Exception as e:
+        logger.exception(f"处理支付宝回调失败: {e}")
+        return Response('fail')
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_order_status(request, order_id):
+    """
+    查询订单状态
+    
+    GET /api/payments/orders/{order_id}/status/
+    """
+    try:
+        order = PointsOrder.objects.get(id=order_id, user=request.user)
+        return Response({
+            'order_id': order.id,
+            'order_number': order.order_number,
+            'status': order.status,
+            'amount': str(order.amount),
+            'payment_method': order.payment_method,
+            'paid_at': order.paid_at.isoformat() if order.paid_at else None,
+            'created_at': order.created_at.isoformat(),
+        })
+    except PointsOrder.DoesNotExist:
+        return Response(
+            {'detail': '订单不存在'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def query_and_sync_order(request, order_id):
+    """
+    查询支付宝订单状态并同步到本地订单（用于修复已支付但状态未更新的订单）
+    
+    POST /api/payments/orders/{order_id}/query-and-sync/
+    """
+    from core.payment.alipay import query_alipay_order_status
+    
+    try:
+        order = PointsOrder.objects.get(id=order_id, user=request.user)
+        
+        # 只有待支付状态的订单才需要查询
+        if order.status != PointsOrder.ORDER_STATUS_PENDING:
+            return Response({
+                'success': True,
+                'message': f'订单状态已经是 {order.get_status_display()}，无需同步',
+                'order_status': order.status,
+            })
+        
+        # 只有支付宝订单才能查询
+        if order.payment_method != PointsOrder.PAYMENT_METHOD_ALIPAY:
+            return Response(
+                {'detail': '只有支付宝订单可以查询状态'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 查询支付宝订单状态
+        result = query_alipay_order_status(order.order_number)
+        
+        if not result.get('success'):
+            return Response(
+                {'detail': f'查询失败: {result.get("msg")}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        trade_status = result.get('trade_status')
+        
+        # 如果订单已支付，更新本地订单状态
+        if trade_status in ('TRADE_SUCCESS', 'TRADE_FINISHED'):
+            trade_no = result.get('trade_no')
+            gmt_payment = result.get('gmt_payment')
+            
+            # 更新订单状态
+            order.status = PointsOrder.ORDER_STATUS_PAID
+            order.payment_transaction_id = trade_no
+            if gmt_payment:
+                try:
+                    from datetime import datetime as dt
+                    paid_time = dt.strptime(gmt_payment, "%Y-%m-%d %H:%M:%S")
+                    order.paid_at = timezone.make_aware(paid_time)
+                except Exception:
+                    order.paid_at = timezone.now()
+            else:
+                order.paid_at = timezone.now()
+            order.save()
+            
+            # 如果是会员订单，更新用户会员状态
+            metadata = order.metadata or {}
+            if metadata.get('order_type') == 'membership':
+                tier = metadata.get('tier')
+                expires_at_str = metadata.get('expires_at')
+                
+                if tier and expires_at_str:
+                    try:
+                        # 解析到期时间
+                        expires_at = datetime.strptime(expires_at_str, "%Y-%m-%d").date()
+                        expires_at_datetime = timezone.make_aware(
+                            datetime.combine(expires_at, datetime.max.time())
+                        )
+                        
+                        # 更新用户会员状态
+                        profile, _ = UserProfile.objects.get_or_create(user=order.user)
+                        
+                        # 如果用户之前不是会员，或者会员已过期，记录新的开通时间
+                        was_member = profile.is_member and profile.membership_expires and profile.membership_expires > timezone.now()
+                        if not was_member:
+                            profile.membership_started_at = timezone.now()
+                            # 重置视觉分析额度周期
+                            try:
+                                from core.models import VisualAnalysisQuota
+                                quota = VisualAnalysisQuota.objects.filter(user=order.user).first()
+                                if quota:
+                                    quota.current_month = ""
+                                    quota.save(update_fields=["current_month"])
+                            except Exception:
+                                pass
+                        
+                        profile.is_member = True
+                        profile.membership_expires = expires_at_datetime
+                        profile.save(update_fields=["is_member", "membership_expires", "membership_started_at", "updated_at"])
+                        
+                        logger.info(f"订单 {order.order_number} 查询并同步成功，已更新用户 {order.user.email} 的会员状态")
+                    except Exception as e:
+                        logger.exception(f"更新会员状态失败: {e}")
+            
+            return Response({
+                'success': True,
+                'message': '订单状态已更新为已支付',
+                'order_status': order.status,
+                'trade_no': trade_no,
+            })
+        else:
+            return Response({
+                'success': True,
+                'message': f'订单在支付宝的状态是: {trade_status}，尚未支付',
+                'order_status': order.status,
+                'alipay_status': trade_status,
+            })
+        
+    except PointsOrder.DoesNotExist:
+        return Response(
+            {'detail': '订单不存在'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        logger.exception(f"查询并同步订单失败: {e}")
+        return Response(
+            {'detail': f'查询并同步订单失败: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def sync_order_membership(request, order_id):
+    """
+    手动同步订单会员状态（用于修复已支付但会员状态未更新的订单）
+    
+    POST /api/payments/orders/{order_id}/sync-membership/
+    """
+    try:
+        order = PointsOrder.objects.get(id=order_id, user=request.user)
+        
+        # 只有已支付的订单才能同步
+        if order.status != PointsOrder.ORDER_STATUS_PAID:
+            return Response(
+                {'detail': '订单未支付，无法同步会员状态'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 检查是否是会员订单
+        metadata = order.metadata or {}
+        if metadata.get('order_type') != 'membership':
+            return Response(
+                {'detail': '该订单不是会员订单'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        tier = metadata.get('tier')
+        expires_at_str = metadata.get('expires_at')
+        
+        if not tier or not expires_at_str:
+            return Response(
+                {'detail': '订单缺少会员信息'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # 解析到期时间
+            expires_at = datetime.strptime(expires_at_str, "%Y-%m-%d").date()
+            expires_at_datetime = timezone.make_aware(
+                datetime.combine(expires_at, datetime.max.time())
+            )
+            
+            # 更新用户会员状态
+            profile, _ = UserProfile.objects.get_or_create(user=order.user)
+            
+            # 记录更新前的状态（用于日志）
+            old_is_member = profile.is_member
+            old_expires = profile.membership_expires
+            
+            # 如果用户之前不是会员，或者会员已过期，记录新的开通时间
+            was_member = profile.is_member and profile.membership_expires and profile.membership_expires > timezone.now()
+            if not was_member:
+                profile.membership_started_at = timezone.now()
+                # 重置视觉分析额度周期
+                try:
+                    from core.models import VisualAnalysisQuota
+                    quota = VisualAnalysisQuota.objects.filter(user=order.user).first()
+                    if quota:
+                        quota.current_month = ""
+                        quota.save(update_fields=["current_month"])
+                except Exception:
+                    pass
+            
+            # 强制更新会员状态
+            profile.is_member = True
+            profile.membership_expires = expires_at_datetime
+            profile.save(update_fields=["is_member", "membership_expires", "membership_started_at", "updated_at"])
+            
+            logger.info(f"手动同步订单 {order.order_number} 的会员状态成功: 用户={order.user.email}, 更新前(is_member={old_is_member}, expires={old_expires}), 更新后(is_member={profile.is_member}, expires={profile.membership_expires})")
+            
+            return Response({
+                'success': True,
+                'message': '会员状态已更新',
+                'membership_expires': profile.membership_expires.isoformat() if profile.membership_expires else None,
+            })
+        except Exception as e:
+            logger.exception(f"同步会员状态失败: {e}")
+            return Response(
+                {'detail': f'同步会员状态失败: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+    except PointsOrder.DoesNotExist:
+        return Response(
+            {'detail': '订单不存在'},
+            status=status.HTTP_404_NOT_FOUND
         )

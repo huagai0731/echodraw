@@ -11,6 +11,7 @@ from core.admin_views import (
     HolidayMessageAdminViewSet,
     LongTermPlanCopyAdminViewSet,
     MonthlyReportTemplateAdminViewSet,
+    PointsOrderAdminViewSet,
     ShortTermTaskPresetAdminViewSet,
     TestAccountCheckInDetailView,
     TestAccountCheckInListCreateView,
@@ -112,6 +113,11 @@ router.register(
     DailyQuizOptionAdminViewSet,
     basename="admin-daily-quiz-options",
 )
+router.register(
+    r"admin/orders",
+    PointsOrderAdminViewSet,
+    basename="admin-orders",
+)
 
 urlpatterns = [
     path("health/", views.health_check, name="health-check"),
@@ -136,6 +142,12 @@ urlpatterns = [
         views.MembershipSubscriptionView.as_view(),
         name="membership-subscribe",
     ),
+    # 支付相关接口
+    path("payments/orders/create/", views.create_payment_order, name="create-payment-order"),
+    path("payments/alipay/notify/", views.alipay_notify, name="alipay-notify"),
+    path("payments/orders/<int:order_id>/query-and-sync/", views.query_and_sync_order, name="query-and-sync-order"),
+    path("payments/orders/<int:order_id>/sync-membership/", views.sync_order_membership, name="sync-order-membership"),
+    path("payments/orders/<int:order_id>/status/", views.get_order_status, name="get-order-status"),
     path("uploads/", views.UserUploadListCreateView.as_view(), name="user-uploads"),
     path("uploads/check-limit/", views.check_upload_limit, name="user-uploads-check-limit"),
     path("uploads/<int:pk>/", views.UserUploadDetailView.as_view(), name="user-upload-detail"),
