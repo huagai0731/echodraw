@@ -20,6 +20,7 @@ import api from "@/services/api";
 import { clearAllUserCache } from "@/utils/clearUserCache";
 import TopNav from "@/components/TopNav";
 import { loadFeaturedArtworkIds, loadFeaturedArtworkIdsFromServer } from "@/services/featuredArtworks";
+import { extractApiError } from "@/hooks/useApiError";
 import type { Artwork } from "@/pages/Gallery";
 
 import "./Profile.css";
@@ -815,7 +816,12 @@ function Profile({
             }
           } catch (error: any) {
             console.error("[Echo] Failed to create payment order:", error);
-            const errorMessage = error?.response?.data?.detail || error?.message || "创建支付订单失败，请重试";
+            // 使用 extractApiError 提取详细的错误信息
+            const errorMessage = extractApiError(error, "创建支付订单失败，请重试");
+            // 在控制台输出完整的错误信息，便于调试
+            if (error?.response?.data) {
+              console.error("[Echo] Error response data:", error.response.data);
+            }
             alert(errorMessage);
             setPendingTier(null);
             setView("membership-options");

@@ -62,6 +62,21 @@ systemctl show-environment | grep ALIPAY
 cat /path/to/your/.env | grep ALIPAY
 ```
 
+**快速检查脚本**：
+
+我们提供了一个配置检查脚本，可以快速检查所有支付宝配置：
+
+```bash
+cd backend
+python check_alipay_config.py
+```
+
+这个脚本会：
+- 检查所有必需和可选的环境变量
+- 尝试创建支付宝客户端
+- 测试网络连接到支付宝网关
+- 显示详细的配置信息
+
 #### 3. 检查密钥格式
 
 支付宝密钥应该是完整的 RSA 密钥，包含头尾：
