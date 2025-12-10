@@ -64,9 +64,7 @@ function App() {
               <Route path="test-accounts" element={<TestAccountsPage />} />
               <Route path="test-accounts/:profileId" element={<TestAccountDetailPage />} />
             </Route>
-            <Route path="/" element={<Navigate to="/app" replace />} />
-            <Route path="/app/*" element={<UserApp />} />
-            <Route path="*" element={<Navigate to="/app" replace />} />
+            <Route path="/*" element={<UserApp />} />
           </Routes>
         </Suspense>
       </BrowserRouter>

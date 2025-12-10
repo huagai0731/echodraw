@@ -209,20 +209,6 @@ function VisualAnalysisComprehensive({
     ? savedResult.comprehensive_analysis
     : results;
   
-  console.log("[VisualAnalysisComprehensive] 数据合并:", {
-    hasSavedResultComprehensiveAnalysis: !!(savedResult?.comprehensive_analysis && typeof savedResult.comprehensive_analysis === 'object' && Object.keys(savedResult.comprehensive_analysis).length > 0),
-    hasResults: !!results,
-    usingSavedResult: comprehensiveData === savedResult?.comprehensive_analysis,
-    comprehensiveDataKeys: comprehensiveData ? Object.keys(comprehensiveData) : [],
-    hasStep5: !!comprehensiveData?.step5,
-    step5Keys: comprehensiveData?.step5 ? Object.keys(comprehensiveData.step5) : [],
-    hasDominantPalette8: !!comprehensiveData?.step5?.dominant_palette_8,
-    hasDominantPalette12: !!comprehensiveData?.step5?.dominant_palette_12,
-    palette8Length: comprehensiveData?.step5?.dominant_palette_8?.palette?.length || 0,
-    palette12Length: comprehensiveData?.step5?.dominant_palette_12?.palette?.length || 0,
-    hasKmeans12Image: !!savedResult?.kmeans_segmentation_image_12,
-  });
-  
   const [currentPage, setCurrentPage] = useState(1);
   const [hlsInverted, setHlsInverted] = useState(false);
   const [invertedHlsImage, setInvertedHlsImage] = useState<string | null>(null);

@@ -23,34 +23,12 @@ type ArtworkEditPageProps = {
 };
 
 export function ArtworkEditPage({ artwork, onBack, onSave }: ArtworkEditPageProps) {
-  // 防御性检查：确保 artwork 存在
-  if (!artwork) {
-    console.error("[ArtworkEditPage] artwork is null or undefined");
-    return (
-      <div className="artwork-edit-screen">
-        <div className="artwork-edit-screen__topbar">
-          <TopNav
-            title="编辑画作"
-            subtitle="Edit Artwork"
-            leadingAction={{ icon: "arrow_back", label: "返回", onClick: onBack }}
-            className="top-nav--fixed top-nav--flush"
-          />
-        </div>
-        <main className="artwork-edit-screen__content">
-          <div style={{ padding: "2rem", textAlign: "center", color: "#efeae7" }}>
-            <p>画作数据无效，请返回重试。</p>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
-  const [title, setTitle] = useState(artwork.title || "");
-  const [description, setDescription] = useState(artwork.description || "");
+  const [title, setTitle] = useState(artwork?.title || "");
+  const [description, setDescription] = useState(artwork?.description || "");
   const [selectedTags, setSelectedTags] = useState<(string | number)[]>([]);
   const [rating, setRating] = useState(() => {
     // 将字符串评分转换为数字，如果没有评分则默认为0
-    if (artwork.rating) {
+    if (artwork?.rating) {
       const parsed = Number.parseFloat(artwork.rating);
       return Number.isFinite(parsed) ? parsed : 0;
     }
@@ -66,6 +44,7 @@ export function ArtworkEditPage({ artwork, onBack, onSave }: ArtworkEditPageProp
 
   // 加载标签选项并初始化选中的标签
   useEffect(() => {
+    if (!artwork) return;
     let cancelled = false;
     setTagsLoading(true);
     loadTagPreferencesAsync()
@@ -121,6 +100,7 @@ export function ArtworkEditPage({ artwork, onBack, onSave }: ArtworkEditPageProp
 
   // 当 moods 加载完成后，尝试匹配 artwork.mood 字符串到 mood ID
   useEffect(() => {
+    if (!artwork) return;
     if (!moodsLoading && moodMatrix.length > 0 && artwork.mood && artwork.mood.trim()) {
       // 在所有 moods 中查找匹配的名称
       const allMoods = moodMatrix.flat();
@@ -129,18 +109,18 @@ export function ArtworkEditPage({ artwork, onBack, onSave }: ArtworkEditPageProp
         setSelectedMoodId(matchedMood.id);
       }
     }
-  }, [moodsLoading, moodMatrix, artwork.mood]);
+  }, [moodsLoading, moodMatrix, artwork?.mood]);
 
   // 处理时长 - 必须在 useEffect 之前定义
   const [durationHours, setDurationHours] = useState(() => {
-    if (artwork.durationMinutes) {
+    if (artwork?.durationMinutes) {
       return Math.floor(artwork.durationMinutes / 60);
     }
     return 0;
   });
 
   const [durationMinutes, setDurationMinutes] = useState(() => {
-    if (artwork.durationMinutes) {
+    if (artwork?.durationMinutes) {
       return artwork.durationMinutes % 60;
     }
     return 0;
@@ -255,6 +235,28 @@ export function ArtworkEditPage({ artwork, onBack, onSave }: ArtworkEditPageProp
     formattedDuration,
     onSave,
   ]);
+
+  // 防御性检查：确保 artwork 存在
+  if (!artwork) {
+    console.error("[ArtworkEditPage] artwork is null or undefined");
+    return (
+      <div className="artwork-edit-screen">
+        <div className="artwork-edit-screen__topbar">
+          <TopNav
+            title="编辑画作"
+            subtitle="Edit Artwork"
+            leadingAction={{ icon: "arrow_back", label: "返回", onClick: onBack }}
+            className="top-nav--fixed top-nav--flush"
+          />
+        </div>
+        <main className="artwork-edit-screen__content">
+          <div style={{ padding: "2rem", textAlign: "center", color: "#efeae7" }}>
+            <p>画作数据无效，请返回重试。</p>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="artwork-edit-screen">

@@ -27,20 +27,13 @@
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js', { scope: '/' })
             .then((registration) => {
-              console.log('✅ Service Worker 注册成功:', registration.scope);
               // 检查更新
               registration.update();
             })
-            .catch((registrationError) => {
-              console.error('❌ Service Worker 注册失败:', registrationError);
-              console.error('请检查:');
-              console.error('1. sw.js 文件是否存在于 public 目录');
-              console.error('2. 文件路径是否正确 (/sw.js)');
-              console.error('3. 服务器是否正确提供该文件');
+            .catch(() => {
+              // Service Worker 注册失败，静默处理
             });
         });
-      } else {
-        console.warn('⚠️ 浏览器不支持 Service Worker');
       }
     </script>
   </body>

@@ -72,9 +72,16 @@
   background: rgba(197, 225, 226, 0.18);
 }
 
-.login-screen__content {
+.login-screen__wrapper {
   position: relative;
   z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.login-screen__content {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -83,6 +90,7 @@
   gap: 2.5rem;
   padding: 2rem 0;
   overflow-y: auto;
+  min-height: 0;
 }
 
 .login-screen__header {
@@ -222,5 +230,22 @@
 .login-screen__link[disabled] {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+.login-screen__beian {
+  flex-shrink: 0;
+  padding: 0.75rem 0 calc(var(--bottom-nav-safe-area, 0px) + 0.5rem);
+  text-align: center;
+}
+
+.login-screen__beian a {
+  font-size: 0.7rem;
+  color: rgba(239, 234, 231, 0.35);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.login-screen__beian a:hover {
+  color: rgba(239, 234, 231, 0.55);
 }
 

@@ -18,7 +18,6 @@ import {
 } from "@/services/api";
 import { clearAllUserCache } from "@/utils/clearUserCache";
 import TopNav from "@/components/TopNav";
-import MaterialIcon from "@/components/MaterialIcon";
 import { loadFeaturedArtworkIds, loadFeaturedArtworkIdsFromServer } from "@/services/featuredArtworks";
 import type { Artwork } from "@/pages/Gallery";
 
@@ -287,6 +286,7 @@ function Profile({
   const [membershipTier, setMembershipTier] = useState<MembershipTier>("pending");
   const [pendingTier, setPendingTier] = useState<MembershipTier | null>(null);
   const [membershipTierLoading, setMembershipTierLoading] = useState(true);
+  const [membershipExpires, setMembershipExpires] = useState<string | null>(null);
 
   useEffect(() => {
     if (auth) {
@@ -408,10 +408,12 @@ function Profile({
           storePreferences(userEmail, effectiveDisplayName, effectiveSignature);
           // 更新会员状态
           const isMember = preferences.isMember;
-          const membershipExpires = preferences.membershipExpires;
+          const membershipExpiresDate = preferences.membershipExpires;
+          // 保存会员到期时间
+          setMembershipExpires(membershipExpiresDate);
           // 检查会员是否过期
-          if (isMember && membershipExpires) {
-            const expiresDate = new Date(membershipExpires);
+          if (isMember && membershipExpiresDate) {
+            const expiresDate = new Date(membershipExpiresDate);
             const now = new Date();
             if (expiresDate > now) {
               setMembershipTier("premium");
@@ -640,6 +642,7 @@ function Profile({
     return (
       <PaymentConfirmation
         plan={nextPlan}
+        currentMembershipExpires={membershipExpires}
         onBack={() => setView("membership-options")}
         onConfirm={async ({ tier, expiresAt }) => {
           try {
@@ -674,6 +677,7 @@ function Profile({
           setView("dashboard");
         }}
         currentTier={membershipTier}
+        membershipExpires={membershipExpires}
         onSelectTier={(tier) => {
           setPendingTier(tier);
           setView("payment-confirmation");

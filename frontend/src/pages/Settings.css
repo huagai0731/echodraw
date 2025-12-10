@@ -523,6 +523,23 @@
   color: #221b1b;
 }
 
+.settings-page__beian {
+  margin-top: 1rem;
+  text-align: center;
+  padding-top: 1rem;
+}
+
+.settings-page__beian a {
+  font-size: 0.7rem;
+  color: rgba(239, 234, 231, 0.4);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.settings-page__beian a:hover {
+  color: rgba(239, 234, 231, 0.6);
+}
+
 @media (min-width: 600px) {
   .settings-page {
     padding: 4.5rem 3rem 3.5rem;

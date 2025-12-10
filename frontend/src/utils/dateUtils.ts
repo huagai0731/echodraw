@@ -186,13 +186,11 @@ export function startOfWeekInShanghai(reference: Date): Date {
 export function isMonthlyReportVisible(year: number, month: number): boolean {
   const todayStr = getTodayInShanghai();
   if (!todayStr) {
-    console.log(`[isMonthlyReportVisible] todayStr is empty for ${year}-${month}`);
     return false;
   }
   
   const today = parseISODateInShanghai(todayStr);
   if (!today) {
-    console.log(`[isMonthlyReportVisible] failed to parse today for ${year}-${month}`);
     return false;
   }
   
@@ -212,23 +210,17 @@ export function isMonthlyReportVisible(year: number, month: number): boolean {
     visibleMonth = month + 1;
   }
   
-  console.log(`[isMonthlyReportVisible] checking ${year}-${month}: today=${todayYear}-${todayMonth}-${todayDay}, visible=${visibleYear}-${visibleMonth}-1`);
-  
   // 如果当前日期 >= 可见日期，则可见
   if (todayYear > visibleYear) {
-    console.log(`[isMonthlyReportVisible] ${year}-${month} is visible (todayYear > visibleYear)`);
     return true;
   }
   if (todayYear === visibleYear && todayMonth > visibleMonth) {
-    console.log(`[isMonthlyReportVisible] ${year}-${month} is visible (todayMonth > visibleMonth)`);
     return true;
   }
   if (todayYear === visibleYear && todayMonth === visibleMonth && todayDay >= 1) {
-    console.log(`[isMonthlyReportVisible] ${year}-${month} is visible (todayDay >= 1)`);
     return true;
   }
   
-  console.log(`[isMonthlyReportVisible] ${year}-${month} is NOT visible`);
   return false;
 }
 
@@ -240,22 +232,17 @@ export function isMonthlyReportVisible(year: number, month: number): boolean {
  */
 export function getVisibleMonthlyReports(userRegistrationDate?: string | null): Array<{ year: number; month: number }> {
   const todayStr = getTodayInShanghai();
-  console.log("[getVisibleMonthlyReports] todayStr:", todayStr);
   if (!todayStr) {
-    console.log("[getVisibleMonthlyReports] todayStr is empty");
     return [];
   }
   
   const today = parseISODateInShanghai(todayStr);
-  console.log("[getVisibleMonthlyReports] parsed today:", today);
   if (!today) {
-    console.log("[getVisibleMonthlyReports] failed to parse today");
     return [];
   }
   
   const currentYear = today.getFullYear();
   const currentMonth = today.getMonth() + 1; // 1-12
-  console.log("[getVisibleMonthlyReports] currentYear:", currentYear, "currentMonth:", currentMonth);
   
   const reports: Array<{ year: number; month: number }> = [];
   
@@ -267,17 +254,12 @@ export function getVisibleMonthlyReports(userRegistrationDate?: string | null): 
     // 先提取日期部分（如果是ISO格式）
     const dateOnly = userRegistrationDate.split('T')[0];
     const registrationDate = parseISODateInShanghai(dateOnly);
-    console.log("[getVisibleMonthlyReports] user registration date (raw):", userRegistrationDate);
-    console.log("[getVisibleMonthlyReports] user registration date (parsed):", dateOnly);
-    console.log("[getVisibleMonthlyReports] registrationDate object:", registrationDate);
     
     if (registrationDate) {
       // 起始月份是用户注册日期所在的月份
       // 例如：用户12月7日注册，第一个月报是12月月报（在1月1日可见）
       startYear = registrationDate.getFullYear();
       startMonth = registrationDate.getMonth() + 1; // 1-12
-      
-      console.log("[getVisibleMonthlyReports] start from:", startYear, startMonth);
     } else {
       // 解析失败，使用默认逻辑（从当前月份往前推12个月）
       startYear = currentYear;
@@ -303,25 +285,18 @@ export function getVisibleMonthlyReports(userRegistrationDate?: string | null): 
   const endYear = currentYear;
   const endMonth = currentMonth - 1; // 当前月份的上一个月
   
-  console.log(`[getVisibleMonthlyReports] range: ${startYear}-${startMonth} to ${endYear}-${endMonth}`);
-  
   // 如果起始月份已经超过结束月份，直接返回空数组
   if (year > endYear || (year === endYear && month > endMonth)) {
-    console.log("[getVisibleMonthlyReports] start month is after end month, returning empty");
     return [];
   }
   
   while (true) {
-    console.log(`[getVisibleMonthlyReports] checking year: ${year}, month: ${month}`);
-    
     // 检查是否超过结束月份（在检查可见性之前）
     if (year > endYear || (year === endYear && month > endMonth)) {
-      console.log(`[getVisibleMonthlyReports] reached end month, stopping`);
       break;
     }
     
     const isVisible = isMonthlyReportVisible(year, month);
-    console.log(`[getVisibleMonthlyReports] isVisible(${year}, ${month}):`, isVisible);
     
     // 如果这个月报可见，加入列表
     if (isVisible) {
@@ -338,12 +313,10 @@ export function getVisibleMonthlyReports(userRegistrationDate?: string | null): 
     
     // 安全措施：防止无限循环
     if (reports.length > 24) {
-      console.warn("[getVisibleMonthlyReports] Too many reports, stopping to prevent infinite loop");
       break;
     }
   }
   
-  console.log("[getVisibleMonthlyReports] final reports:", reports);
   return reports;
 }
 

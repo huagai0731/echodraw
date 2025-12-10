@@ -55,46 +55,8 @@ function TestResults({ resultId, onBack }: TestResultsProps) {
     loadResult();
   }, [resultId]);
 
-  if (loading) {
-    return (
-      <div className="test-results">
-        <TopNav
-          className="top-nav--fixed top-nav--flush"
-          leadingAction={{
-            icon: "arrow_back",
-            label: "返回",
-            onClick: onBack,
-          }}
-          title="测试结果"
-        />
-        <div className="test-results__loading">加载中...</div>
-      </div>
-    );
-  }
-
-  if (error || !result) {
-    return (
-      <div className="test-results">
-        <TopNav
-          className="top-nav--fixed top-nav--flush"
-          leadingAction={{
-            icon: "arrow_back",
-            label: "返回",
-            onClick: onBack,
-          }}
-          title="测试结果"
-        />
-        <div className="test-results__error">{error || "未找到测试结果"}</div>
-      </div>
-    );
-  }
-
-  // 获取维度信息
-  const dimensions = test?.dimensions || [];
-  const dimensionScores = result.dimension_scores || {};
-
   // 格式化日期
-  const formatDate = (dateString: string) => {
+  const formatDate = useCallback((dateString: string) => {
     try {
       const date = new Date(dateString);
       const year = date.getFullYear();
@@ -106,7 +68,7 @@ function TestResults({ resultId, onBack }: TestResultsProps) {
     } catch {
       return dateString;
     }
-  };
+  }, []);
 
   const handleToggleMenu = useCallback(() => {
     setMenuOpen((prev) => !prev);
@@ -185,6 +147,44 @@ function TestResults({ resultId, onBack }: TestResultsProps) {
     ],
     [handleToggleMenu],
   );
+
+  // 获取维度信息
+  const dimensions = test?.dimensions || [];
+  const dimensionScores = result?.dimension_scores || {};
+
+  if (loading) {
+    return (
+      <div className="test-results">
+        <TopNav
+          className="top-nav--fixed top-nav--flush"
+          leadingAction={{
+            icon: "arrow_back",
+            label: "返回",
+            onClick: onBack,
+          }}
+          title="测试结果"
+        />
+        <div className="test-results__loading">加载中...</div>
+      </div>
+    );
+  }
+
+  if (error || !result) {
+    return (
+      <div className="test-results">
+        <TopNav
+          className="top-nav--fixed top-nav--flush"
+          leadingAction={{
+            icon: "arrow_back",
+            label: "返回",
+            onClick: onBack,
+          }}
+          title="测试结果"
+        />
+        <div className="test-results__error">{error || "未找到测试结果"}</div>
+      </div>
+    );
+  }
 
   return (
     <div className="test-results">

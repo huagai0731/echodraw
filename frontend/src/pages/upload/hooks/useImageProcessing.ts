@@ -20,7 +20,7 @@ function getOrientation(file: File): Promise<number> {
       }
 
       let offset = 2;
-      let length = view.byteLength;
+      const length = view.byteLength;
 
       while (offset < length) {
         if (view.getUint16(offset, false) !== 0xffe1) {

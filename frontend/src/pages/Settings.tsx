@@ -364,6 +364,11 @@ function Settings({
         <button type="button" className="settings-page__logout" onClick={onLogout}>
           退出登录
         </button>
+        <div className="settings-page__beian">
+          <a href="https://beian.miit.gov.cn" target="_blank" rel="noopener noreferrer">
+            沪ICP备2025153645号
+          </a>
+        </div>
       </footer>
 
       <div className={clsx("settings-dialog", activeDialog && "settings-dialog--open")}>

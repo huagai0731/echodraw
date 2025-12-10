@@ -2065,17 +2065,14 @@ export async function fetchVisualAnalysisResults(): Promise<VisualAnalysisResult
   
   // 处理分页响应：如果返回的是分页对象，提取 results 数组；否则直接返回数组
   if (response.data && typeof response.data === 'object' && 'results' in response.data && Array.isArray(response.data.results)) {
-    console.log("[fetchVisualAnalysisResults] 检测到分页响应，总数:", response.data.count, "当前页结果数:", response.data.results.length);
     return response.data.results;
   }
   
   // 如果不是分页响应，直接返回数组
   if (Array.isArray(response.data)) {
-    console.log("[fetchVisualAnalysisResults] 返回数组响应，结果数:", response.data.length);
     return response.data;
   }
   
-  console.warn("[fetchVisualAnalysisResults] 意外的响应格式:", response.data);
   return [];
 }
 

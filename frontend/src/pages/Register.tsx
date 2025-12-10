@@ -172,97 +172,104 @@ function Register({ onBack, onLogin, onRequestCode, onSuccess }: RegisterProps) 
         subtitle="Sign Up"
       />
 
-      <div className="register-screen__content">
-        <header className="register-screen__header">
-          <div className="register-screen__headline">
-            <h1>
-              开启创作旅程，
-              <br />点亮灵感
-            </h1>
-            <p>立即加入 EchoDraw</p>
-          </div>
-        </header>
+      <div className="register-screen__wrapper">
+        <div className="register-screen__content">
+          <header className="register-screen__header">
+            <div className="register-screen__headline">
+              <h1>
+                开启创作旅程，
+                <br />点亮灵感
+              </h1>
+              <p>立即加入 EchoDraw</p>
+            </div>
+          </header>
 
-        <form className="register-form" onSubmit={handleSubmit}>
-          <label className="register-form__field">
-            <span>邮箱</span>
-            <input
-              type="email"
-              placeholder="例如：artist@echo.com"
-              autoComplete="email"
-              value={email}
-              onChange={handleEmailChange}
-              disabled={submitting || sendingCode}
-              required
-            />
-          </label>
-          <label className="register-form__field">
-            <span>密码</span>
-            <input
-              type="password"
-              placeholder="至少 8 位密码"
-              autoComplete="new-password"
-              value={password}
-              onChange={handlePasswordChange}
-              disabled={submitting}
-              minLength={8}
-              required
-            />
-          </label>
-          <label className="register-form__field">
-            <span>确认密码</span>
-            <input
-              type="password"
-              placeholder="再次输入密码"
-              autoComplete="new-password"
-              value={confirmPassword}
-              onChange={handleConfirmPasswordChange}
-              disabled={submitting}
-              minLength={8}
-              required
-            />
-          </label>
-          <label className="register-form__field register-form__field--verification">
-            <span>验证码</span>
-            <div className="register-form__verification">
+          <form className="register-form" onSubmit={handleSubmit}>
+            <label className="register-form__field">
+              <span>邮箱</span>
               <input
-                type="text"
-                placeholder="输入验证码"
-                value={code}
-                onChange={handleCodeChange}
-                disabled={submitting}
+                type="email"
+                placeholder="例如：artist@echo.com"
+                autoComplete="email"
+                value={email}
+                onChange={handleEmailChange}
+                disabled={submitting || sendingCode}
                 required
               />
-              <button
-                type="button"
-                className="register-form__get-code"
-                onClick={handleSendCode}
-                disabled={!canSendCode}
-              >
-                {isCountdownActive
-                  ? `重新发送 (${countdown} 秒)`
-                  : sendingCode
-                    ? "发送中..."
-                    : "获取验证码"}
-              </button>
-            </div>
-          </label>
+            </label>
+            <label className="register-form__field">
+              <span>密码</span>
+              <input
+                type="password"
+                placeholder="至少 8 位密码"
+                autoComplete="new-password"
+                value={password}
+                onChange={handlePasswordChange}
+                disabled={submitting}
+                minLength={8}
+                required
+              />
+            </label>
+            <label className="register-form__field">
+              <span>确认密码</span>
+              <input
+                type="password"
+                placeholder="再次输入密码"
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={handleConfirmPasswordChange}
+                disabled={submitting}
+                minLength={8}
+                required
+              />
+            </label>
+            <label className="register-form__field register-form__field--verification">
+              <span>验证码</span>
+              <div className="register-form__verification">
+                <input
+                  type="text"
+                  placeholder="输入验证码"
+                  value={code}
+                  onChange={handleCodeChange}
+                  disabled={submitting}
+                  required
+                />
+                <button
+                  type="button"
+                  className="register-form__get-code"
+                  onClick={handleSendCode}
+                  disabled={!canSendCode}
+                >
+                  {isCountdownActive
+                    ? `重新发送 (${countdown} 秒)`
+                    : sendingCode
+                      ? "发送中..."
+                      : "获取验证码"}
+                </button>
+              </div>
+            </label>
 
-          {error ? (
-            <p className="register-form__message register-form__message--error">{error}</p>
-          ) : null}
-          {info ? (
-            <p className="register-form__message register-form__message--info">{info}</p>
-          ) : null}
+            {error ? (
+              <p className="register-form__message register-form__message--error">{error}</p>
+            ) : null}
+            {info ? (
+              <p className="register-form__message register-form__message--info">{info}</p>
+            ) : null}
 
-          <button type="submit" className="register-form__submit" disabled={!canSubmit}>
-            {submitting ? "注册中..." : "注册"}
+            <button type="submit" className="register-form__submit" disabled={!canSubmit}>
+              {submitting ? "注册中..." : "注册"}
+            </button>
+          </form>
+
+          <button type="button" className="register-screen__link" onClick={() => onLogin?.()}>
+            已有账号？去登录
           </button>
-        </form>
-
-        <button type="button" className="register-screen__link" onClick={() => onLogin?.()}>
-          已有账号？去登录
-        </button>
+        </div>
+        <div className="register-screen__beian">
+          <a href="https://beian.miit.gov.cn" target="_blank" rel="noopener noreferrer">
+            沪ICP备2025153645号
+          </a>
+        </div>
       </div>
     </div>
   );

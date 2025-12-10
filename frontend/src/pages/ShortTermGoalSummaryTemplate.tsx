@@ -167,7 +167,7 @@ function ShortTermGoalSummaryTemplate({
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     
     // 绘制网格图片
-    let imageLoadPromises: Promise<void>[] = [];
+    const imageLoadPromises: Promise<void>[] = [];
     
     for (let row = 0; row < gridConfig.rows; row++) {
       for (let col = 0; col < gridConfig.cols; col++) {

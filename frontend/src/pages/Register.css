@@ -72,9 +72,16 @@
   background: rgba(197, 225, 226, 0.18);
 }
 
-.register-screen__content {
+.register-screen__wrapper {
   position: relative;
   z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.register-screen__content {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -83,6 +90,7 @@
   gap: 1rem;
   padding: 0.5rem 0;
   overflow-y: auto;
+  min-height: 0;
 }
 
 .register-screen__header {
@@ -242,6 +250,23 @@
   font-size: 0.875rem;
   color: rgba(239, 234, 231, 0.65);
   cursor: pointer;
+}
+
+.register-screen__beian {
+  flex-shrink: 0;
+  padding: 0.75rem 0 calc(var(--bottom-nav-safe-area, 0px) + 0.5rem);
+  text-align: center;
+}
+
+.register-screen__beian a {
+  font-size: 0.7rem;
+  color: rgba(239, 234, 231, 0.35);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.register-screen__beian a:hover {
+  color: rgba(239, 234, 231, 0.55);
 }
 
 

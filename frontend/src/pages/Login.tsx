@@ -4,7 +4,6 @@ import type { FormEvent, ChangeEvent } from "react";
 import TopNav from "@/components/TopNav";
 import api from "@/services/api";
 import { useAsyncOperation } from "@/hooks/useAsyncOperation";
-import { extractApiError } from "@/hooks/useApiError";
 
 import "./Login.css";
 
@@ -93,58 +92,65 @@ function Login({ onBack, onSuccess, initialEmail = "", onForgotPassword }: Login
         subtitle="Login"
       />
 
-      <div className="login-screen__content">
-        <header className="login-screen__header">
-          <div className="login-screen__headline">
-            <h1>
-              再次创作
-              <br />记录灵感
-            </h1>
-            <p>欢迎回到 EchoDraw</p>
-          </div>
-        </header>
+      <div className="login-screen__wrapper">
+        <div className="login-screen__content">
+          <header className="login-screen__header">
+            <div className="login-screen__headline">
+              <h1>
+                再次创作
+                <br />记录灵感
+              </h1>
+              <p>欢迎回到 EchoDraw</p>
+            </div>
+          </header>
 
-        <form className="login-form" onSubmit={handleSubmit}>
-          <label className="login-form__field">
-            <span>邮箱</span>
-            <input
-              type="email"
-              placeholder="例如：artist@echo.com"
-              autoComplete="email"
-              value={email}
-              onChange={handleEmailChange}
-              disabled={submitting}
-              required
-            />
-          </label>
-          <label className="login-form__field">
-            <span>密码</span>
-            <input
-              type="password"
-              placeholder="············"
-              autoComplete="current-password"
-              value={password}
-              onChange={handlePasswordChange}
-              disabled={submitting}
-              required
-            />
-          </label>
+          <form className="login-form" onSubmit={handleSubmit}>
+            <label className="login-form__field">
+              <span>邮箱</span>
+              <input
+                type="email"
+                placeholder="例如：artist@echo.com"
+                autoComplete="email"
+                value={email}
+                onChange={handleEmailChange}
+                disabled={submitting}
+                required
+              />
+            </label>
+            <label className="login-form__field">
+              <span>密码</span>
+              <input
+                type="password"
+                placeholder="············"
+                autoComplete="current-password"
+                value={password}
+                onChange={handlePasswordChange}
+                disabled={submitting}
+                required
+              />
+            </label>
 
-          {error ? <p className="login-form__message login-form__message--error">{error}</p> : null}
+            {error ? <p className="login-form__message login-form__message--error">{error}</p> : null}
 
-          <button type="submit" className="login-form__submit" disabled={!canSubmit}>
-            {submitting ? "登录中..." : "登录"}
+            <button type="submit" className="login-form__submit" disabled={!canSubmit}>
+              {submitting ? "登录中..." : "登录"}
+            </button>
+          </form>
+
+          <button
+            type="button"
+            className="login-screen__link"
+            onClick={() => onForgotPassword?.(email)}
+            disabled={submitting}
+          >
+            忘记密码？
           </button>
-        </form>
-
-        <button
-          type="button"
-          className="login-screen__link"
-          onClick={() => onForgotPassword?.(email)}
-          disabled={submitting}
-        >
-          忘记密码？
-        </button>
+        </div>
+        <div className="login-screen__beian">
+          <a href="https://beian.miit.gov.cn" target="_blank" rel="noopener noreferrer">
+            沪ICP备2025153645号
+          </a>
+        </div>
       </div>
     </div>
   );

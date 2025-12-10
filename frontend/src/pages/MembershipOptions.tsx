@@ -10,6 +10,7 @@ export type MembershipTier = "pending" | "premium";
 type MembershipOptionsProps = {
   onBack: () => void;
   currentTier: MembershipTier;
+  membershipExpires?: string | null;
   onSelectTier: (tier: MembershipTier) => void;
 };
 
@@ -29,11 +30,11 @@ export type MembershipPlan = {
 export const MEMBERSHIP_PLANS: MembershipPlan[] = [
   {
     id: "premium",
-    name: "长期主义绘画记录",
+    name: "EchoDraw PLUS",
     amount: 5,
     cycle: "/ 月",
     billingCycleInMonths: 1,
-    tagline: "",
+    tagline: "长期主义绘画记录",
     description: "",
     features: [
       { label: "视觉分析：看清画面问题，让练习不再盲目" },
@@ -50,14 +51,45 @@ function formatPrice(amount: number): string {
   return hasFraction ? amount.toFixed(1) : amount.toFixed(0);
 }
 
-function MembershipOptions({ onBack, currentTier, onSelectTier }: MembershipOptionsProps) {
+function MembershipOptions({ onBack, currentTier, membershipExpires, onSelectTier }: MembershipOptionsProps) {
+  const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
 
   const handleSelectTier = (tier: MembershipTier) => {
-    if (tier === currentTier) {
-      return;
-    }
+    // 允许会员继续购买（叠加购买）
     onSelectTier(tier);
   };
+
+  const formatExpiresDate = (expires: string | null | undefined): string => {
+    if (!expires) return "";
+    try {
+      const date = new Date(expires);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    } catch {
+      return "";
+    }
+  };
+
+  const handleToggleFaq = (index: number) => {
+    setExpandedFaq(expandedFaq === index ? null : index);
+  };
+
+  const faqItems = [
+    {
+      question: "我上传的作品会被看到或拿去训练 AI 吗？",
+      answer: "不会。EchoDraw承诺你的图片只存在于你的账号里，不会被团队查看，也不会被用于ai模型训练或任何二次用途，只为你的记录、分析和目标服务。",
+    },
+    {
+      question: "如果我不想再练了、或之后不续费会怎样？",
+      answer: "随时可以停。已经上传的内容、目标、记录不会被删。EchoDraw开发的初衷就是希望为你保留你努力过的痕迹，即使暂时放下，等你回来的时候也不会感到从零开始的迷茫。",
+    },
+    {
+      question: "会员只有一个档位吗？",
+      answer: "是的。我们只做一个简单透明的档位，希望能帮你把心力留给创作。且保证不开展任何限时优惠活动，或永久会员。",
+    },
+  ];
 
   return (
     <div className="membership-options">
@@ -96,10 +128,6 @@ function MembershipOptions({ onBack, currentTier, onSelectTier }: MembershipOpti
                 <header className="membership-card__header">
                   <h2>{plan.name}</h2>
                   {plan.tagline ? <p className="membership-card__tagline">{plan.tagline}</p> : null}
-                  <div className="membership-card__price">
-                    <strong>¥{formatPrice(plan.amount)}</strong>
-                    <span>{plan.cycle}</span>
-                  </div>
                   {plan.description ? <p className="membership-card__description">{plan.description}</p> : null}
                 </header>
 
@@ -115,7 +143,7 @@ function MembershipOptions({ onBack, currentTier, onSelectTier }: MembershipOpti
                           feature.highlight && "membership-card__feature--highlight",
                         )}
                       >
-                        <MaterialIcon name={feature.highlight ? "auto_awesome" : "check_circle"} filled />
+                        <MaterialIcon name="star" filled />
                         <span>
                           <strong className="membership-card__feature-title">{title}：</strong>
                           {description}
@@ -133,10 +161,20 @@ function MembershipOptions({ onBack, currentTier, onSelectTier }: MembershipOpti
                       currentTier === plan.id && "membership-card__cta--active",
                     )}
                     onClick={() => handleSelectTier(plan.id)}
-                    disabled={currentTier === plan.id}
                   >
-                    {currentTier === plan.id ? "当前版本" : "立即开通"}
+                    <span className="membership-card__cta-price">
+                      <strong>¥{formatPrice(plan.amount)}</strong>
+                      <span>{plan.cycle}</span>
+                    </span>
+                    <span className="membership-card__cta-text">
+                      {currentTier === plan.id ? "叠加购买" : "立即开通"}
+                    </span>
                   </button>
+                  {currentTier === plan.id && membershipExpires && (
+                    <p className="membership-card__expires">
+                      您的EchoDraw PLUS时效：{formatExpiresDate(membershipExpires)}
+                    </p>
+                  )}
                 </footer>
               </article>
             ))}
@@ -145,19 +183,33 @@ function MembershipOptions({ onBack, currentTier, onSelectTier }: MembershipOpti
 
         <section className="membership-options__faq">
           <h3>常见问题</h3>
-          <div className="membership-options__faq-grid">
-            <div>
-              <h4>我上传的作品会被看到或拿去训练 AI 吗？</h4>
-              <p>不会。EchoDraw承诺你的图片只存在于你的账号里，不会被团队查看，也不会被用于ai模型训练或任何二次用途，只为你的记录、分析和目标服务。</p>
-            </div>
-            <div>
-              <h4>如果我不想再练了、或之后不续费会怎样？</h4>
-              <p>随时可以停。已经上传的内容、目标、记录不会被删。EchoDraw开发的初衷就是希望为你保留你努力过的痕迹，即使暂时放下，等你回来的时候也不会感到从零开始的迷茫。</p>
-            </div>
-            <div>
-              <h4>会员只有一个档位吗？</h4>
-              <p>是的。我们只做一个简单透明的档位，希望能帮你把心力留给创作。且保证不开展任何限时优惠活动，或永久会员。</p>
-            </div>
+          <div className="membership-options__faq-list">
+            {faqItems.map((item, index) => (
+              <div
+                key={index}
+                className={clsx(
+                  "membership-options__faq-item",
+                  expandedFaq === index && "membership-options__faq-item--expanded"
+                )}
+              >
+                <button
+                  type="button"
+                  className="membership-options__faq-question"
+                  onClick={() => handleToggleFaq(index)}
+                >
+                  <h4>{item.question}</h4>
+                  <MaterialIcon
+                    name={expandedFaq === index ? "expand_less" : "expand_more"}
+                    className="membership-options__faq-icon"
+                  />
+                </button>
+                {expandedFaq === index && (
+                  <div className="membership-options__faq-answer">
+                    <p>{item.answer}</p>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         </section>
       </main>

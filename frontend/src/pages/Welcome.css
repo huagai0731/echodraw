@@ -113,6 +113,24 @@
   transform: scale(0.98);
 }
 
+.welcome-screen__beian {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  text-align: center;
+}
+
+.welcome-screen__beian a {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.35);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.welcome-screen__beian a:hover {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+
 
 
 

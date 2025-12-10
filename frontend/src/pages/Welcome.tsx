@@ -38,6 +38,11 @@ function Welcome({ onLogin, onRegister }: WelcomeProps) {
             登录
           </button>
         </footer>
+        <div className="welcome-screen__beian">
+          <a href="https://beian.miit.gov.cn" target="_blank" rel="noopener noreferrer">
+            沪ICP备2025153645号
+          </a>
+        </div>
       </div>
     </div>
   );
