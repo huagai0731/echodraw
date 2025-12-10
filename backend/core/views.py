@@ -4020,12 +4020,24 @@ def create_payment_order(request):
                 'pay_url': pay_url,
                 'payment_method': payment_method,
             })
-        except Exception as e:
-            logger.exception(f"创建支付宝支付失败: {e}")
-            # 删除订单
+        except ValueError as e:
+            # 环境变量配置错误
+            logger.exception(f"创建支付宝支付失败（配置错误）: {e}")
             order.delete()
             return Response(
-                {"detail": f"创建支付订单失败: {str(e)}"},
+                {"detail": f"支付配置错误: {str(e)}。请检查服务器环境变量配置。"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        except Exception as e:
+            # 其他错误（网络错误、API错误等）
+            logger.exception(f"创建支付宝支付失败: {e}")
+            order.delete()
+            # 在生产环境不暴露详细错误信息，但记录到日志
+            error_msg = "创建支付订单失败，请稍后重试"
+            if DEBUG:
+                error_msg = f"创建支付订单失败: {str(e)}"
+            return Response(
+                {"detail": error_msg},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     

@@ -22,6 +22,19 @@ self.addEventListener('install', (event) => {
 
 // 拦截请求，使用缓存
 self.addEventListener('fetch', (event) => {
+  // 跳过非 GET 请求（POST, PUT, DELETE 等不应该被缓存）
+  if (event.request.method !== 'GET') {
+    // 对于非 GET 请求，直接通过网络获取，不进行缓存
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
+  // 跳过 API 请求（不应该被缓存）
+  if (event.request.url.includes('/api/')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request)
       .then((response) => {
@@ -34,7 +47,7 @@ self.addEventListener('fetch', (event) => {
           if (!response || response.status !== 200 || response.type !== 'basic') {
             return response;
           }
-          // 克隆响应
+          // 只缓存 GET 请求的响应
           const responseToCache = response.clone();
           caches.open(CACHE_NAME).then((cache) => {
             cache.put(event.request, responseToCache);
