@@ -173,11 +173,16 @@ function callWechatPay(
 
 /**
  * 获取当前页面的完整URL（用于微信授权回调）
+ * 注意：微信要求redirect_uri的域名必须与配置的网页授权域名完全一致
+ * 返回格式：https://domain.com/（使用根路径，确保域名匹配）
  */
 export function getCurrentUrl(): string {
   if (typeof window === "undefined") {
     return "";
   }
-  return window.location.href.split("#")[0]; // 移除hash部分
+  // 使用网站根路径作为redirect_uri，确保域名匹配
+  // 微信授权回调时会重定向到根路径，并添加code和state参数
+  // 前端可以通过检查URL中的code参数来处理授权回调
+  return `${window.location.origin}/`;
 }
 

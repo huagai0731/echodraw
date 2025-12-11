@@ -295,6 +295,137 @@ function Profile({
   const [membershipExpires, setMembershipExpires] = useState<string | null>(null);
   const [checkingPayment, setCheckingPayment] = useState(false);
 
+  // 处理微信授权回调
+  useEffect(() => {
+    // 检查是否是微信授权回调
+    if (typeof window === "undefined" || !auth) {
+      return;
+    }
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get("code");
+    const state = urlParams.get("state");
+
+    if (code && state && isWechatBrowser()) {
+      // 是微信授权回调，且当前在微信浏览器中
+      try {
+        // 解析state参数（包含支付信息）
+        const paymentInfo = JSON.parse(decodeURIComponent(state)) as {
+          tier: MembershipTier;
+          expiresAt: string;
+          paymentMethod: string;
+          quantity: number;
+          totalAmount: number;
+        };
+
+        // 清除URL中的code和state参数
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, "", newUrl);
+
+        // 自动处理授权并继续支付流程
+        (async () => {
+          try {
+            // 获取openid
+            const oauthResponse = await api.get<{
+              openid: string;
+              state?: string;
+            }>(`/payments/wechat/oauth/callback/?code=${code}&state=${state}`);
+            const openid = oauthResponse.data.openid;
+
+            // 切换到支付确认页面
+            setPendingTier(paymentInfo.tier);
+            setView("payment-confirmation");
+
+            // 自动触发支付（延迟一下，确保页面已切换）
+            setTimeout(async () => {
+              try {
+                const response = await api.post<{
+                  order_id: number;
+                  order_number: string;
+                  payment_method: string;
+                  jsapi_params?: {
+                    appId: string;
+                    timeStamp: string;
+                    nonceStr: string;
+                    package: string;
+                    signType: string;
+                    paySign: string;
+                  };
+                  payment_type?: "native" | "jsapi";
+                }>("/payments/orders/create/", {
+                  payment_method: paymentInfo.paymentMethod,
+                  amount: paymentInfo.totalAmount,
+                  tier: paymentInfo.tier,
+                  expires_at: paymentInfo.expiresAt,
+                  openid: openid,
+                });
+
+                if (response.data.payment_type === "jsapi" && response.data.jsapi_params) {
+                  // 保存订单ID
+                  try {
+                    window.localStorage.setItem(PENDING_ORDER_KEY, JSON.stringify({
+                      order_id: response.data.order_id,
+                      order_number: response.data.order_number,
+                      timestamp: Date.now(),
+                    }));
+                  } catch (e) {
+                    console.warn("[Echo] Failed to save pending order:", e);
+                  }
+
+                  // 调起微信支付
+                  await invokeWechatPay(response.data.jsapi_params);
+
+                  // 支付成功，检查订单状态
+                  setMembershipTierLoading(true);
+                  try {
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    try {
+                      await api.post(`/payments/orders/${response.data.order_id}/sync-membership/`);
+                    } catch (syncError: any) {
+                      console.warn("[Echo] Failed to sync membership status:", syncError);
+                    }
+                    const preferences = await fetchProfilePreferences();
+                    if (preferences.isMember) {
+                      setMembershipTier("premium");
+                      setMembershipExpires(preferences.membershipExpires);
+                    } else {
+                      setMembershipTier("pending");
+                      setMembershipExpires(null);
+                    }
+                  } catch (e) {
+                    console.error("[Echo] Failed to refresh membership status:", e);
+                  } finally {
+                    setMembershipTierLoading(false);
+                  }
+
+                  setPendingTier(null);
+                  setView("membership-options");
+                }
+              } catch (error: any) {
+                console.error("[Echo] Failed to create payment order after auth:", error);
+                const errorMessage = extractApiError(error, "创建支付订单失败，请重试");
+                alert(errorMessage);
+                setPendingTier(null);
+                setView("membership-options");
+              }
+            }, 500);
+          } catch (oauthError: any) {
+            console.error("[Echo] Failed to get openid from callback:", oauthError);
+            const errorMessage = extractApiError(oauthError, "获取微信授权失败，请重试");
+            alert(errorMessage);
+            setView("membership-options");
+          }
+        })();
+      } catch (error: any) {
+        console.error("[Echo] Failed to parse state parameter:", error);
+        // 如果state解析失败，清除参数并返回会员选项页面
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, "", newUrl);
+        setView("membership-options");
+      }
+    }
+  }, [auth]); // 只在auth变化时执行一次
+
   useEffect(() => {
     if (auth) {
       setAuthToken(auth.token);
