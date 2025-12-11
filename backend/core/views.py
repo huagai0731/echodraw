@@ -4029,19 +4029,26 @@ def create_payment_order(request):
     order_number = f"{datetime.now().strftime('%Y%m%d%H%M%S')}{uuid.uuid4().hex[:8]}"
     
     # 创建订单
-    order = PointsOrder.objects.create(
-        user=user,
-        order_number=order_number,
-        points=0,  # 会员订单，点数为0
-        amount=amount,
-        payment_method=payment_method,
-        status=PointsOrder.ORDER_STATUS_PENDING,
-        metadata={
-            "tier": tier,
-            "expires_at": expires_at,
-            "order_type": "membership",  # 标识这是会员订单
-        }
-    )
+    try:
+        order = PointsOrder.objects.create(
+            user=user,
+            order_number=order_number,
+            points=0,  # 会员订单，点数为0
+            amount=amount,
+            payment_method=payment_method,
+            status=PointsOrder.ORDER_STATUS_PENDING,
+            metadata={
+                "tier": tier,
+                "expires_at": expires_at,
+                "order_type": "membership",  # 标识这是会员订单
+            }
+        )
+    except Exception as e:
+        logger.exception(f"创建订单失败: {e}")
+        return Response(
+            {"detail": f"创建订单失败: {str(e)}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
     
     if payment_method == PointsOrder.PAYMENT_METHOD_ALIPAY:
         try:

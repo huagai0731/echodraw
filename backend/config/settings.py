@@ -344,6 +344,7 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
+    "EXCEPTION_HANDLER": "config.exception_handler.custom_exception_handler",
     # API限流配置：开发环境完全禁用，生产环境启用防止滥用
     "DEFAULT_THROTTLE_CLASSES": [] if DEBUG else [
         "rest_framework.throttling.AnonRateThrottle",

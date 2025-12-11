@@ -146,7 +146,7 @@ def check_alipay_config():
     
     # 检查必要的环境变量
     required_vars = [
-        'ALIPAY_APP_ID',
+        'ALIPAY_APPID',  # 注意：是 APPID 不是 APP_ID
         'ALIPAY_PRIVATE_KEY',
         'ALIPAY_PUBLIC_KEY',
     ]
