@@ -1,5 +1,5 @@
 // 更新版本号，强制清除旧缓存
-const CACHE_NAME = 'echo-v2';
+const CACHE_NAME = 'echo-v3';
 const urlsToCache = [
   '/',
   '/index.html'
@@ -26,48 +26,26 @@ self.addEventListener('fetch', (event) => {
   // 跳过非 GET 请求（POST, PUT, DELETE 等不应该被缓存）
   if (event.request.method !== 'GET') {
     // 对于非 GET 请求，直接通过网络获取，不进行缓存
-    event.respondWith(fetch(event.request));
+    event.respondWith(fetch(event.request).catch(() => {
+      // 如果网络请求失败，返回错误，让浏览器处理
+      return new Response('Network error', { status: 503 });
+    }));
     return;
   }
 
   // 跳过 API 请求（不应该被缓存）
   if (event.request.url.includes('/api/')) {
-    event.respondWith(fetch(event.request));
+    event.respondWith(fetch(event.request).catch(() => {
+      // 如果网络请求失败，返回错误，让浏览器处理
+      return new Response('Network error', { status: 503 });
+    }));
     return;
   }
 
-  // 对于 assets 文件（JS、CSS等），使用网络优先策略，不缓存
-  // 这样可以确保总是加载最新版本
+  // 对于 assets 文件（JS、CSS等），直接通过网络获取，不拦截
+  // 这样可以避免 ServiceWorker 导致的加载问题
   if (event.request.url.includes('/assets/')) {
-    event.respondWith(
-      fetch(event.request)
-        .then((response) => {
-          // 如果网络请求成功，直接返回，不缓存
-          if (response && response.status === 200) {
-            return response;
-          }
-          // 如果网络请求失败，尝试从缓存获取（作为降级方案）
-          return caches.match(event.request).then((cachedResponse) => {
-            return cachedResponse || response;
-          });
-        })
-        .catch(() => {
-          // 网络请求失败，尝试从缓存获取
-          return caches.match(event.request).then((cachedResponse) => {
-            if (cachedResponse) {
-              return cachedResponse;
-            }
-            // 如果缓存也没有，返回错误
-            return new Response('资源加载失败', {
-              status: 503,
-              statusText: 'Service Unavailable',
-              headers: new Headers({
-                'Content-Type': 'text/plain'
-              })
-            });
-          });
-        })
-    );
+    // 不拦截 assets 请求，让浏览器直接处理
     return;
   }
 
