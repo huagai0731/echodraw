@@ -2305,8 +2305,8 @@ class VisualAnalysisResult(models.Model):
 class VisualAnalysisQuota(models.Model):
     """
     视觉分析使用额度：跟踪用户视觉分析的使用次数
-    - 新用户赠送10次额度（一次性，不按月重置）
-    - 会员用户每月60次额度（按月重置）
+    - 新用户赠送10次额度（一次性，不重置）
+    - 会员用户每天15次额度（每天0点刷新，上海时区）
     """
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
@@ -2319,26 +2319,26 @@ class VisualAnalysisQuota(models.Model):
         default=10,
         help_text="赠送的免费额度（新用户一次性10次）",
     )
-    # 会员月度额度（每月重置）
+    # 会员每日额度（每天重置）
     monthly_quota = models.PositiveIntegerField(
         default=0,
-        help_text="会员月度额度（每月60次）",
+        help_text="会员每日额度（每天15次，每天0点刷新）",
     )
-    # 当前月份（用于判断是否需要重置）
+    # 当前日期（用于判断是否需要重置）
     current_month = models.CharField(
-        max_length=20,  # 格式：YYYY-MM（自然月）或 YYYY-MM-DD-P{周期数}（会员周期）
+        max_length=20,  # 格式：YYYY-MM-DD（上海时区的日期）
         blank=True,
-        help_text="当前月份标识（格式：YYYY-MM 或 YYYY-MM-DD-P{周期数}），用于判断是否需要重置月度额度",
+        help_text="当前日期标识（格式：YYYY-MM-DD），用于判断是否需要重置每日额度",
     )
     # 已使用次数（赠送额度）
     used_free_quota = models.PositiveIntegerField(
         default=0,
         help_text="已使用的免费额度",
     )
-    # 已使用次数（月度额度）
+    # 已使用次数（每日额度）
     used_monthly_quota = models.PositiveIntegerField(
         default=0,
-        help_text="本月已使用的月度额度",
+        help_text="今日已使用的每日额度",
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -2352,7 +2352,7 @@ class VisualAnalysisQuota(models.Model):
         ]
     
     def __str__(self) -> str:
-        return f"{self.user.email} - 免费:{self.remaining_free_quota}, 月度:{self.remaining_monthly_quota}"
+        return f"{self.user.email} - 免费:{self.remaining_free_quota}, 每日:{self.remaining_monthly_quota}"
     
     @property
     def remaining_free_quota(self) -> int:
@@ -2361,7 +2361,7 @@ class VisualAnalysisQuota(models.Model):
     
     @property
     def remaining_monthly_quota(self) -> int:
-        """剩余月度额度"""
+        """剩余每日额度"""
         return max(0, self.monthly_quota - self.used_monthly_quota)
     
     @property
@@ -2370,70 +2370,21 @@ class VisualAnalysisQuota(models.Model):
         return self.remaining_free_quota + self.remaining_monthly_quota
     
     def check_and_reset_monthly_quota(self):
-        """检查并重置月度额度（如果需要）
+        """检查并重置每日额度（如果需要）
         
-        基于用户会员开通时间计算月度周期，而不是自然月。
-        例如：如果用户在 2025-01-15 开通会员，则每月15号重置额度。
+        每天0点（上海时区）自动刷新额度。
+        使用上海时区的当前日期作为判断标准。
         """
-        from datetime import datetime, timedelta
-        from django.utils import timezone as django_timezone
+        from core.views import get_today_shanghai
         
-        # 获取用户会员开通时间
-        try:
-            profile = self.user.profile
-            membership_started_at = profile.membership_started_at
-        except Exception:
-            # 如果没有 profile 或 membership_started_at，回退到自然月逻辑
-            current_month_str = datetime.now().strftime("%Y-%m")
-            if self.current_month != current_month_str:
-                self.current_month = current_month_str
-                self.monthly_quota = 60
-                self.used_monthly_quota = 0
-                self.save(update_fields=["current_month", "monthly_quota", "used_monthly_quota", "updated_at"])
-            return
+        # 获取上海时区的今天日期
+        today_shanghai = get_today_shanghai()
+        current_date_str = today_shanghai.strftime("%Y-%m-%d")
         
-        # 如果没有会员开通时间，使用自然月逻辑
-        if not membership_started_at:
-            current_month_str = datetime.now().strftime("%Y-%m")
-            if self.current_month != current_month_str:
-                self.current_month = current_month_str
-                self.monthly_quota = 60
-                self.used_monthly_quota = 0
-                self.save(update_fields=["current_month", "monthly_quota", "used_monthly_quota", "updated_at"])
-            return
-        
-        # 确保 membership_started_at 是时区感知的
-        if django_timezone.is_naive(membership_started_at):
-            membership_started_at = django_timezone.make_aware(membership_started_at)
-        
-        now = django_timezone.now()
-        
-        # 使用开通时间的日期作为基准，计算当前应该处于第几个周期
-        # 例如：如果用户在 2025-01-15 开通，则：
-        # - 第一个周期：2025-01-15 到 2025-02-14
-        # - 第二个周期：2025-02-15 到 2025-03-14
-        # - 以此类推
-        start_date = membership_started_at.date()
-        current_date = now.date()
-        
-        # 计算当前周期
-        # 如果当前日期 >= 开通日期的日期，则周期数 = 月份差
-        # 如果当前日期 < 开通日期的日期，则周期数 = 月份差 - 1
-        months_diff = (current_date.year - start_date.year) * 12 + (current_date.month - start_date.month)
-        
-        if current_date.day >= start_date.day:
-            current_period = months_diff
-        else:
-            current_period = max(0, months_diff - 1)  # 确保周期数不为负数
-        
-        # 计算当前周期对应的标识（格式：YYYY-MM-DD-P，P是周期数）
-        # 这样可以唯一标识每个周期
-        period_key = f"{start_date.year}-{start_date.month:02d}-{start_date.day:02d}-P{current_period}"
-        
-        # 如果周期不同，重置月度额度
-        if self.current_month != period_key:
-            self.current_month = period_key
-            self.monthly_quota = 60  # 会员每月60次
+        # 如果日期不同，重置每日额度
+        if self.current_month != current_date_str:
+            self.current_month = current_date_str
+            self.monthly_quota = 15  # 会员每天15次
             self.used_monthly_quota = 0
             self.save(update_fields=["current_month", "monthly_quota", "used_monthly_quota", "updated_at"])
     
@@ -2444,31 +2395,31 @@ class VisualAnalysisQuota(models.Model):
         Returns:
             (can_use, error_message)
         """
-        # 如果是会员，检查并重置月度额度
+        # 如果是会员，检查并重置每日额度
         if is_member:
             self.check_and_reset_monthly_quota()
         
         # 检查总剩余额度
         if self.total_remaining_quota <= 0:
             if is_member:
-                return False, "本月视觉分析次数已用完（60次/月），请下月再试"
+                return False, "今日视觉分析次数已用完（15次/天），请明天再试"
             else:
-                return False, "视觉分析次数已用完（赠送的10次已用完），加入EchoDraw会员可享受每月60次额度"
+                return False, "视觉分析次数已用完（赠送的10次已用完），加入EchoDraw会员可享受每天15次额度"
         
         return True, ""
     
     def use_quota(self, is_member: bool):
         """
-        使用一次额度（优先使用免费额度，免费额度用完后使用月度额度）
+        使用一次额度（优先使用免费额度，免费额度用完后使用每日额度）
         """
-        # 如果是会员，检查并重置月度额度
+        # 如果是会员，检查并重置每日额度
         if is_member:
             self.check_and_reset_monthly_quota()
         
         # 优先使用免费额度
         if self.remaining_free_quota > 0:
             self.used_free_quota += 1
-        # 免费额度用完后，使用月度额度（仅会员）
+        # 免费额度用完后，使用每日额度（仅会员）
         elif is_member and self.remaining_monthly_quota > 0:
             self.used_monthly_quota += 1
         else:

@@ -49,13 +49,41 @@ export function getProxiedImageUrl(url: string): string {
   const isTosUrl = tosDomains.some(domain => url.includes(domain));
   
   if (isTosUrl) {
-    // 获取API基础URL
-    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
-    const baseUrl = apiBaseUrl.endsWith('/') ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
+    // 动态导入 API_BASE_URL 以避免循环依赖
+    // 使用与 api.ts 相同的逻辑来解析 baseURL
+    let baseUrl: string;
+    const explicitBaseURL = (import.meta.env.VITE_API_BASE_URL ?? "").trim();
     
-    // 构建代理URL
+    if (explicitBaseURL) {
+      if (
+        typeof window !== "undefined" &&
+        window.location.hostname &&
+        window.location.hostname !== "localhost" &&
+        /localhost|127\.0\.0\.1/i.test(explicitBaseURL)
+      ) {
+        baseUrl = `${window.location.protocol}//${window.location.host.replace(/\/$/, "")}/api`;
+      } else {
+        baseUrl = explicitBaseURL.endsWith('/') ? explicitBaseURL.slice(0, -1) : explicitBaseURL;
+      }
+    } else {
+      if (typeof window !== "undefined") {
+        if (import.meta.env.DEV) {
+          baseUrl = "/api";
+        } else {
+          const origin = window.location.origin.replace(/\/$/, "");
+          baseUrl = `${origin}/api`;
+        }
+      } else {
+        baseUrl = "/api";
+      }
+    }
+    
+    // 确保 baseUrl 不以 / 结尾
+    baseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+    
+    // 构建代理URL（baseUrl 已经包含 /api 前缀）
     const encodedUrl = encodeURIComponent(url);
-    return `${baseUrl}/api/visual-analysis/proxy-image/?url=${encodedUrl}`;
+    return `${baseUrl}/visual-analysis/proxy-image/?url=${encodedUrl}`;
   }
   
   return url;

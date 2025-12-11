@@ -262,6 +262,11 @@ function VisualAnalysis({ onBack, onSave, resultId, onNavigateToProfile }: Visua
     try {
       const taskResponse = await analyzeImageComprehensive(fileToAnalyze, selectedThreshold);
 
+      // 检查响应是否有效
+      if (!taskResponse) {
+        throw new Error("服务器返回空响应");
+      }
+
       if (taskResponse.result_id) {
         setSavedResultId(taskResponse.result_id);
         savedResultIdRef.current = taskResponse.result_id;
@@ -298,6 +303,8 @@ function VisualAnalysis({ onBack, onSave, resultId, onNavigateToProfile }: Visua
           onError: (err: string) => {
             setError(err);
             setComprehensiveLoading(false);
+            setCurrentTaskId(null);
+            setComprehensiveProgress(0);
           },
         }, isMountedRef);
       } else if ((taskResponse as any).step1 || (taskResponse as any).step2) {
@@ -305,6 +312,7 @@ function VisualAnalysis({ onBack, onSave, resultId, onNavigateToProfile }: Visua
         setComprehensiveResults(taskResponse);
         setComprehensiveLoading(false);
         setComprehensiveProgress(100);
+        setCurrentTaskId(null);
         await updateComprehensiveResultsToServer(
           taskResponse,
           savedResultIdRef.current,
@@ -313,9 +321,11 @@ function VisualAnalysis({ onBack, onSave, resultId, onNavigateToProfile }: Visua
           selectedThreshold
         );
       } else {
-        throw new Error("未知的响应格式");
+        // 如果既没有 task_id，也不是同步模式，说明响应格式不正确
+        throw new Error("服务器返回了未知的响应格式，请稍后重试");
       }
     } catch (err) {
+      // 确保所有错误情况下都正确重置状态
       let errorMessage = "未知错误";
       if (err instanceof Error) {
         errorMessage = err.message;
@@ -333,7 +343,11 @@ function VisualAnalysis({ onBack, onSave, resultId, onNavigateToProfile }: Visua
       setError(errorMessage);
       setComprehensiveLoading(false);
       setLoading(false);
+      setCurrentTaskId(null);
+      setComprehensiveProgress(0);
       setShowComprehensive(true);
+      // 清理轮询
+      stopPolling();
     }
   }, [imageFile, selectedThreshold, stopPolling, startPolling, loadResultWithGrayscaleLevels, setSavedResultData, processSavedResultUrls, setComprehensiveResults, originalImage, results?.step2Grayscale, isMountedRef, savedResultId, savedResultData]);
 
@@ -712,7 +726,7 @@ function VisualAnalysis({ onBack, onSave, resultId, onNavigateToProfile }: Visua
                     <div style={{ fontSize: "0.9rem", lineHeight: "1.6" }}>
                       {quota.is_member ? (
                         <>
-                          <div>会员月度额度：{quota.remaining_monthly_quota} / {quota.monthly_quota} 次</div>
+                          <div>会员每日额度：{quota.remaining_monthly_quota} / {quota.monthly_quota} 次</div>
                           {quota.remaining_free_quota > 0 && (
                             <div style={{ marginTop: "0.25rem", opacity: 0.8 }}>
                               赠送额度：{quota.remaining_free_quota} 次
@@ -723,7 +737,7 @@ function VisualAnalysis({ onBack, onSave, resultId, onNavigateToProfile }: Visua
                         <>
                           <div>剩余次数：{quota.total_remaining_quota} 次（赠送额度）</div>
                           <div style={{ marginTop: "0.5rem", fontSize: "0.85rem", opacity: 0.8 }}>
-                            加入EchoDraw会员可享受每月60次额度
+                            加入EchoDraw会员可享受每天15次额度
                           </div>
                         </>
                       )}
@@ -762,7 +776,7 @@ function VisualAnalysis({ onBack, onSave, resultId, onNavigateToProfile }: Visua
               isViewMode ||
               (comprehensiveResults || results)) && (
               <div style={{ marginTop: "2rem" }}>
-                {comprehensiveLoading ? (
+                {comprehensiveLoading && (currentTaskId || comprehensiveProgress > 0) ? (
                   <div className="visual-analysis__loading">
                     <ArtisticLoader size="medium" text="正在进行专业分析，请稍候..." />
                     {comprehensiveProgress > 0 && (

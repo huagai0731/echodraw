@@ -3728,7 +3728,7 @@ def get_visual_analysis_quota(request):
             }
         )
         
-        # 如果是会员，检查并重置月度额度
+        # 如果是会员，检查并重置每日额度
         if is_member:
             quota.check_and_reset_monthly_quota()
         
