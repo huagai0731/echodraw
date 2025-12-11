@@ -949,7 +949,7 @@ function Profile({
                   // 没有code，需要先进行微信授权
                   const currentUrl = getCurrentUrl();
                   const oauthUrl = getWechatOAuthUrl(
-                    encodeURIComponent(currentUrl),
+                    currentUrl, // 不在这里编码，让 getWechatOAuthUrl 内部处理
                     JSON.stringify({ tier, expiresAt, paymentMethod, quantity, totalAmount })
                   );
                   if (oauthUrl) {

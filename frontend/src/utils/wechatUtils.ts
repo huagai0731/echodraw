@@ -15,7 +15,7 @@ export function isWechatBrowser(): boolean {
 
 /**
  * 获取微信授权URL
- * @param redirectUri 授权后重定向的URI（需要URL编码）
+ * @param redirectUri 授权后重定向的URI（不需要预先编码）
  * @param state 可选的状态参数，用于保持请求前后状态一致
  * @returns 微信授权URL
  */
@@ -26,16 +26,32 @@ export function getWechatOAuthUrl(redirectUri: string, state?: string): string {
     return "";
   }
   
-  const baseUrl = "https://open.weixin.qq.com/connect/oauth2/authorize";
-  const params = new URLSearchParams({
-    appid: appid,
-    redirect_uri: redirectUri,
-    response_type: "code",
-    scope: "snsapi_base", // 静默授权，不需要用户确认
-    state: state || "",
-  });
+  // 微信要求 redirect_uri 必须使用 encodeURIComponent 编码
+  // 注意：不能使用 URLSearchParams，因为它会对已编码的URL再次编码
+  // 所以手动构建URL参数
+  const encodedRedirectUri = encodeURIComponent(redirectUri);
+  const encodedState = state ? encodeURIComponent(state) : "";
   
-  return `${baseUrl}?${params.toString()}#wechat_redirect`;
+  // 调试信息：输出实际使用的 redirect_uri（仅在开发环境）
+  if (import.meta.env.DEV) {
+    console.log("[Wechat OAuth] redirect_uri 信息:", {
+      original: redirectUri,
+      encoded: encodedRedirectUri,
+      domain: new URL(redirectUri).hostname,
+    });
+  }
+  
+  const baseUrl = "https://open.weixin.qq.com/connect/oauth2/authorize";
+  // 手动构建URL参数，避免双重编码
+  const params = [
+    `appid=${encodeURIComponent(appid)}`,
+    `redirect_uri=${encodedRedirectUri}`, // 已经用 encodeURIComponent 编码过了
+    `response_type=code`,
+    `scope=snsapi_base`, // 静默授权，不需要用户确认
+    encodedState ? `state=${encodedState}` : "",
+  ].filter(Boolean).join("&");
+  
+  return `${baseUrl}?${params}#wechat_redirect`;
 }
 
 /**

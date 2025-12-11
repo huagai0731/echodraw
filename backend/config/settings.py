@@ -74,7 +74,7 @@ else:
             file=sys.stderr
         )
         print(
-            "示例: DJANGO_ALLOWED_HOSTS=yourdomain.com,www.yourdomain.com",
+            "示例: DJANGO_ALLOWED_HOSTS=echodraw.com,www.echodraw.com",
             file=sys.stderr
         )
         # 生产环境不允许空ALLOWED_HOSTS，但为了不阻止启动，先设置为空列表
