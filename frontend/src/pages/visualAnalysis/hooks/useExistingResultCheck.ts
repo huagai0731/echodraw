@@ -78,8 +78,25 @@ export function useExistingResultCheck(
 
         const pendingTask = pendingTaskResponse?.task || null;
 
-        // 如果发现进行中的任务，立即显示进度条，不再显示"正在检查已有分析..."
+        // 如果发现进行中的任务，先检查是否超时
         if (pendingTask) {
+          // 先检查任务是否超时（30分钟）
+          const taskCreatedAt = pendingTask.created_at ? new Date(pendingTask.created_at).getTime() : Date.now();
+          const taskAge = Date.now() - taskCreatedAt;
+          const maxTaskAge = 30 * 60 * 1000; // 30分钟
+          
+          // 如果任务超时，直接显示错误，不继续处理
+          if (taskAge > maxTaskAge) {
+            setCheckingExistingResult(false);
+            callbacks.onSetCheckingExistingResult(false);
+            const minutesAgo = Math.floor(taskAge / (60 * 1000));
+            callbacks.onSetError(`分析任务已超时（创建于${minutesAgo}分钟前）。任务可能已失败，请重新上传图片进行分析。\n\n可能的原因：\n1. Celery worker 未运行\n2. 服务器负载过高\n3. 图片处理异常\n\n建议：请尝试重新上传图片，或联系管理员检查后端日志`);
+            callbacks.onSetComprehensiveLoading(false);
+            callbacks.onSetCurrentTaskId(null);
+            callbacks.onSetComprehensiveProgress(0);
+            return;
+          }
+          
           // 立即停止显示检查状态，开始显示进度条
           setCheckingExistingResult(false);
           callbacks.onSetCheckingExistingResult(false);
@@ -130,6 +147,7 @@ export function useExistingResultCheck(
               callbacks.onSetError("处理任务时发生错误，请刷新页面重试");
               callbacks.onSetComprehensiveLoading(false);
               callbacks.onSetCurrentTaskId(null);
+              callbacks.onSetComprehensiveProgress(0);
             }
           }
           return;
@@ -250,9 +268,9 @@ async function handlePendingTask(
     // 检查任务是否真的在进行中
     const taskCreatedAt = pendingTask.created_at ? new Date(pendingTask.created_at).getTime() : Date.now();
     const taskAge = Date.now() - taskCreatedAt;
-    const maxTaskAge = 5 * 60 * 1000; // 5分钟
+    const maxTaskAge = 30 * 60 * 1000; // 30分钟
 
-    // 如果任务创建时间超过5分钟但一直是 pending 或 started
+    // 如果任务创建时间超过30分钟但一直是 pending 或 started，直接告知失败
     if ((statusResponse.status === "pending" || statusResponse.status === "started") && taskAge > maxTaskAge) {
       const latestResult = getLatestResult(results);
       // 如果有已有结果，说明任务可能已经完成或卡住，但已有结果已经显示了，静默处理
@@ -263,11 +281,13 @@ async function handlePendingTask(
         onComplete();
         return;
       }
-      // 没有已有结果且任务卡住，显示错误（只在非静默模式下）
+      // 没有已有结果且任务超时，显示错误（只在非静默模式下）
       if (!silentMode) {
-        callbacks.onSetError("任务似乎卡住了。可能的原因：\n1. Celery worker 未运行\n2. 服务器负载过高\n\n请检查后端日志或联系管理员，或尝试重新上传图片");
+        const minutesAgo = Math.floor(taskAge / (60 * 1000));
+        callbacks.onSetError(`分析任务已超时（创建于${minutesAgo}分钟前）。任务可能已失败，请重新上传图片进行分析。\n\n可能的原因：\n1. Celery worker 未运行\n2. 服务器负载过高\n3. 图片处理异常\n\n建议：请尝试重新上传图片，或联系管理员检查后端日志`);
         callbacks.onSetComprehensiveLoading(false);
         callbacks.onSetCurrentTaskId(null);
+        callbacks.onSetComprehensiveProgress(0);
       }
       onComplete();
       return;
@@ -434,10 +454,14 @@ function handleNoResults(
   if (pendingTask) {
     const taskCreatedAt = pendingTask.created_at ? new Date(pendingTask.created_at).getTime() : Date.now();
     const taskAge = Date.now() - taskCreatedAt;
-    const maxTaskAge = 5 * 60 * 1000; // 5分钟
+    const maxTaskAge = 30 * 60 * 1000; // 30分钟
 
     if (taskAge > maxTaskAge) {
+      const minutesAgo = Math.floor(taskAge / (60 * 1000));
+      callbacks.onSetError(`分析任务已超时（创建于${minutesAgo}分钟前）。任务可能已失败，请重新上传图片进行分析。`);
       callbacks.onSetComprehensiveLoading(false);
+      callbacks.onSetCurrentTaskId(null);
+      callbacks.onSetComprehensiveProgress(0);
     }
   }
   
