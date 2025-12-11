@@ -92,29 +92,46 @@ export function useExistingResultCheck(
           
           // 在后台继续获取结果列表（用于任务完成后的处理）
           const resultsPromise = fetchVisualAnalysisResults().catch((err) => {
+            console.warn("[VisualAnalysis] 获取结果列表失败:", err);
             return [];
           });
           
           // 处理进行中的任务，同时获取结果列表
-          const results = await Promise.race([
-            resultsPromise,
-            timeoutPromise.then(() => []),
-          ]);
+          let results: any[] = [];
+          try {
+            results = await Promise.race([
+              resultsPromise,
+              timeoutPromise.then(() => []),
+            ]);
+          } catch (err) {
+            console.warn("[VisualAnalysis] 获取结果列表超时或失败:", err);
+            results = [];
+          }
 
           if (!isMounted) {
             return;
           }
 
-          await handlePendingTask(
-            pendingTask,
-            results,
-            callbacks,
-            isMountedRef,
-            () => {
-              // 任务处理完成
-            },
-            false // 非静默模式：显示加载动画
-          );
+          try {
+            await handlePendingTask(
+              pendingTask,
+              results,
+              callbacks,
+              isMountedRef,
+              () => {
+                // 任务处理完成
+              },
+              false // 非静默模式：显示加载动画
+            );
+          } catch (err) {
+            // handlePendingTask 内部已经有错误处理，但这里作为最后的保险
+            console.error("[VisualAnalysis] 处理进行中任务失败:", err);
+            if (isMounted && isMountedRef.current) {
+              callbacks.onSetError("处理任务时发生错误，请刷新页面重试");
+              callbacks.onSetComprehensiveLoading(false);
+              callbacks.onSetCurrentTaskId(null);
+            }
+          }
           return;
         }
 
@@ -235,8 +252,8 @@ async function handlePendingTask(
     const taskAge = Date.now() - taskCreatedAt;
     const maxTaskAge = 5 * 60 * 1000; // 5分钟
 
-    // 如果任务创建时间超过5分钟但一直是 pending
-    if (statusResponse.status === "pending" && taskAge > maxTaskAge) {
+    // 如果任务创建时间超过5分钟但一直是 pending 或 started
+    if ((statusResponse.status === "pending" || statusResponse.status === "started") && taskAge > maxTaskAge) {
       const latestResult = getLatestResult(results);
       // 如果有已有结果，说明任务可能已经完成或卡住，但已有结果已经显示了，静默处理
       if (latestResult || silentMode) {
@@ -250,6 +267,7 @@ async function handlePendingTask(
       if (!silentMode) {
         callbacks.onSetError("任务似乎卡住了。可能的原因：\n1. Celery worker 未运行\n2. 服务器负载过高\n\n请检查后端日志或联系管理员，或尝试重新上传图片");
         callbacks.onSetComprehensiveLoading(false);
+        callbacks.onSetCurrentTaskId(null);
       }
       onComplete();
       return;
@@ -269,8 +287,59 @@ async function handlePendingTask(
       callbacks.onSetIsViewMode(true);
       callbacks.onStartPolling(pendingTask.task_id, statusResponse.progress || 0);
     }
+    onComplete();
   } catch (err) {
-    // Failed to check task status
+    // 查询任务状态失败，显示错误并清理状态
+    console.error("[VisualAnalysis] 查询任务状态失败:", err);
+    
+    if (!isMountedRef.current) {
+      return;
+    }
+    
+    const errorMessage = err instanceof Error 
+      ? err.message 
+      : (err && typeof err === 'object' && 'response' in err)
+        ? (err as any).response?.data?.detail || (err as any).response?.data?.message || "查询任务状态失败"
+        : "查询任务状态失败，请稍后重试";
+    
+    // 检查是否有已有结果可以显示
+    const latestResult = getLatestResult(results);
+    
+    if (latestResult && !silentMode) {
+      // 如果有已有结果，尝试加载它而不是显示错误
+      try {
+        const savedResult = await fetchVisualAnalysisResult(latestResult.id);
+        const processedResult = processSavedResultUrls(savedResult);
+        
+        callbacks.onSetSavedResultId(latestResult.id);
+        callbacks.onSetSavedResultData(processedResult);
+        
+        if (savedResult.comprehensive_analysis) {
+          callbacks.onSetComprehensiveResults(savedResult.comprehensive_analysis);
+        }
+        
+        callbacks.onSetShowComprehensive(true);
+        callbacks.onSetIsViewMode(true);
+        callbacks.onSetComprehensiveLoading(false);
+        callbacks.onSetComprehensiveProgress(100);
+        callbacks.onSetCurrentTaskId(null);
+        
+        await callbacks.onLoadResult(processedResult);
+        onComplete();
+        return;
+      } catch (loadErr) {
+        // 加载已有结果也失败，显示错误
+        console.error("[VisualAnalysis] 加载已有结果失败:", loadErr);
+      }
+    }
+    
+    // 没有已有结果或加载失败，显示错误
+    if (!silentMode) {
+      callbacks.onSetError(`无法查询任务状态: ${errorMessage}\n\n可能的原因：\n1. 网络连接问题\n2. 服务器暂时不可用\n3. 任务可能已失效\n\n建议：请刷新页面重试，或尝试重新上传图片`);
+      callbacks.onSetComprehensiveLoading(false);
+      callbacks.onSetCurrentTaskId(null);
+    }
+    onComplete();
   }
 }
 

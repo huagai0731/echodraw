@@ -1,7 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, startTransition } from "react";
 
 import BottomNav, { type NavId } from "@/components/BottomNav";
-import AddToHomeScreen from "@/components/AddToHomeScreen";
 import { CircularRevealWrapper } from "@/components/CircularRevealWrapper";
 import { ArtisticLoader } from "@/components/ArtisticLoader";
 
@@ -1352,7 +1351,6 @@ function UserApp() {
           });
         }}
       />
-      <AddToHomeScreen />
       {forcedLogoutVisible ? (
         <div className="forced-logout-overlay">
           <div className="forced-logout-dialog">

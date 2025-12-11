@@ -159,7 +159,10 @@ export function useTaskPolling() {
         }
         // 如果还在 pending 或 started，继续轮询（已经在上面设置了）
       } catch (err) {
-        // 即使首次查询失败，也继续轮询
+        // 即使首次查询失败，也继续轮询（可能是临时网络问题）
+        // 但记录日志以便调试
+        console.warn("[VisualAnalysis] 首次查询任务状态失败，将继续轮询:", err);
+        // 不停止轮询，让后续的轮询尝试继续
       }
     };
     
