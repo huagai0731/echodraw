@@ -33,6 +33,10 @@ def get_wechatpay_client():
     
     # 微信支付公钥ID（用于公钥模式）
     wechatpay_public_key_id = os.getenv("WECHAT_PUBLIC_KEY_ID")
+    if wechatpay_public_key_id:
+        logger.info(f"✅ 检测到公钥ID: {wechatpay_public_key_id[:20]}...")
+    else:
+        logger.info("⚠️ 未检测到公钥ID，将使用平台证书模式")
     
     if not appid:
         raise ValueError("WECHAT_APPID 环境变量未设置")
@@ -96,8 +100,13 @@ def get_wechatpay_client():
             # 如果使用 cert_dir，就不需要 public_key 了
             public_key = None
         else:
-            logger.warning(f"证书目录 {wechat_cert_dir} 中没有找到有效的 CERTIFICATE 格式证书，将切换到平台证书模式（自动获取）")
-            # 不设置 cert_dir，让后续逻辑处理（切换到平台证书模式）
+            logger.warning(f"证书目录 {wechat_cert_dir} 中没有找到有效的 CERTIFICATE 格式证书")
+            # 如果提供了公钥ID，优先使用公钥模式；否则切换到平台证书模式
+            if wechatpay_public_key_id:
+                logger.info("检测到公钥ID，将尝试使用公钥模式")
+            else:
+                logger.info("未提供公钥ID，将切换到平台证书模式（自动获取）")
+            # 不设置 cert_dir，让后续逻辑处理
     
     # 切换到平台证书模式（推荐用于生产环境）
     # 微信支付公钥（PUBLIC KEY）可以用于验证签名，但 wechatpayv3 库需要 CERTIFICATE 格式
@@ -128,15 +137,25 @@ def get_wechatpay_client():
                     cert_dir = str(cert_dir_path.resolve())
                     logger.info(f"检测到 CERTIFICATE 格式证书，使用证书目录: {cert_dir}")
                 elif '-----BEGIN PUBLIC KEY-----' in content:
-                    # 是 PUBLIC KEY 格式，切换到平台证书模式
-                    logger.info("✅ 检测到 PUBLIC KEY 格式，切换到平台证书模式（库将自动获取证书）")
-                    from pathlib import Path
-                    BASE_DIR = Path(__file__).resolve().parent.parent.parent
-                    auto_cert_dir = BASE_DIR / "wechatpay_certs_auto"
-                    auto_cert_dir.mkdir(exist_ok=True)
-                    cert_dir = str(auto_cert_dir.resolve())
-                    public_key = None  # 不使用 public_key，改用 cert_dir
-                    logger.info(f"✅ 已切换到平台证书模式，证书目录: {cert_dir}")
+                    # 是 PUBLIC KEY 格式
+                    logger.info(f"检测到 PUBLIC KEY 格式，检查公钥ID: {wechatpay_public_key_id}")
+                    if wechatpay_public_key_id:
+                        # 如果提供了公钥ID，使用公钥模式
+                        logger.info("✅ 检测到 PUBLIC KEY 格式和公钥ID，使用微信支付公钥模式")
+                        public_key = content  # 使用文件中的公钥内容
+                        # 不设置 cert_dir，使用 public_key 模式
+                        logger.info(f"✅ 已设置 public_key，长度: {len(public_key)} 字符")
+                    else:
+                        # 如果没有公钥ID，切换到平台证书模式
+                        logger.info("⚠️ 检测到 PUBLIC KEY 格式但未提供公钥ID，切换到平台证书模式（库将自动获取证书）")
+                        logger.info("💡 提示：设置 WECHAT_PUBLIC_KEY_ID 环境变量可使用更稳定的公钥模式")
+                        from pathlib import Path
+                        BASE_DIR = Path(__file__).resolve().parent.parent.parent
+                        auto_cert_dir = BASE_DIR / "wechatpay_certs_auto"
+                        auto_cert_dir.mkdir(exist_ok=True)
+                        cert_dir = str(auto_cert_dir.resolve())
+                        public_key = None  # 不使用 public_key，改用 cert_dir
+                        logger.info(f"✅ 已切换到平台证书模式，证书目录: {cert_dir}")
                 else:
                     # 未知格式，也切换到平台证书模式
                     logger.warning(f"未知的证书格式，切换到平台证书模式")
