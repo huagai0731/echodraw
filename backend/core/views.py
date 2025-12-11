@@ -3999,9 +3999,6 @@ def create_payment_order(request):
                         {"detail": "微信支付必须提供openid，请在微信浏览器中打开页面进行支付"},
                         status=status.HTTP_400_BAD_REQUEST
                     )
-                        'payment_method': payment_method,
-                        'message': '已返回您最近创建的订单',
-                    })
             except Exception as e:
                 logger.exception(f"为已有订单生成支付URL失败: {e}")
                 # 如果生成支付URL失败，继续创建新订单

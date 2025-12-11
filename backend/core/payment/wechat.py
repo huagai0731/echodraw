@@ -79,7 +79,6 @@ def get_wechatpay_client_jsapi():
     private_key_string = os.getenv("WECHAT_PRIVATE_KEY")
     wechatpay_public_key_string = os.getenv("WECHAT_PUBLIC_KEY")
     wechatpay_public_key_id = os.getenv("WECHAT_PUBLIC_KEY_ID")
-    wechat_cert_dir = os.getenv("WECHAT_CERT_DIR")
     
     if not appid or not mchid or not apiv3_key or not cert_serial_no:
         raise ValueError("微信支付配置不完整")
@@ -98,7 +97,6 @@ def get_wechatpay_client_jsapi():
     
     # 处理公钥（JSAPI支付只使用公钥模式，不使用证书模式）
     public_key = None
-    cert_dir = None
     
     # 优先使用公钥文件路径
     if wechatpay_public_key_path and os.path.exists(wechatpay_public_key_path):
