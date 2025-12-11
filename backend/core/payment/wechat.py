@@ -517,49 +517,40 @@ def get_wechatpay_client_jsapi():
     else:
         raise ValueError("必须设置 WECHAT_PRIVATE_KEY_PATH 或 WECHAT_PRIVATE_KEY")
     
-    # 处理证书/公钥（复用 get_wechatpay_client 的逻辑）
+    # 处理公钥（JSAPI支付只使用公钥模式，不使用证书模式）
     public_key = None
     cert_dir = None
     
-    if wechat_cert_dir and os.path.isdir(wechat_cert_dir):
-        cert_dir = wechat_cert_dir
-    elif wechatpay_public_key_path and os.path.exists(wechatpay_public_key_path):
-        if os.path.isdir(wechatpay_public_key_path):
-            cert_dir = wechatpay_public_key_path
-        else:
+    # 优先使用公钥文件路径
+    if wechatpay_public_key_path and os.path.exists(wechatpay_public_key_path):
+        if not os.path.isdir(wechatpay_public_key_path):
             with open(wechatpay_public_key_path, 'r', encoding='utf-8') as f:
                 content = f.read().strip()
-            if '-----BEGIN CERTIFICATE-----' in content:
-                from pathlib import Path
-                BASE_DIR = Path(__file__).resolve().parent.parent.parent
-                cert_dir_path = BASE_DIR / "wechatpay_certs_auto"
-                cert_dir_path.mkdir(exist_ok=True)
-                import shutil
-                shutil.copy(wechatpay_public_key_path, cert_dir_path / "wechatpay_cert.pem")
-                cert_dir = str(cert_dir_path.resolve())
-            elif '-----BEGIN PUBLIC KEY-----' in content and wechatpay_public_key_id:
+            if '-----BEGIN PUBLIC KEY-----' in content:
                 public_key = content
+                logger.info("✅ 使用公钥文件模式")
+            elif '-----BEGIN CERTIFICATE-----' in content:
+                # 如果是证书格式，忽略，只使用公钥模式
+                logger.warning(f"文件 {wechatpay_public_key_path} 是证书格式，但JSAPI支付只使用公钥模式，将忽略此文件")
+    # 其次使用公钥字符串
     elif wechatpay_public_key_string:
         public_key = wechatpay_public_key_string.strip()
         if '-----BEGIN' not in public_key:
             public_key = f"-----BEGIN PUBLIC KEY-----\n{public_key}\n-----END PUBLIC KEY-----"
-        if '-----BEGIN PUBLIC KEY-----' in public_key and not wechatpay_public_key_id:
-            from pathlib import Path
-            BASE_DIR = Path(__file__).resolve().parent.parent.parent
-            auto_cert_dir = BASE_DIR / "wechatpay_certs_auto"
-            auto_cert_dir.mkdir(exist_ok=True)
-            cert_dir = str(auto_cert_dir.resolve())
-            public_key = None
+        logger.info("✅ 使用公钥字符串模式")
     
-    if not cert_dir and not public_key:
-        from pathlib import Path
-        BASE_DIR = Path(__file__).resolve().parent.parent.parent
-        auto_cert_dir = BASE_DIR / "wechatpay_certs_auto"
-        auto_cert_dir.mkdir(exist_ok=True)
-        cert_dir = str(auto_cert_dir.resolve())
+    # 如果没有配置公钥，报错
+    if not public_key:
+        raise ValueError(
+            "JSAPI支付必须配置公钥模式。请设置 WECHAT_PUBLIC_KEY_PATH 或 WECHAT_PUBLIC_KEY 环境变量，"
+            "并确保 WECHAT_PUBLIC_KEY_ID 也已设置。"
+        )
     
-    # 创建 JSAPI 类型的客户端
+    # 创建 JSAPI 类型的客户端（只使用公钥模式，不使用证书模式）
     # wechatpay_type 是初始化时的必需参数，用于指定支付类型
+    if not wechatpay_public_key_id:
+        raise ValueError("使用公钥模式必须设置 WECHAT_PUBLIC_KEY_ID 环境变量")
+    
     init_params = {
         'wechatpay_type': WeChatPayType.JSAPI,  # JSAPI 支付（公众号内支付）
         'mchid': mchid,
@@ -568,25 +559,14 @@ def get_wechatpay_client_jsapi():
         'appid': appid,
         'apiv3_key': apiv3_key,
         'notify_url': app_notify_url,
+        'public_key': public_key,  # 使用公钥模式
+        'public_key_id': wechatpay_public_key_id,  # 公钥ID是必需的
     }
     
-    if cert_dir:
-        init_params['cert_dir'] = cert_dir
-    elif public_key:
-        init_params['public_key'] = public_key
-        if wechatpay_public_key_id:
-            init_params['public_key_id'] = wechatpay_public_key_id
-        else:
-            init_params['public_key_id'] = ""
+    logger.info(f"✅ JSAPI支付使用公钥模式，公钥ID: {wechatpay_public_key_id}")
+    logger.info(f"公钥长度: {len(public_key)} 字符")
     
     wechatpay = WeChatPay(**init_params)
-    
-    # 如果证书列表为空，尝试获取
-    if cert_dir and not wechatpay._core._certificates:
-        try:
-            wechatpay._core._update_certificates()
-        except Exception as e:
-            logger.warning(f"自动获取证书失败（将在首次调用时重试）: {e}")
     
     return wechatpay
 
