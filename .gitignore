@@ -8,11 +8,15 @@ npm-debug.log
 backend/.env
 backend/.env.local
 backend/.env.development
+backend/.env.backup*
+backend/.env.*.backup
 frontend/.env
 frontend/.env.local
 .env
 .env.local
 .env.development
+.env.backup*
+.env.*.backup
 backend/.venv/
 backend/__pycache__/
 *.pyc
