@@ -3917,12 +3917,7 @@ def create_payment_order(request):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
     
-    try:
-        from core.payment.wechat import create_wechatpay_qrcode
-    except Exception as e:
-        logger.exception(f"导入微信支付模块失败: {e}")
-        # 如果只是微信支付模块导入失败，不影响支付宝，所以不立即返回错误
-        # 但会在后续微信支付调用时处理
+    # 微信支付只支持JSAPI模式，不需要导入Native支付函数
     payment_method = request.data.get('payment_method')
     amount_str = request.data.get('amount')
     tier = request.data.get('tier')
@@ -3998,25 +3993,12 @@ def create_payment_order(request):
                         'message': '已返回您最近创建的订单',
                     })
                 elif payment_method == PointsOrder.PAYMENT_METHOD_WECHAT:
-                    # 微信支付：重新生成二维码
-                    try:
-                        from core.payment.wechat import create_wechatpay_qrcode
-                    except ImportError as import_err:
-                        logger.exception(f"导入微信支付模块失败: {import_err}")
-                        return Response(
-                            {"detail": f"微信支付模块导入失败: {str(import_err)}。请检查服务器配置和依赖。"},
-                            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                        )
-                    description = f"EchoDraw会员-{tier}"
-                    code_url = create_wechatpay_qrcode(
-                        order_number=recent_order.order_number,
-                        amount=str(amount),
-                        description=description,
+                    # 微信支付只支持JSAPI模式，需要openid
+                    # 如果订单已存在但没有openid，返回错误提示
+                    return Response(
+                        {"detail": "微信支付必须提供openid，请在微信浏览器中打开页面进行支付"},
+                        status=status.HTTP_400_BAD_REQUEST
                     )
-                    return Response({
-                        'order_id': recent_order.id,
-                        'order_number': recent_order.order_number,
-                        'code_url': code_url,
                         'payment_method': payment_method,
                         'message': '已返回您最近创建的订单',
                     })
@@ -4096,7 +4078,7 @@ def create_payment_order(request):
             # 调用微信支付接口
             # 如果之前导入失败，这里会再次尝试导入
             try:
-                from core.payment.wechat import create_wechatpay_qrcode, create_wechatpay_jsapi
+                from core.payment.wechat import create_wechatpay_jsapi
             except ImportError as import_err:
                 logger.exception(f"导入微信支付模块失败: {import_err}")
                 order.delete()
@@ -4107,53 +4089,44 @@ def create_payment_order(request):
             
             description = f"EchoDraw会员-{tier}"
             
-            # 检查是否有openid，如果有则使用JSAPI支付（公众号内支付）
+            # 只支持JSAPI支付（公众号内支付），必须提供openid
             openid = request.data.get('openid')
-            if openid:
-                # JSAPI支付（公众号内支付）
-                try:
-                    jsapi_params = create_wechatpay_jsapi(
-                        order_number=order_number,
-                        amount=str(amount),
-                        description=description,
-                        openid=openid,
-                    )
-                    return Response({
-                        'order_id': order.id,
-                        'order_number': order_number,
-                        'jsapi_params': jsapi_params,  # JSAPI支付参数
-                        'payment_method': payment_method,
-                        'payment_type': 'jsapi',  # 标识这是JSAPI支付
-                    })
-                except Exception as jsapi_error:
-                    logger.exception(f"创建微信JSAPI支付失败: {jsapi_error}")
-                    order.delete()
-                    # 在测试阶段，返回详细错误信息
-                    import traceback
-                    error_traceback = traceback.format_exc()
-                    error_msg = f"创建微信JSAPI支付失败\n\n错误信息: {str(jsapi_error)}\n\n错误类型: {type(jsapi_error).__name__}\n\n详细堆栈:\n{error_traceback}"
-                    if not settings.DEBUG:
-                        # 生产环境也返回详细错误（测试阶段）
-                        error_msg = f"创建微信JSAPI支付失败: {str(jsapi_error)}\n\n错误类型: {type(jsapi_error).__name__}"
-                    return Response(
-                        {"detail": error_msg},
-                        status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                    )
-            else:
-                # Native支付（扫码支付）
-                code_url = create_wechatpay_qrcode(
+            if not openid:
+                order.delete()
+                return Response(
+                    {"detail": "微信支付必须提供openid，请在微信浏览器中打开页面进行支付"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # JSAPI支付（公众号内支付）
+            try:
+                jsapi_params = create_wechatpay_jsapi(
                     order_number=order_number,
                     amount=str(amount),
                     description=description,
+                    openid=openid,
                 )
-                
                 return Response({
                     'order_id': order.id,
                     'order_number': order_number,
-                    'code_url': code_url,  # 微信支付二维码URL
+                    'jsapi_params': jsapi_params,  # JSAPI支付参数
                     'payment_method': payment_method,
-                    'payment_type': 'native',  # 标识这是Native支付
+                    'payment_type': 'jsapi',  # 标识这是JSAPI支付
                 })
+            except Exception as jsapi_error:
+                logger.exception(f"创建微信JSAPI支付失败: {jsapi_error}")
+                order.delete()
+                # 在测试阶段，返回详细错误信息
+                import traceback
+                error_traceback = traceback.format_exc()
+                error_msg = f"创建微信JSAPI支付失败\n\n错误信息: {str(jsapi_error)}\n\n错误类型: {type(jsapi_error).__name__}\n\n详细堆栈:\n{error_traceback}"
+                if not settings.DEBUG:
+                    # 生产环境也返回详细错误（测试阶段）
+                    error_msg = f"创建微信JSAPI支付失败: {str(jsapi_error)}\n\n错误类型: {type(jsapi_error).__name__}"
+                return Response(
+                    {"detail": error_msg},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
         except ValueError as e:
             # 环境变量配置错误
             error_detail = str(e)
