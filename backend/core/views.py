@@ -3994,11 +3994,34 @@ def create_payment_order(request):
                     })
                 elif payment_method == PointsOrder.PAYMENT_METHOD_WECHAT:
                     # 微信支付只支持JSAPI模式，需要openid
-                    # 如果订单已存在但没有openid，返回错误提示
-                    return Response(
-                        {"detail": "微信支付必须提供openid，请在微信浏览器中打开页面进行支付"},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
+                    openid = request.data.get('openid')
+                    if not openid:
+                        # 如果订单已存在但没有openid，返回错误提示
+                        return Response(
+                            {"detail": "微信支付必须提供openid，请在微信浏览器中打开页面进行支付"},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                    # 如果有openid，为已有订单生成JSAPI支付参数
+                    try:
+                        from core.payment.wechat import create_wechatpay_jsapi
+                        description = f"EchoDraw会员-{tier}"
+                        jsapi_params = create_wechatpay_jsapi(
+                            order_number=recent_order.order_number,
+                            amount=str(amount),
+                            description=description,
+                            openid=openid,
+                        )
+                        return Response({
+                            'order_id': recent_order.id,
+                            'order_number': recent_order.order_number,
+                            'jsapi_params': jsapi_params,
+                            'payment_method': payment_method,
+                            'payment_type': 'jsapi',
+                            'message': '已返回您最近创建的订单',
+                        })
+                    except Exception as jsapi_error:
+                        logger.exception(f"为已有订单生成微信JSAPI支付参数失败: {jsapi_error}")
+                        # 如果生成支付参数失败，继续创建新订单
             except Exception as e:
                 logger.exception(f"为已有订单生成支付URL失败: {e}")
                 # 如果生成支付URL失败，继续创建新订单

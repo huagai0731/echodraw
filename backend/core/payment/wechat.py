@@ -209,7 +209,9 @@ def create_wechatpay_jsapi(order_number: str, amount: str, description: str, ope
             
             # 生成签名
             # 签名串格式：appId\n时间戳\n随机字符串\nprepay_id=xxx\n
+            # 注意：必须使用\n（LF），不能使用\r\n（CRLF）
             sign_str = f"{appid}\n{timestamp}\n{nonce_str}\nprepay_id={prepay_id}\n"
+            logger.debug(f"JSAPI支付签名串: {repr(sign_str)}")
             
             # 使用wechatpayv3库的签名方法（如果可用）
             try:
@@ -277,7 +279,7 @@ def create_wechatpay_jsapi(order_number: str, amount: str, description: str, ope
                     logger.exception(f"使用库的私钥签名也失败: {e2}")
                     raise ValueError(f"无法生成JSAPI支付签名: {sign_error}")
             
-            return {
+            result = {
                 "appId": appid,
                 "timeStamp": timestamp,
                 "nonceStr": nonce_str,
@@ -285,6 +287,9 @@ def create_wechatpay_jsapi(order_number: str, amount: str, description: str, ope
                 "signType": "RSA",
                 "paySign": pay_sign,
             }
+            logger.info(f"JSAPI支付参数生成成功，订单号: {order_number}, prepay_id: {prepay_id[:20]}...")
+            logger.debug(f"支付参数: appId={appid}, timeStamp={timestamp}, nonceStr={nonce_str}, package={result['package']}, signType=RSA")
+            return result
         else:
             raise ValueError(f"微信支付返回数据格式错误: {message}")
     else:

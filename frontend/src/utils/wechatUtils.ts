@@ -162,6 +162,16 @@ function callWechatPay(
     return;
   }
 
+  // 记录支付参数（不包含paySign，避免泄露）
+  console.log("[WeChat Pay] 调起支付，参数:", {
+    appId: jsapiParams.appId,
+    timeStamp: jsapiParams.timeStamp,
+    nonceStr: jsapiParams.nonceStr,
+    package: jsapiParams.package,
+    signType: jsapiParams.signType,
+    paySignLength: jsapiParams.paySign?.length || 0,
+  });
+
   wx.invoke(
     "getBrandWCPayRequest",
     {
@@ -173,6 +183,7 @@ function callWechatPay(
       paySign: jsapiParams.paySign,
     },
     (res: any) => {
+      console.log("[WeChat Pay] 支付回调:", res);
       if (res.err_msg === "get_brand_wcpay_request:ok") {
         // 支付成功
         resolve();
@@ -180,8 +191,15 @@ function callWechatPay(
         // 用户取消支付
         reject(new Error("用户取消支付"));
       } else {
-        // 支付失败
-        reject(new Error(res.err_msg || "支付失败"));
+        // 支付失败，提供更详细的错误信息
+        const errorMsg = res.err_msg || "支付失败";
+        console.error("[WeChat Pay] 支付失败:", errorMsg, res);
+        // 如果是签名验证失败，提供更明确的提示
+        if (errorMsg.includes("sign") || errorMsg.includes("签名")) {
+          reject(new Error("支付签名验证失败，请刷新页面重试"));
+        } else {
+          reject(new Error(errorMsg));
+        }
       }
     }
   );
