@@ -4128,9 +4128,13 @@ def create_payment_order(request):
                 except Exception as jsapi_error:
                     logger.exception(f"创建微信JSAPI支付失败: {jsapi_error}")
                     order.delete()
-                    error_msg = "创建支付订单失败，请稍后重试。如果问题持续，请联系客服。"
-                    if settings.DEBUG:
-                        error_msg = f"创建微信JSAPI支付失败: {str(jsapi_error)}"
+                    # 在测试阶段，返回详细错误信息
+                    import traceback
+                    error_traceback = traceback.format_exc()
+                    error_msg = f"创建微信JSAPI支付失败\n\n错误信息: {str(jsapi_error)}\n\n错误类型: {type(jsapi_error).__name__}\n\n详细堆栈:\n{error_traceback}"
+                    if not settings.DEBUG:
+                        # 生产环境也返回详细错误（测试阶段）
+                        error_msg = f"创建微信JSAPI支付失败: {str(jsapi_error)}\n\n错误类型: {type(jsapi_error).__name__}"
                     return Response(
                         {"detail": error_msg},
                         status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -4165,10 +4169,13 @@ def create_payment_order(request):
             error_detail = str(e)
             logger.exception(f"创建微信支付失败: {error_detail}")
             order.delete()
-            # 在生产环境不暴露详细错误信息，但记录到日志
-            error_msg = "创建支付订单失败，请稍后重试。如果问题持续，请联系客服。"
-            if settings.DEBUG:
-                error_msg = f"创建支付订单失败: {error_detail}"
+            # 在测试阶段，返回详细错误信息
+            import traceback
+            error_traceback = traceback.format_exc()
+            error_msg = f"创建微信支付失败\n\n错误信息: {error_detail}\n\n错误类型: {type(e).__name__}\n\n详细堆栈:\n{error_traceback}"
+            if not settings.DEBUG:
+                # 生产环境也返回详细错误（测试阶段）
+                error_msg = f"创建微信支付失败: {error_detail}\n\n错误类型: {type(e).__name__}"
             return Response(
                 {"detail": error_msg},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
