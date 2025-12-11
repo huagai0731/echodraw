@@ -538,6 +538,23 @@ function UserApp() {
     };
   }, []);
 
+  // 处理微信授权回调：如果URL中有code和state，自动跳转到Profile页面处理
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get("code");
+    const state = urlParams.get("state");
+    
+    // 如果URL中有code和state，说明是微信授权回调
+    // 需要跳转到Profile页面，让Profile组件的useEffect处理授权回调
+    if (code && state && activeNav !== "profile") {
+      console.log("[Echo] 检测到微信授权回调，自动跳转到Profile页面处理");
+      setActiveNav("profile");
+      setActivePage("profile");
+    }
+  }, [activeNav]);
+
   // 获取用户会员状态
   useEffect(() => {
     const loadMembershipStatus = async () => {

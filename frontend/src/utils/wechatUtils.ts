@@ -196,9 +196,12 @@ export function getCurrentUrl(): string {
   if (typeof window === "undefined") {
     return "";
   }
-  // 使用网站根路径作为redirect_uri，确保域名匹配
-  // 微信授权回调时会重定向到根路径，并添加code和state参数
-  // 前端可以通过检查URL中的code参数来处理授权回调
-  return `${window.location.origin}/`;
+  // 返回当前页面的完整 URL（包括路径和查询参数）
+  // 这样授权回调后会回到原来的页面，而不是总是回到首页
+  // 注意：需要移除可能存在的 code 和 state 参数，避免重复授权
+  const url = new URL(window.location.href);
+  url.searchParams.delete("code");
+  url.searchParams.delete("state");
+  return url.toString();
 }
 
