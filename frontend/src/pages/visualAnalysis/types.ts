@@ -45,7 +45,6 @@ export type SavedResultData = {
   step4_hls_s_inverted?: string;
   step5_hue: string;
   kmeans_segmentation_image?: string;
-  kmeans_segmentation_image_12?: string;
   binary_threshold: number;
   created_at: string;
   comprehensive_analysis?: any;

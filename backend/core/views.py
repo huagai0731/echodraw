@@ -3676,7 +3676,6 @@ class VisualAnalysisResultDetailView(generics.RetrieveDestroyAPIView):
             instance.step2_grayscale_4_level,
             instance.step4_hls_s_inverted,
             instance.kmeans_segmentation_image,
-            instance.kmeans_segmentation_image_12,
         ]
         
         # 过滤出实际存在的文件

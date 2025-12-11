@@ -562,22 +562,29 @@ function WeeklySingleTemplateDesigner({ open, artworks, onClose }: WeeklySingleT
         }
       });
 
-      // 等待绘制完成
-      await new Promise(resolve => setTimeout(resolve, 200));
+      // 等待绘制完成（移动设备可能需要更长时间）
+      const { waitForCanvasRender, exportCanvasToDataURL } = await import("@/utils/canvasExport");
+      await waitForCanvasRender();
 
-      // 现在尝试导出
-      const dataURL = exportCanvas.toDataURL("image/png");
+      // 现在尝试导出（使用安全的导出函数，包含移动端处理）
+      const dataURL = exportCanvasToDataURL(exportCanvas, "image/png");
       setPreviewImageUrl(dataURL);
       setShowPreviewModal(true);
     } catch (error) {
       console.error("生成图片失败:", error);
-      if (error instanceof Error && (error.message.includes("Tainted") || error.message.includes("SecurityError") || error.message.includes("CORS"))) {
-        alert("导出失败：图片跨域限制。请确保图片服务器允许跨域访问（CORS）。如果问题持续，请联系管理员。");
-      } else if (error instanceof Error && error.message.includes("CORS")) {
-        alert(error.message);
-      } else {
-        alert("生成图片失败，请稍后重试");
+      let errorMessage = "生成图片失败，请稍后重试";
+      
+      if (error instanceof Error) {
+        if (error.message.includes("Tainted") || error.message.includes("SecurityError") || error.message.includes("CORS") || error.message.includes("跨域")) {
+          errorMessage = "导出失败：图片跨域限制。请确保图片服务器允许跨域访问（CORS）。如果问题持续，请联系管理员。";
+        } else if (error.message.includes("尺寸过大") || error.message.includes("尺寸无效")) {
+          errorMessage = error.message;
+        } else {
+          errorMessage = `导出失败：${error.message}`;
+        }
       }
+      
+      alert(errorMessage);
     }
   };
 

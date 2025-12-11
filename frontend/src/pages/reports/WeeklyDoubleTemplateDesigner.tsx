@@ -559,27 +559,11 @@ function WeeklyDoubleTemplateDesigner({ open, artworks, onClose }: WeeklyDoubleT
       });
 
       // 等待绘制完成（移动设备可能需要更长时间）
-      await new Promise(resolve => setTimeout(resolve, 500));
+      const { waitForCanvasRender, exportCanvasToDataURL } = await import("@/utils/canvasExport");
+      await waitForCanvasRender();
 
-      // 现在尝试导出
-      // 在移动设备上，toDataURL 可能会因为 Canvas 尺寸或内存限制而失败
-      let dataURL: string;
-      try {
-        dataURL = exportCanvas.toDataURL("image/png");
-        // 检查是否成功生成（某些浏览器在失败时返回空字符串或 "data:,"）
-        if (!dataURL || dataURL === "data:," || dataURL.length < 100) {
-          throw new Error("Canvas 导出失败：生成的数据为空或无效");
-        }
-      } catch (toDataURLError) {
-        console.error("toDataURL 失败:", toDataURLError);
-        // 检查是否是 Canvas 尺寸限制
-        const canvasSize = exportCanvas.width * exportCanvas.height;
-        const maxCanvasSize = 16777216; // 4096x4096，大多数移动设备的限制
-        if (canvasSize > maxCanvasSize) {
-          throw new Error(`Canvas 尺寸过大 (${exportCanvas.width}x${exportCanvas.height})，移动设备可能不支持。请尝试使用较小的图片尺寸。`);
-        }
-        throw new Error(`导出失败：${toDataURLError instanceof Error ? toDataURLError.message : "未知错误"}`);
-      }
+      // 现在尝试导出（使用安全的导出函数，包含移动端处理）
+      const dataURL = exportCanvasToDataURL(exportCanvas, "image/png");
 
       // 清理 blob URL 以释放内存
       for (const gridImage of reloadedGridImages) {

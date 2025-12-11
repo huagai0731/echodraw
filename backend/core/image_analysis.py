@@ -600,34 +600,60 @@ def analyze_colormax_segmentation(rgb_image: np.ndarray, target_n: int = 8) -> D
         
         # 计算距离矩阵（Lab 欧氏距离）
         # 使用 condensed distance matrix（节省内存）
-        from scipy.spatial.distance import pdist, squareform
+        from scipy.spatial.distance import pdist
         distances = pdist(bin_centers, metric='euclidean')
         
+        # 内存优化：如果bin数量很大，使用更节省内存的方法
+        # 对于大量bin，层级聚类可能消耗大量内存
+        if n_bins > 10000:
+            # 如果bin数量超过10000，使用更激进的降采样
+            logger.warning(f"K-means分析：bin数量过多({n_bins})，可能导致内存不足，尝试进一步降采样")
+            # 随机采样到最多5000个bin
+            if n_bins > 5000:
+                import random
+                sampled_indices = random.sample(range(n_bins), 5000)
+                bin_centers = bin_centers[sampled_indices]
+                unique_bins = unique_bins[sampled_indices]
+                n_bins = 5000
+                # 重新构建bin_means（只保留采样的bin）
+                bin_means = {unique_bins[i]: bin_means[unique_bins[i]] for i in range(n_bins)}
+        
         # 层级聚类
-        linkage_matrix = linkage(distances, method='ward')
+        use_kmeans_fallback = False
+        try:
+            linkage_matrix = linkage(distances, method='ward')
+            # 聚成 target_n 个簇
+            cluster_labels = fcluster(linkage_matrix, target_n, criterion='maxclust')
+        except MemoryError as e:
+            logger.error(f"K-means分析：层级聚类内存不足，bin数量: {n_bins}, 错误: {str(e)}")
+            # 如果内存不足，回退到简单的K-means
+            use_kmeans_fallback = True
+            from sklearn.cluster import KMeans
+            kmeans = KMeans(n_clusters=target_n, random_state=42, n_init=10, max_iter=100)
+            cluster_labels = kmeans.fit_predict(bin_centers) + 1  # +1 因为fcluster从1开始
+            cluster_centers_lab = kmeans.cluster_centers_
+            bin_to_cluster = {unique_bins[i]: cluster_labels[i] - 1 for i in range(len(unique_bins))}
         
-        # 聚成 target_n 个簇
-        cluster_labels = fcluster(linkage_matrix, target_n, criterion='maxclust')
-        
-        # 计算每个簇的中心（Lab 空间）
-        cluster_centers_lab = []
-        bin_to_cluster = {}
-        for cluster_id in range(1, target_n + 1):
-            cluster_mask = cluster_labels == cluster_id
-            cluster_bins = unique_bins[cluster_mask]
-            if len(cluster_bins) > 0:
-                # 加权平均（按 bin 的像素数加权）
-                weights = np.array([bin_means[idx]['count'] for idx in cluster_bins])
-                cluster_center = np.average(
-                    [bin_means[idx]['lab_mean'] for idx in cluster_bins],
-                    axis=0,
-                    weights=weights
-                )
-                cluster_centers_lab.append(cluster_center)
-                for idx in cluster_bins:
-                    bin_to_cluster[idx] = len(cluster_centers_lab) - 1
-        
-        cluster_centers_lab = np.array(cluster_centers_lab)
+        if not use_kmeans_fallback:
+            # 计算每个簇的中心（Lab 空间）
+            cluster_centers_lab = []
+            bin_to_cluster = {}
+            for cluster_id in range(1, target_n + 1):
+                cluster_mask = cluster_labels == cluster_id
+                cluster_bins = unique_bins[cluster_mask]
+                if len(cluster_bins) > 0:
+                    # 加权平均（按 bin 的像素数加权）
+                    weights = np.array([bin_means[idx]['count'] for idx in cluster_bins])
+                    cluster_center = np.average(
+                        [bin_means[idx]['lab_mean'] for idx in cluster_bins],
+                        axis=0,
+                        weights=weights
+                    )
+                    cluster_centers_lab.append(cluster_center)
+                    for idx in cluster_bins:
+                        bin_to_cluster[idx] = len(cluster_centers_lab) - 1
+            
+            cluster_centers_lab = np.array(cluster_centers_lab)
     
     # 4. 合并小簇（<0.5%）
     # 先计算每个簇的占比
@@ -1000,20 +1026,11 @@ def analyze_image_simplified(image_data: str, binary_threshold: int = 140) -> Di
         kmeans_result_8 = analyze_kmeans_segmentation(rgb_image, k=8)
         dominant_palette_8 = analyze_dominant_palette(rgb_image, kmeans_result_8, top_n=8)
         
-        # 12色分析
-        kmeans_result_12 = analyze_kmeans_segmentation(rgb_image, k=12)
-        dominant_palette_12 = analyze_dominant_palette(rgb_image, kmeans_result_12, top_n=12)
-        
         results['step5'] = {
             'kmeans_segmentation_8': kmeans_result_8['segmented_image'],  # 8色色块分割，已经是base64
-            'kmeans_segmentation_12': kmeans_result_12['segmented_image'],  # 12色色块分割，已经是base64
             'dominant_palette_8': {
                 'palette': dominant_palette_8['palette'],
                 'palette_ratios': dominant_palette_8['palette_ratios'],
-            },
-            'dominant_palette_12': {
-                'palette': dominant_palette_12['palette'],
-                'palette_ratios': dominant_palette_12['palette_ratios'],
             },
         }
         
@@ -1238,24 +1255,24 @@ def analyze_image_simplified_from_url(image_url: str, result_id: int, binary_thr
         if progress_callback:
             progress_callback(72)
         
-        # 性能优化：先执行8色分析（通常更快），然后执行12色分析
         # 8色分析
         logger.info(f"[analyze_image_simplified_from_url] 开始8色K-means分析，图片尺寸: {rgb_image.shape}")
-        kmeans_result_8 = analyze_kmeans_segmentation(rgb_image, k=8)
-        dominant_palette_8 = analyze_dominant_palette(rgb_image, kmeans_result_8, top_n=8)
-        logger.info(f"[analyze_image_simplified_from_url] 8色K-means分析完成")
+        try:
+            kmeans_result_8 = analyze_kmeans_segmentation(rgb_image, k=8)
+            dominant_palette_8 = analyze_dominant_palette(rgb_image, kmeans_result_8, top_n=8)
+            logger.info(f"[analyze_image_simplified_from_url] 8色K-means分析完成")
+            
+            # 内存优化：立即释放8色分析中的大对象（如果可能）
+            import gc
+            gc.collect()
+        except MemoryError as e:
+            logger.error(f"[analyze_image_simplified_from_url] 8色K-means分析内存不足: {str(e)}")
+            raise
+        except Exception as e:
+            logger.error(f"[analyze_image_simplified_from_url] 8色K-means分析失败: {str(e)}", exc_info=True)
+            raise
         
-        # 进度：8色分析完成 (80%)
-        if progress_callback:
-            progress_callback(80)
-        
-        # 12色分析
-        logger.info(f"[analyze_image_simplified_from_url] 开始12色K-means分析，图片尺寸: {rgb_image.shape}")
-        kmeans_result_12 = analyze_kmeans_segmentation(rgb_image, k=12)
-        dominant_palette_12 = analyze_dominant_palette(rgb_image, kmeans_result_12, top_n=12)
-        logger.info(f"[analyze_image_simplified_from_url] 12色K-means分析完成")
-        
-        # 进度：12色分析完成 (85%)
+        # 进度：8色分析完成 (85%)
         if progress_callback:
             progress_callback(85)
         
@@ -1316,14 +1333,7 @@ def analyze_image_simplified_from_url(image_url: str, result_id: int, binary_thr
         # 保存8色K-means图片到 kmeans_segmentation_image 字段
         save_kmeans_image_from_base64(kmeans_result_8['segmented_image'], result_obj.kmeans_segmentation_image, 'kmeans_8')
         
-        # 进度：8色图片保存完成 (88%)
-        if progress_callback:
-            progress_callback(88)
-        
-        # 保存12色K-means图片到 kmeans_segmentation_image_12 字段
-        save_kmeans_image_from_base64(kmeans_result_12['segmented_image'], result_obj.kmeans_segmentation_image_12, 'kmeans_12')
-        
-        # 进度：12色图片保存完成 (92%)
+        # 进度：8色图片保存完成 (92%)
         if progress_callback:
             progress_callback(92)
         
@@ -1346,13 +1356,9 @@ def analyze_image_simplified_from_url(image_url: str, result_id: int, binary_thr
                     'palette': dominant_palette_8['palette'],
                     'palette_ratios': dominant_palette_8['palette_ratios'],
                 },
-                'dominant_palette_12': {
-                    'palette': dominant_palette_12['palette'],
-                    'palette_ratios': dominant_palette_12['palette_ratios'],
-                },
             },
         }
-        logger.info(f"[analyze_image_simplified_from_url] 准备保存 comprehensive_analysis，hue_histogram长度: {len(hist)}, dominant_palette_8长度: {len(dominant_palette_8.get('palette', []))}, dominant_palette_12长度: {len(dominant_palette_12.get('palette', []))}")
+        logger.info(f"[analyze_image_simplified_from_url] 准备保存 comprehensive_analysis，hue_histogram长度: {len(hist)}, dominant_palette_8长度: {len(dominant_palette_8.get('palette', []))}")
         
         # 设置 comprehensive_analysis
         result_obj.comprehensive_analysis = comprehensive_data
@@ -1365,7 +1371,7 @@ def analyze_image_simplified_from_url(image_url: str, result_id: int, binary_thr
             progress_callback(100)
         
         logger.info(f"[analyze_image_simplified_from_url] 所有图片和结构化数据已保存，结果ID: {result_id}")
-        logger.info(f"[analyze_image_simplified_from_url] comprehensive_analysis内容: step4.hue_histogram长度={len(result_obj.comprehensive_analysis.get('step4', {}).get('hue_histogram', []))}, step5.dominant_palette_8存在={bool(result_obj.comprehensive_analysis.get('step5', {}).get('dominant_palette_8'))}, step5.dominant_palette_12存在={bool(result_obj.comprehensive_analysis.get('step5', {}).get('dominant_palette_12'))}")
+        logger.info(f"[analyze_image_simplified_from_url] comprehensive_analysis内容: step4.hue_histogram长度={len(result_obj.comprehensive_analysis.get('step4', {}).get('hue_histogram', []))}, step5.dominant_palette_8存在={bool(result_obj.comprehensive_analysis.get('step5', {}).get('dominant_palette_8'))}")
         
     except Exception as e:
         logger.error(f"[analyze_image_simplified_from_url] 处理图片时发生错误: {str(e)}", exc_info=True)

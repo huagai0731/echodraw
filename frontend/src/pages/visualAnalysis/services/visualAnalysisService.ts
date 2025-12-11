@@ -124,7 +124,6 @@ export const updateComprehensiveResultsToServer = async (
     const step3HlsSaturationInverted = structuredAnalysis.step3?.hls_saturation_inverted;
     const step4HueMap = structuredAnalysis.step4?.hue_map;
     const step5KmeansSegmentation8 = structuredAnalysis.step5?.kmeans_segmentation_8 || structuredAnalysis.step5?.kmeans_segmentation;
-    const step5KmeansSegmentation12 = structuredAnalysis.step5?.kmeans_segmentation_12;
     
     // 从JSON中移除图片数据，只保留结构化数据
     if (structuredAnalysis.step1) {

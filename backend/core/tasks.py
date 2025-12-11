@@ -20,8 +20,8 @@ User = get_user_model()
     name="core.tasks.analyze_image_comprehensive_task",
     max_retries=2,  # 最多重试2次
     default_retry_delay=60,  # 重试延迟60秒
-    soft_time_limit=300,  # 软超时5分钟
-    time_limit=360,  # 硬超时6分钟
+    soft_time_limit=600,  # 软超时10分钟（K-means分析可能需要较长时间）
+    time_limit=720,  # 硬超时12分钟
 )
 def analyze_image_comprehensive_task(self, result_id: int, image_url: str, user_id: int, binary_threshold: int = 140):
     """

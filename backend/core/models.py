@@ -2269,13 +2269,6 @@ class VisualAnalysisResult(models.Model):
         help_text="K-means色块分割图（Step5，8色）",
         storage=get_default_storage(),
     )
-    kmeans_segmentation_image_12 = models.ImageField(
-        upload_to=visual_analysis_kmeans_segmentation_upload_path,
-        blank=True,
-        null=True,
-        help_text="K-means色块分割图（Step5，12色）",
-        storage=get_default_storage(),
-    )
     
     # 分析参数
     binary_threshold = models.IntegerField(default=128, help_text="二值化阈值（-1表示Otsu自动）")

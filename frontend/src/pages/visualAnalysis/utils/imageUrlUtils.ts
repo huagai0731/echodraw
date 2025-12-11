@@ -49,7 +49,6 @@ export const processSavedResultUrls = (savedResult: any): SavedResultData => {
     step4_hls_s_inverted: processImageUrl(savedResult.step4_hls_s_inverted),
     step5_hue: processImageUrl(savedResult.step5_hue),
     kmeans_segmentation_image: processImageUrl(savedResult.kmeans_segmentation_image),
-    kmeans_segmentation_image_12: processImageUrl(savedResult.kmeans_segmentation_image_12),
   };
 };
 

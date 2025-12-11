@@ -2321,7 +2321,6 @@ class VisualAnalysisResultSerializer(serializers.ModelSerializer):
             "step2_grayscale_4_level",
             "step4_hls_s_inverted",
             "kmeans_segmentation_image",
-            "kmeans_segmentation_image_12",
             "binary_threshold",
             "comprehensive_analysis",
             "created_at",
@@ -2358,7 +2357,6 @@ class VisualAnalysisResultSerializer(serializers.ModelSerializer):
             optional_fields = [
                 'step4_hsv_s',
                 'step2_grayscale',  # 旧字段，新流程不需要
-                'kmeans_segmentation_image_12',  # 新字段，旧数据可能没有
             ]
             
             # 如果字段不在data中，跳过
@@ -2514,7 +2512,6 @@ class VisualAnalysisResultSerializer(serializers.ModelSerializer):
             'step2_grayscale_4_level',  # 必填（Step1）
             'step4_hls_s_inverted',  # 必填（Step3）
             'kmeans_segmentation_image',  # 必填（Step5，8色）
-            'kmeans_segmentation_image_12',  # 可选（Step5，12色）
             'step3_lab_l',  # 必填（Step2）
             'step4_hsv_s',  # 旧字段，可选
             'step4_hls_s',  # 必填（Step3）

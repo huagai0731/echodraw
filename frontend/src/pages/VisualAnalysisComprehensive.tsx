@@ -103,9 +103,9 @@ function getHueColorName(hue: number): string {
 
 // 辅助函数：反色处理（将图片反色）
 function invertImage(imageDataUrl: string): Promise<string> {
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
     const img = new Image();
-    img.onload = () => {
+    img.onload = async () => {
       const canvas = document.createElement("canvas");
       canvas.width = img.width;
       canvas.height = img.height;
@@ -127,7 +127,13 @@ function invertImage(imageDataUrl: string): Promise<string> {
       }
       
       ctx.putImageData(imageData, 0, 0);
-      resolve(canvas.toDataURL("image/png"));
+      try {
+        // 使用安全的导出函数，包含移动端处理
+        const { exportCanvasToDataURL } = await import("@/utils/canvasExport");
+        resolve(exportCanvasToDataURL(canvas, "image/png"));
+      } catch (error) {
+        reject(error);
+      }
     };
     img.onerror = () => reject(new Error("图片加载失败"));
     img.src = imageDataUrl;
@@ -659,121 +665,63 @@ function VisualAnalysisComprehensive({
     );
   };
 
-  // 第五页：左右结构，左边8色，右边12色
+  // 第五页：8色K-means分析
   const renderPage5 = () => {
     // 获取K-means图片（优先使用savedResult，图片已保存到ImageField字段）
     // 8色：优先使用savedResult的ImageField字段
     const kmeansImg8 = savedResult?.kmeans_segmentation_image || comprehensiveData?.step5?.kmeans_segmentation_8 || comprehensiveData?.step5?.kmeans_segmentation;
-    // 12色：使用savedResult的新ImageField字段（从TOS读取）
-    const kmeansImg12 = savedResult?.kmeans_segmentation_image_12 || comprehensiveData?.step5?.kmeans_segmentation_12;
     
     // 获取主色调数据（优先使用savedResult的comprehensive_analysis）
     // 8色：优先使用新字段，否则使用旧字段（向后兼容）
     const dominantPalette8 = comprehensiveData?.step5?.dominant_palette_8 || comprehensiveData?.step5?.dominant_palette || comprehensiveData?.color_block_structure?.dominant_palette;
-    // 12色：使用新字段
-    const dominantPalette12 = comprehensiveData?.step5?.dominant_palette_12;
     
     return (
       <div className="visual-analysis-page">
-        <div className="visual-analysis-page-images" style={{ 
-          gridTemplateColumns: "1fr 1fr",
-          gap: "1.5rem"
-        }}>
-          {/* 左边：8色 */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-            {/* 8色K-means 色块分割 */}
-            {kmeansImg8 ? (
-              <div className="visual-analysis-page-image-item">
-                <h3>8色 色块分割</h3>
-                <img 
-                  src={kmeansImg8} 
-                  alt="8色 色块分割"
-                  style={{ cursor: "pointer", width: "100%", height: "auto" }}
-                  onClick={() => setModalImage({ url: kmeansImg8, alt: "8色 色块分割" })}
-                />
-              </div>
-            ) : (
-              <div style={{ padding: "2rem", textAlign: "center", color: "rgba(239, 234, 231, 0.5)" }}>
-                暂无8色K-means色块分割图片
-              </div>
-            )}
-            
-            {/* 8色主色调分析 */}
-            {dominantPalette8 ? (
-              <div className="visual-analysis-page-image-item">
-                <h3>8色主色调</h3>
-                <div className="visual-analysis__color-palette">
-                  <div className="visual-analysis__color-swatches">
-                    {dominantPalette8.palette?.map((color: number[], index: number) => (
-                      <div key={index} className="visual-analysis__color-swatch-container">
-                        <div 
-                          className="visual-analysis__color-swatch"
-                          style={{ backgroundColor: `rgb(${color[0]}, ${color[1]}, ${color[2]})` }}
-                        />
-                        {dominantPalette8.palette_ratios && (
-                          <div className="visual-analysis__color-swatch-label">
-                            {Math.round(dominantPalette8.palette_ratios[index]! * 100)}%
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div style={{ padding: "2rem", textAlign: "center", color: "rgba(239, 234, 231, 0.5)" }}>
-                暂无8色主色调数据
-              </div>
-            )}
-          </div>
+        <div className="visual-analysis-page-images">
+          {/* 8色K-means 色块分割 */}
+          {kmeansImg8 ? (
+            <div className="visual-analysis-page-image-item">
+              <h3>8色 色块分割</h3>
+              <img 
+                src={kmeansImg8} 
+                alt="8色 色块分割"
+                style={{ cursor: "pointer", width: "100%", height: "auto" }}
+                onClick={() => setModalImage({ url: kmeansImg8, alt: "8色 色块分割" })}
+              />
+            </div>
+          ) : (
+            <div style={{ padding: "2rem", textAlign: "center", color: "rgba(239, 234, 231, 0.5)" }}>
+              暂无8色K-means色块分割图片
+            </div>
+          )}
           
-          {/* 右边：12色 */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-            {/* 12色K-means 色块分割 */}
-            {kmeansImg12 ? (
-              <div className="visual-analysis-page-image-item">
-                <h3>12色 色块分割</h3>
-                <img 
-                  src={kmeansImg12} 
-                  alt="12色 色块分割"
-                  style={{ cursor: "pointer", width: "100%", height: "auto" }}
-                  onClick={() => setModalImage({ url: kmeansImg12, alt: "12色 色块分割" })}
-                />
-              </div>
-            ) : (
-              <div style={{ padding: "2rem", textAlign: "center", color: "rgba(239, 234, 231, 0.5)" }}>
-                暂无12色K-means色块分割图片
-              </div>
-            )}
-            
-            {/* 12色主色调分析 */}
-            {dominantPalette12 ? (
-              <div className="visual-analysis-page-image-item">
-                <h3>12色主色调</h3>
-                <div className="visual-analysis__color-palette">
-                  <div className="visual-analysis__color-swatches">
-                    {dominantPalette12.palette?.map((color: number[], index: number) => (
-                      <div key={index} className="visual-analysis__color-swatch-container">
-                        <div 
-                          className="visual-analysis__color-swatch"
-                          style={{ backgroundColor: `rgb(${color[0]}, ${color[1]}, ${color[2]})` }}
-                        />
-                        {dominantPalette12.palette_ratios && (
-                          <div className="visual-analysis__color-swatch-label">
-                            {Math.round(dominantPalette12.palette_ratios[index]! * 100)}%
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+          {/* 8色主色调分析 */}
+          {dominantPalette8 ? (
+            <div className="visual-analysis-page-image-item">
+              <h3>8色主色调</h3>
+              <div className="visual-analysis__color-palette">
+                <div className="visual-analysis__color-swatches">
+                  {dominantPalette8.palette?.map((color: number[], index: number) => (
+                    <div key={index} className="visual-analysis__color-swatch-container">
+                      <div 
+                        className="visual-analysis__color-swatch"
+                        style={{ backgroundColor: `rgb(${color[0]}, ${color[1]}, ${color[2]})` }}
+                      />
+                      {dominantPalette8.palette_ratios && (
+                        <div className="visual-analysis__color-swatch-label">
+                          {Math.round(dominantPalette8.palette_ratios[index]! * 100)}%
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
-            ) : (
-              <div style={{ padding: "2rem", textAlign: "center", color: "rgba(239, 234, 231, 0.5)" }}>
-                暂无12色主色调数据
-              </div>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div style={{ padding: "2rem", textAlign: "center", color: "rgba(239, 234, 231, 0.5)" }}>
+              暂无8色主色调数据
+            </div>
+          )}
         </div>
 
         {renderGuidance(5, guidanceContent[5])}
@@ -1002,26 +950,23 @@ function VisualAnalysisComprehensive({
           }
         }
       } else if (pageNumber === 5) {
-        // 第五页：左右结构，8色和12色色块分割图及主色调
+        // 第五页：8色K-means分析
         const kmeansImg8 = savedResult?.kmeans_segmentation_image || comprehensiveData?.step5?.kmeans_segmentation_8 || comprehensiveData?.step5?.kmeans_segmentation;
-        const kmeansImg12 = savedResult?.kmeans_segmentation_image_12 || comprehensiveData?.step5?.kmeans_segmentation_12;
         const dominantPalette8 = comprehensiveData?.step5?.dominant_palette_8 || comprehensiveData?.step5?.dominant_palette || comprehensiveData?.color_block_structure?.dominant_palette;
-        const dominantPalette12 = comprehensiveData?.step5?.dominant_palette_12;
 
         const padding = 50;
-        const leftWidth = (canvasWidth - padding * 3) / 2;
-        const rightWidth = (canvasWidth - padding * 3) / 2;
+        const contentWidth = canvasWidth - padding * 2;
         const imageHeight = (canvasHeight - padding * 3) / 2;
         const paletteHeight = (canvasHeight - padding * 3) / 2;
 
-        // 左边：8色
+        // 8色K-means图片
         let currentY = padding;
         if (kmeansImg8) {
           const img = await loadImage(kmeansImg8);
-          const scale = Math.min(leftWidth / img.width, imageHeight / img.height);
+          const scale = Math.min(contentWidth / img.width, imageHeight / img.height);
           const scaledWidth = img.width * scale;
           const scaledHeight = img.height * scale;
-          const offsetX = (leftWidth - scaledWidth) / 2;
+          const offsetX = (contentWidth - scaledWidth) / 2;
           const offsetY = (imageHeight - scaledHeight) / 2;
           ctx.drawImage(img, padding + offsetX, currentY + offsetY, scaledWidth, scaledHeight);
         }
@@ -1034,48 +979,7 @@ function VisualAnalysisComprehensive({
           const swatchSize = 80;
           const swatchSpacing = 20;
           const totalWidth = palette.length * (swatchSize + swatchSpacing) - swatchSpacing;
-          let startX = padding + (leftWidth - totalWidth) / 2;
-
-          for (let i = 0; i < palette.length; i++) {
-            const color = palette[i]!;
-            const x = startX + i * (swatchSize + swatchSpacing);
-            const y = currentY + 50;
-
-            // 绘制色块
-            ctx.fillStyle = `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
-            ctx.fillRect(x, y, swatchSize, swatchSize);
-
-            // 绘制比例文字
-            ctx.fillStyle = "#efeae7";
-            ctx.font = "bold 30px 'Manrope', sans-serif";
-            ctx.textAlign = "center";
-            ctx.textBaseline = "top";
-            const ratio = ratios[i] ? Math.round(ratios[i]! * 100) : 0;
-            ctx.fillText(`${ratio}%`, x + swatchSize / 2, y + swatchSize + 10);
-          }
-        }
-
-        // 右边：12色
-        currentY = padding;
-        if (kmeansImg12) {
-          const img = await loadImage(kmeansImg12);
-          const scale = Math.min(rightWidth / img.width, imageHeight / img.height);
-          const scaledWidth = img.width * scale;
-          const scaledHeight = img.height * scale;
-          const offsetX = (rightWidth - scaledWidth) / 2;
-          const offsetY = (imageHeight - scaledHeight) / 2;
-          ctx.drawImage(img, padding * 2 + leftWidth + offsetX, currentY + offsetY, scaledWidth, scaledHeight);
-        }
-        currentY += imageHeight + padding;
-
-        // 12色主色调
-        if (dominantPalette12?.palette) {
-          const palette = dominantPalette12.palette;
-          const ratios = dominantPalette12.palette_ratios || [];
-          const swatchSize = 60;
-          const swatchSpacing = 15;
-          const totalWidth = palette.length * (swatchSize + swatchSpacing) - swatchSpacing;
-          let startX = padding * 2 + leftWidth + (rightWidth - totalWidth) / 2;
+          let startX = padding + (contentWidth - totalWidth) / 2;
 
           for (let i = 0; i < palette.length; i++) {
             const color = palette[i]!;
@@ -1097,7 +1001,10 @@ function VisualAnalysisComprehensive({
         }
       }
 
-      return canvas.toDataURL("image/png");
+      // 使用安全的导出函数，包含移动端处理
+      const { waitForCanvasRender, exportCanvasToDataURL } = await import("@/utils/canvasExport");
+      await waitForCanvasRender();
+      return exportCanvasToDataURL(canvas, "image/png");
     } catch (error) {
       console.error(`生成第${pageNumber}页图片失败:`, error);
       throw error;
