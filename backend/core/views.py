@@ -3904,9 +3904,25 @@ def create_payment_order(request):
     }
     """
     from decimal import Decimal
-    from core.payment.alipay import create_alipay_payment_url
     
     user = request.user
+    
+    # 在函数开始时尝试导入支付模块，以便捕获导入错误
+    try:
+        from core.payment.alipay import create_alipay_payment_url
+    except Exception as e:
+        logger.exception(f"导入支付宝支付模块失败: {e}")
+        return Response(
+            {"detail": f"支付模块导入失败: {str(e)}。请检查服务器配置和依赖。"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+    
+    try:
+        from core.payment.wechat import create_wechatpay_qrcode
+    except Exception as e:
+        logger.exception(f"导入微信支付模块失败: {e}")
+        # 如果只是微信支付模块导入失败，不影响支付宝，所以不立即返回错误
+        # 但会在后续微信支付调用时处理
     payment_method = request.data.get('payment_method')
     amount_str = request.data.get('amount')
     tier = request.data.get('tier')
@@ -3983,7 +3999,14 @@ def create_payment_order(request):
                     })
                 elif payment_method == PointsOrder.PAYMENT_METHOD_WECHAT:
                     # 微信支付：重新生成二维码
-                    from core.payment.wechat import create_wechatpay_qrcode
+                    try:
+                        from core.payment.wechat import create_wechatpay_qrcode
+                    except ImportError as import_err:
+                        logger.exception(f"导入微信支付模块失败: {import_err}")
+                        return Response(
+                            {"detail": f"微信支付模块导入失败: {str(import_err)}。请检查服务器配置和依赖。"},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                        )
                     description = f"EchoDraw会员-{tier}"
                     code_url = create_wechatpay_qrcode(
                         order_number=recent_order.order_number,
@@ -4064,7 +4087,17 @@ def create_payment_order(request):
     elif payment_method == PointsOrder.PAYMENT_METHOD_WECHAT:
         try:
             # 调用微信支付接口
-            from core.payment.wechat import create_wechatpay_qrcode
+            # 如果之前导入失败，这里会再次尝试导入
+            try:
+                from core.payment.wechat import create_wechatpay_qrcode
+            except ImportError as import_err:
+                logger.exception(f"导入微信支付模块失败: {import_err}")
+                order.delete()
+                return Response(
+                    {"detail": f"微信支付模块导入失败: {str(import_err)}。请检查服务器配置和依赖。"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+            
             description = f"EchoDraw会员-{tier}"
             code_url = create_wechatpay_qrcode(
                 order_number=order_number,
