@@ -427,7 +427,18 @@ function Profile({
                 response: error?.response?.data,
                 status: error?.response?.status,
               });
-              const errorMessage = extractApiError(error, "创建支付订单失败，请重试");
+              
+              // 在测试阶段，显示详细的错误信息
+              let errorMessage = extractApiError(error, "创建支付订单失败，请重试");
+              if (error?.response?.data) {
+                const errorDetail = typeof error.response.data === 'string' 
+                  ? error.response.data 
+                  : JSON.stringify(error.response.data, null, 2);
+                errorMessage = `创建支付订单失败\n\n错误详情:\n${errorDetail}\n\n状态码: ${error?.response?.status || 'N/A'}\n\n原始错误: ${error?.message || 'N/A'}`;
+              } else if (error?.message) {
+                errorMessage = `创建支付订单失败\n\n错误信息: ${error.message}`;
+              }
+              
               alert(errorMessage);
               setPendingTier(null);
               setView("membership-options");
@@ -439,7 +450,18 @@ function Profile({
               response: oauthError?.response?.data,
               status: oauthError?.response?.status,
             });
-            const errorMessage = extractApiError(oauthError, "获取微信授权失败，请重试");
+            
+            // 在测试阶段，显示详细的错误信息
+            let errorMessage = extractApiError(oauthError, "获取微信授权失败，请重试");
+            if (oauthError?.response?.data) {
+              const errorDetail = typeof oauthError.response.data === 'string' 
+                ? oauthError.response.data 
+                : JSON.stringify(oauthError.response.data, null, 2);
+              errorMessage = `获取微信授权失败\n\n错误详情:\n${errorDetail}\n\n状态码: ${oauthError?.response?.status || 'N/A'}\n\n原始错误: ${oauthError?.message || 'N/A'}`;
+            } else if (oauthError?.message) {
+              errorMessage = `获取微信授权失败\n\n错误信息: ${oauthError.message}`;
+            }
+            
             alert(errorMessage);
             setPendingTier(null);
             setView("membership-options");
@@ -447,9 +469,13 @@ function Profile({
         })();
       } catch (error: any) {
         console.error("[Echo] Failed to parse state parameter:", error);
+        // 在测试阶段，显示详细的错误信息
+        const errorMessage = `解析支付参数失败\n\n错误信息: ${error?.message || '未知错误'}\n\nState参数: ${state?.substring(0, 100) || 'N/A'}...`;
+        alert(errorMessage);
         // 如果state解析失败，清除参数并返回会员选项页面
         const newUrl = window.location.pathname;
         window.history.replaceState({}, "", newUrl);
+        setPendingTier(null);
         setView("membership-options");
       }
     }
