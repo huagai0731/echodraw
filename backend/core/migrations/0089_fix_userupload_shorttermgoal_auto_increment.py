@@ -13,49 +13,59 @@ def fix_auto_increment(apps, schema_editor):
     # 检查是否是 MySQL 数据库
     if 'mysql' in schema_editor.connection.vendor or 'mariadb' in schema_editor.connection.vendor:
         with schema_editor.connection.cursor() as cursor:
-            try:
-                # 修复 core_userupload 表
-                cursor.execute("""
-                    ALTER TABLE `core_userupload`
-                    MODIFY COLUMN `id` BIGINT AUTO_INCREMENT NOT NULL
-                """)
-                print("✓ 已修复 core_userupload 表的 AUTO_INCREMENT")
-            except Exception as e:
-                print(f"修复 core_userupload 表时出错: {e}")
-                # 检查当前状态
-                cursor.execute("""
-                    SELECT COLUMN_TYPE, EXTRA, IS_NULLABLE
-                    FROM INFORMATION_SCHEMA.COLUMNS
-                    WHERE TABLE_SCHEMA = DATABASE()
-                    AND TABLE_NAME = 'core_userupload'
-                    AND COLUMN_NAME = 'id'
-                """)
-                result = cursor.fetchone()
-                if result:
-                    print(f"当前 core_userupload.id 字段状态: {result}")
-                raise
+            tables_to_fix = [
+                ('core_userupload', 'UserUpload'),
+                ('core_shorttermgoal', 'ShortTermGoal'),
+            ]
             
-            try:
-                # 修复 core_shorttermgoal 表
-                cursor.execute("""
-                    ALTER TABLE `core_shorttermgoal`
-                    MODIFY COLUMN `id` BIGINT AUTO_INCREMENT NOT NULL
-                """)
-                print("✓ 已修复 core_shorttermgoal 表的 AUTO_INCREMENT")
-            except Exception as e:
-                print(f"修复 core_shorttermgoal 表时出错: {e}")
-                # 检查当前状态
-                cursor.execute("""
-                    SELECT COLUMN_TYPE, EXTRA, IS_NULLABLE
-                    FROM INFORMATION_SCHEMA.COLUMNS
-                    WHERE TABLE_SCHEMA = DATABASE()
-                    AND TABLE_NAME = 'core_shorttermgoal'
-                    AND COLUMN_NAME = 'id'
-                """)
-                result = cursor.fetchone()
-                if result:
-                    print(f"当前 core_shorttermgoal.id 字段状态: {result}")
-                raise
+            for table_name, model_name in tables_to_fix:
+                try:
+                    # 先检查当前状态
+                    cursor.execute("""
+                        SELECT COLUMN_TYPE, EXTRA, IS_NULLABLE
+                        FROM INFORMATION_SCHEMA.COLUMNS
+                        WHERE TABLE_SCHEMA = DATABASE()
+                        AND TABLE_NAME = %s
+                        AND COLUMN_NAME = 'id'
+                    """, [table_name])
+                    
+                    result = cursor.fetchone()
+                    if not result:
+                        print(f"⚠  {table_name} 表不存在或没有id字段，跳过")
+                        continue
+                    
+                    column_type, extra, is_nullable = result
+                    has_auto_increment = 'auto_increment' in extra.lower() if extra else False
+                    
+                    if has_auto_increment:
+                        print(f"✓ {table_name} 表的 AUTO_INCREMENT 已正确设置，无需修复")
+                        continue
+                    
+                    # 修复表
+                    cursor.execute(f"""
+                        ALTER TABLE `{table_name}`
+                        MODIFY COLUMN `id` BIGINT AUTO_INCREMENT NOT NULL
+                    """)
+                    print(f"✓ 已修复 {table_name} ({model_name}) 表的 AUTO_INCREMENT")
+                    
+                except Exception as e:
+                    print(f"✗ 修复 {table_name} ({model_name}) 表时出错: {e}")
+                    # 检查当前状态以便调试
+                    try:
+                        cursor.execute("""
+                            SELECT COLUMN_TYPE, EXTRA, IS_NULLABLE
+                            FROM INFORMATION_SCHEMA.COLUMNS
+                            WHERE TABLE_SCHEMA = DATABASE()
+                            AND TABLE_NAME = %s
+                            AND COLUMN_NAME = 'id'
+                        """, [table_name])
+                        result = cursor.fetchone()
+                        if result:
+                            print(f"   当前 {table_name}.id 字段状态: {result}")
+                    except:
+                        pass
+                    # 不抛出异常，继续修复其他表
+                    print(f"   跳过 {table_name}，继续修复其他表...")
 
 
 def reverse_fix(apps, schema_editor):

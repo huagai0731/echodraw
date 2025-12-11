@@ -896,6 +896,14 @@ function Profile({
             }
 
             // 调用创建支付订单接口
+            console.log("[Echo] 开始创建支付订单:", {
+              payment_method: paymentMethod,
+              amount: totalAmount,
+              tier: tier,
+              expires_at: expiresAt,
+              has_openid: !!openid,
+            });
+            
             const response = await api.post<{
               order_id: number;
               order_number: string;
@@ -918,6 +926,14 @@ function Profile({
               expires_at: expiresAt,
               openid: openid, // 如果有openid，传递给后端
             });
+            
+            console.log("[Echo] 支付订单创建成功:", {
+              order_id: response.data.order_id,
+              payment_method: response.data.payment_method,
+              payment_type: response.data.payment_type,
+              has_jsapi_params: !!response.data.jsapi_params,
+              has_pay_url: !!response.data.pay_url,
+            });
 
             if (paymentMethod === "alipay") {
               // 支付宝支付：跳转到支付页面
@@ -939,6 +955,12 @@ function Profile({
               }
             } else if (paymentMethod === "wechat") {
               // 微信支付（此时应该是在微信浏览器中）
+              console.log("[Echo] 处理微信支付:", {
+                payment_type: response.data.payment_type,
+                has_jsapi_params: !!response.data.jsapi_params,
+                has_code_url: !!response.data.code_url,
+              });
+              
               if (response.data.payment_type === "jsapi" && response.data.jsapi_params) {
                 // JSAPI支付（公众号内支付）
                 try {
@@ -953,8 +975,16 @@ function Profile({
                     console.warn("[Echo] Failed to save pending order:", e);
                   }
                   
+                  console.log("[Echo] 准备调起微信支付，参数:", {
+                    appId: response.data.jsapi_params.appId,
+                    timeStamp: response.data.jsapi_params.timeStamp,
+                    package: response.data.jsapi_params.package,
+                  });
+                  
                   // 调起微信支付
                   await invokeWechatPay(response.data.jsapi_params);
+                  
+                  console.log("[Echo] 微信支付调起成功");
                   
                   // 支付成功，检查订单状态
                   setMembershipTierLoading(true);
@@ -1011,14 +1041,31 @@ function Profile({
               }
             }
           } catch (error: any) {
-            console.error("[Echo] Failed to create payment order:", error);
+            console.error("[Echo] ❌ 创建支付订单失败:", error);
+            console.error("[Echo] 错误详情:", {
+              message: error?.message,
+              response: error?.response,
+              status: error?.response?.status,
+              data: error?.response?.data,
+              stack: error?.stack,
+            });
+            
             // 使用 extractApiError 提取详细的错误信息
             const errorMessage = extractApiError(error, "创建支付订单失败，请重试");
+            
             // 在控制台输出完整的错误信息，便于调试
             if (error?.response?.data) {
-              console.error("[Echo] Error response data:", error.response.data);
+              console.error("[Echo] 后端返回的错误数据:", JSON.stringify(error.response.data, null, 2));
             }
-            alert(errorMessage);
+            
+            // 显示错误提示（使用更明显的方式）
+            const fullErrorMessage = error?.response?.data?.detail 
+              ? `支付失败：${error.response.data.detail}` 
+              : errorMessage;
+            
+            console.error("[Echo] 将显示错误提示:", fullErrorMessage);
+            alert(fullErrorMessage);
+            
             setPendingTier(null);
             setView("membership-options");
           }
