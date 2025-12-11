@@ -326,93 +326,122 @@ function Profile({
         (async () => {
           try {
             // 获取openid
+            console.log("[Echo] 开始获取微信openid，code:", code?.substring(0, 10) + "...");
             const oauthResponse = await api.get<{
               openid: string;
               state?: string;
-            }>(`/payments/wechat/oauth/callback/?code=${code}&state=${state}`);
+            }>(`/payments/wechat/oauth/callback/?code=${code}&state=${state || ""}`);
             const openid = oauthResponse.data.openid;
+            console.log("[Echo] 成功获取openid:", openid ? openid.substring(0, 10) + "..." : "null");
 
-            // 切换到支付确认页面
+            if (!openid) {
+              throw new Error("获取openid失败：openid为空");
+            }
+
+            // 不切换到支付确认页面，直接创建订单并调起支付
             setPendingTier(paymentInfo.tier);
-            setView("payment-confirmation");
 
-            // 自动触发支付（延迟一下，确保页面已切换）
-            setTimeout(async () => {
-              try {
-                const response = await api.post<{
-                  order_id: number;
-                  order_number: string;
-                  payment_method: string;
-                  jsapi_params?: {
-                    appId: string;
-                    timeStamp: string;
-                    nonceStr: string;
-                    package: string;
-                    signType: string;
-                    paySign: string;
-                  };
-                  payment_type?: "native" | "jsapi";
-                }>("/payments/orders/create/", {
-                  payment_method: paymentInfo.paymentMethod,
-                  amount: paymentInfo.totalAmount,
-                  tier: paymentInfo.tier,
-                  expires_at: paymentInfo.expiresAt,
-                  openid: openid,
-                });
+            // 直接创建订单并调起支付（不需要延迟）
+            try {
+              console.log("[Echo] 开始创建支付订单，参数:", {
+                payment_method: paymentInfo.paymentMethod,
+                amount: paymentInfo.totalAmount,
+                tier: paymentInfo.tier,
+                expires_at: paymentInfo.expiresAt,
+                has_openid: !!openid,
+              });
+              
+              const response = await api.post<{
+                order_id: number;
+                order_number: string;
+                payment_method: string;
+                jsapi_params?: {
+                  appId: string;
+                  timeStamp: string;
+                  nonceStr: string;
+                  package: string;
+                  signType: string;
+                  paySign: string;
+                };
+                payment_type?: "native" | "jsapi";
+              }>("/payments/orders/create/", {
+                payment_method: paymentInfo.paymentMethod,
+                amount: paymentInfo.totalAmount,
+                tier: paymentInfo.tier,
+                expires_at: paymentInfo.expiresAt,
+                openid: openid,
+              });
+              
+              console.log("[Echo] 创建订单成功，订单ID:", response.data.order_id);
 
-                if (response.data.payment_type === "jsapi" && response.data.jsapi_params) {
-                  // 保存订单ID
-                  try {
-                    window.localStorage.setItem(PENDING_ORDER_KEY, JSON.stringify({
-                      order_id: response.data.order_id,
-                      order_number: response.data.order_number,
-                      timestamp: Date.now(),
-                    }));
-                  } catch (e) {
-                    console.warn("[Echo] Failed to save pending order:", e);
-                  }
-
-                  // 调起微信支付
-                  await invokeWechatPay(response.data.jsapi_params);
-
-                  // 支付成功，检查订单状态
-                  setMembershipTierLoading(true);
-                  try {
-                    await new Promise(resolve => setTimeout(resolve, 2000));
-                    try {
-                      await api.post(`/payments/orders/${response.data.order_id}/sync-membership/`);
-                    } catch (syncError: any) {
-                      console.warn("[Echo] Failed to sync membership status:", syncError);
-                    }
-                    const preferences = await fetchProfilePreferences();
-                    if (preferences.isMember) {
-                      setMembershipTier("premium");
-                      setMembershipExpires(preferences.membershipExpires);
-                    } else {
-                      setMembershipTier("pending");
-                      setMembershipExpires(null);
-                    }
-                  } catch (e) {
-                    console.error("[Echo] Failed to refresh membership status:", e);
-                  } finally {
-                    setMembershipTierLoading(false);
-                  }
-
-                  setPendingTier(null);
-                  setView("membership-options");
+              if (response.data.payment_type === "jsapi" && response.data.jsapi_params) {
+                // 保存订单ID
+                try {
+                  window.localStorage.setItem(PENDING_ORDER_KEY, JSON.stringify({
+                    order_id: response.data.order_id,
+                    order_number: response.data.order_number,
+                    timestamp: Date.now(),
+                  }));
+                } catch (e) {
+                  console.warn("[Echo] Failed to save pending order:", e);
                 }
-              } catch (error: any) {
-                console.error("[Echo] Failed to create payment order after auth:", error);
-                const errorMessage = extractApiError(error, "创建支付订单失败，请重试");
-                alert(errorMessage);
+
+                console.log("[Echo] 准备调起微信支付");
+                // 调起微信支付
+                await invokeWechatPay(response.data.jsapi_params);
+                console.log("[Echo] 微信支付调起成功");
+
+                // 支付成功，检查订单状态
+                setMembershipTierLoading(true);
+                try {
+                  await new Promise(resolve => setTimeout(resolve, 2000));
+                  try {
+                    await api.post(`/payments/orders/${response.data.order_id}/sync-membership/`);
+                  } catch (syncError: any) {
+                    console.warn("[Echo] Failed to sync membership status:", syncError);
+                  }
+                  const preferences = await fetchProfilePreferences();
+                  if (preferences.isMember) {
+                    setMembershipTier("premium");
+                    setMembershipExpires(preferences.membershipExpires);
+                  } else {
+                    setMembershipTier("pending");
+                    setMembershipExpires(null);
+                  }
+                } catch (e) {
+                  console.error("[Echo] Failed to refresh membership status:", e);
+                } finally {
+                  setMembershipTierLoading(false);
+                }
+
                 setPendingTier(null);
                 setView("membership-options");
+              } else {
+                console.error("[Echo] 创建订单返回的数据格式不正确:", response.data);
+                throw new Error("支付参数格式不正确");
               }
-            }, 500);
+            } catch (error: any) {
+              console.error("[Echo] 创建支付订单失败:", error);
+              console.error("[Echo] 错误详情:", {
+                message: error?.message,
+                response: error?.response?.data,
+                status: error?.response?.status,
+              });
+              const errorMessage = extractApiError(error, "创建支付订单失败，请重试");
+              alert(errorMessage);
+              setPendingTier(null);
+              setView("membership-options");
+            }
           } catch (oauthError: any) {
-            console.error("[Echo] Failed to get openid from callback:", oauthError);
+            console.error("[Echo] 获取openid失败:", oauthError);
+            console.error("[Echo] 错误详情:", {
+              message: oauthError?.message,
+              response: oauthError?.response?.data,
+              status: oauthError?.response?.status,
+            });
             const errorMessage = extractApiError(oauthError, "获取微信授权失败，请重试");
             alert(errorMessage);
+            setPendingTier(null);
             setView("membership-options");
           }
         })();
