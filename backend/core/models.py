@@ -2326,9 +2326,9 @@ class VisualAnalysisQuota(models.Model):
     )
     # 当前月份（用于判断是否需要重置）
     current_month = models.CharField(
-        max_length=7,  # 格式：YYYY-MM
+        max_length=20,  # 格式：YYYY-MM（自然月）或 YYYY-MM-DD-P{周期数}（会员周期）
         blank=True,
-        help_text="当前月份（格式：YYYY-MM），用于判断是否需要重置月度额度",
+        help_text="当前月份标识（格式：YYYY-MM 或 YYYY-MM-DD-P{周期数}），用于判断是否需要重置月度额度",
     )
     # 已使用次数（赠送额度）
     used_free_quota = models.PositiveIntegerField(
