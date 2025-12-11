@@ -785,6 +785,7 @@ function Profile({
               order_number: string;
               pay_url: string;
               payment_method: string;
+              code_url?: string;
             }>("/payments/orders/create/", {
               payment_method: paymentMethod,
               amount: totalAmount,
