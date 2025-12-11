@@ -220,8 +220,9 @@ def get_wechatpay_client():
     
     # 创建微信支付客户端
     # 如果使用 cert_dir，就不传 public_key；反之亦然
+    # 注意：wechatpayv3 2.0.1 版本不再在初始化时使用 wechatpay_type 参数
+    # 支付类型需要在调用 pay() 方法时通过 pay_type 参数指定
     init_params = {
-        'wechatpay_type': WeChatPayType.NATIVE,
         'mchid': mchid,
         'private_key': private_key,
         'cert_serial_no': cert_serial_no,
@@ -352,6 +353,7 @@ def create_wechatpay_qrcode(order_number: str, amount: str, description: str) ->
             description=description,
             out_trade_no=order_number,
             amount={"total": amount_fen, "currency": "CNY"},
+            pay_type=WeChatPayType.NATIVE,  # 指定支付类型为 Native（扫码支付）
         )
     except Exception as e:
         error_str = str(e)
@@ -373,6 +375,7 @@ def create_wechatpay_qrcode(order_number: str, amount: str, description: str) ->
                     description=description,
                     out_trade_no=order_number,
                     amount={"total": amount_fen, "currency": "CNY"},
+                    pay_type=WeChatPayType.NATIVE,  # 指定支付类型为 Native（扫码支付）
                 )
             except Exception as e2:
                 logger.error(f"重新获取证书后仍然失败: {e2}")
@@ -397,6 +400,7 @@ def create_wechatpay_qrcode(order_number: str, amount: str, description: str) ->
                             description=description,
                             out_trade_no=order_number,
                             amount={"total": amount_fen, "currency": "CNY"},
+                            pay_type=WeChatPayType.NATIVE,  # 指定支付类型为 Native（扫码支付）
                             skip_verify=True,  # 跳过签名验证
                         )
                         logger.warning("⚠️ 已使用 skip_verify 模式完成支付，建议检查证书配置")
@@ -557,8 +561,9 @@ def get_wechatpay_client_jsapi():
         cert_dir = str(auto_cert_dir.resolve())
     
     # 创建 JSAPI 类型的客户端
+    # 注意：wechatpayv3 2.0.1 版本不再在初始化时使用 wechatpay_type 参数
+    # 支付类型需要在调用 pay() 方法时通过 pay_type 参数指定
     init_params = {
-        'wechatpay_type': WeChatPayType.JSAPI,  # 使用 JSAPI 类型
         'mchid': mchid,
         'private_key': private_key,
         'cert_serial_no': cert_serial_no,
@@ -631,6 +636,7 @@ def create_wechatpay_jsapi(order_number: str, amount: str, description: str, ope
             out_trade_no=order_number,
             amount={"total": amount_fen, "currency": "CNY"},
             payer={"openid": openid},
+            pay_type=WeChatPayType.JSAPI,  # 指定支付类型为 JSAPI（公众号内支付）
         )
     except Exception as e:
         error_str = str(e)
@@ -646,6 +652,7 @@ def create_wechatpay_jsapi(order_number: str, amount: str, description: str, ope
                     out_trade_no=order_number,
                     amount={"total": amount_fen, "currency": "CNY"},
                     payer={"openid": openid},
+                    pay_type=WeChatPayType.JSAPI,  # 指定支付类型为 JSAPI（公众号内支付）
                 )
             except Exception as e2:
                 logger.error(f"重新获取证书后仍然失败: {e2}")
