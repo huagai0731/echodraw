@@ -22,6 +22,7 @@ import TopNav from "@/components/TopNav";
 import { loadFeaturedArtworkIds, loadFeaturedArtworkIdsFromServer } from "@/services/featuredArtworks";
 import { extractApiError } from "@/hooks/useApiError";
 import type { Artwork } from "@/pages/Gallery";
+import { isWechatBrowser, getWechatOAuthUrl, getCurrentUrl, invokeWechatPay } from "@/utils/wechatUtils";
 
 import "./Profile.css";
 import "./ProfileDashboard.css";
@@ -778,19 +779,84 @@ function Profile({
             return;
           }
 
+          // 如果不是微信浏览器且选择微信支付，提示用户前往微信
+          if (paymentMethod === "wechat" && !isWechatBrowser()) {
+            alert("请在微信中打开此页面进行支付\n\n请复制链接到微信中打开，或通过公众号菜单进入");
+            return;
+          }
+
           try {
+            // 如果是微信浏览器且选择微信支付，需要先获取openid
+            let openid: string | undefined = undefined;
+            if (paymentMethod === "wechat" && isWechatBrowser()) {
+              // 检查URL中是否有code（微信授权回调）
+              const urlParams = new URLSearchParams(window.location.search);
+              const code = urlParams.get("code");
+              const state = urlParams.get("state");
+              
+              if (code) {
+                // 有code，说明是授权回调，获取openid
+                try {
+                  const oauthResponse = await api.get<{
+                    openid: string;
+                    state?: string;
+                  }>(`/payments/wechat/oauth/callback/?code=${code}&state=${state || ""}`);
+                  openid = oauthResponse.data.openid;
+                  
+                  // 清除URL中的code参数，避免重复使用
+                  const newUrl = window.location.pathname + window.location.search.replace(/[?&]code=[^&]*/, "").replace(/[?&]state=[^&]*/, "");
+                  window.history.replaceState({}, "", newUrl);
+                } catch (oauthError: any) {
+                  console.error("[Echo] Failed to get openid:", oauthError);
+                  const errorMessage = extractApiError(oauthError, "获取微信授权失败，请重试");
+                  alert(errorMessage);
+                  setPendingTier(null);
+                  setView("membership-options");
+                  return;
+                }
+                } else {
+                  // 没有code，需要先进行微信授权
+                  const currentUrl = getCurrentUrl();
+                  const oauthUrl = getWechatOAuthUrl(
+                    encodeURIComponent(currentUrl),
+                    JSON.stringify({ tier, expiresAt, paymentMethod, quantity, totalAmount })
+                  );
+                  if (oauthUrl) {
+                    window.location.href = oauthUrl;
+                    return; // 跳转到授权页面，不继续执行
+                  } else {
+                    // 如果无法生成授权URL，提示用户
+                    console.error("[Echo] Cannot generate WeChat OAuth URL");
+                    alert("无法生成微信授权链接，请检查配置或稍后重试");
+                    setPendingTier(null);
+                    setView("membership-options");
+                    return;
+                  }
+                }
+            }
+
             // 调用创建支付订单接口
             const response = await api.post<{
               order_id: number;
               order_number: string;
-              pay_url: string;
+              pay_url?: string;
               payment_method: string;
               code_url?: string;
+              jsapi_params?: {
+                appId: string;
+                timeStamp: string;
+                nonceStr: string;
+                package: string;
+                signType: string;
+                paySign: string;
+              };
+              payment_type?: "native" | "jsapi";
             }>("/payments/orders/create/", {
               payment_method: paymentMethod,
               amount: totalAmount,
               tier: tier,
               expires_at: expiresAt,
+              openid: openid, // 如果有openid，传递给后端
             });
 
             if (paymentMethod === "alipay") {
@@ -812,25 +878,71 @@ function Profile({
                 throw new Error("未获取到支付链接");
               }
             } else if (paymentMethod === "wechat") {
-              // 微信支付：显示二维码
-              if (response.data.code_url) {
-                // 保存订单ID到 localStorage，用于支付完成后检测
+              // 微信支付（此时应该是在微信浏览器中）
+              if (response.data.payment_type === "jsapi" && response.data.jsapi_params) {
+                // JSAPI支付（公众号内支付）
                 try {
-                  window.localStorage.setItem(PENDING_ORDER_KEY, JSON.stringify({
-                    order_id: response.data.order_id,
-                    order_number: response.data.order_number,
-                    timestamp: Date.now(),
-                  }));
-                } catch (e) {
-                  console.warn("[Echo] Failed to save pending order:", e);
+                  // 保存订单ID到 localStorage，用于支付完成后检测
+                  try {
+                    window.localStorage.setItem(PENDING_ORDER_KEY, JSON.stringify({
+                      order_id: response.data.order_id,
+                      order_number: response.data.order_number,
+                      timestamp: Date.now(),
+                    }));
+                  } catch (e) {
+                    console.warn("[Echo] Failed to save pending order:", e);
+                  }
+                  
+                  // 调起微信支付
+                  await invokeWechatPay(response.data.jsapi_params);
+                  
+                  // 支付成功，检查订单状态
+                  setMembershipTierLoading(true);
+                  try {
+                    // 等待一下，让支付回调完成
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    
+                    // 调用同步接口，强制更新会员状态
+                    try {
+                      await api.post(`/payments/orders/${response.data.order_id}/sync-membership/`);
+                      console.log("[Echo] Membership status synced successfully");
+                    } catch (syncError: any) {
+                      console.warn("[Echo] Failed to sync membership status:", syncError);
+                    }
+                    
+                    // 然后刷新会员状态
+                    const preferences = await fetchProfilePreferences();
+                    if (preferences.isMember) {
+                      setMembershipTier("premium");
+                      setMembershipExpires(preferences.membershipExpires);
+                    } else {
+                      setMembershipTier("pending");
+                      setMembershipExpires(null);
+                    }
+                  } catch (e) {
+                    console.error("[Echo] Failed to refresh membership status:", e);
+                  } finally {
+                    setMembershipTierLoading(false);
+                  }
+                  
+                  setPendingTier(null);
+                  setView("membership-options");
+                } catch (payError: any) {
+                  console.error("[Echo] Failed to invoke WeChat pay:", payError);
+                  const errorMessage = payError.message || "调起微信支付失败，请重试";
+                  alert(errorMessage);
+                  setPendingTier(null);
+                  setView("membership-options");
                 }
-                // 显示微信支付二维码页面
-                setView("wechat-payment");
-                // 保存二维码URL到sessionStorage，供二维码页面使用
-                sessionStorage.setItem("wechat-payment-qrcode", response.data.code_url);
-                sessionStorage.setItem("wechat-payment-order-id", String(response.data.order_id));
+              } else if (response.data.code_url) {
+                // Native支付（扫码支付）- 这种情况理论上不应该在微信浏览器中出现
+                // 如果出现了，说明后端没有正确识别openid，提示用户
+                console.warn("[Echo] Received Native payment in WeChat browser, this should not happen");
+                alert("支付配置异常，请刷新页面重试");
+                setPendingTier(null);
+                setView("membership-options");
               } else {
-                throw new Error("未获取到支付二维码");
+                throw new Error("未获取到支付参数");
               }
             }
           } catch (error: any) {

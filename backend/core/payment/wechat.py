@@ -3,6 +3,7 @@
 """
 import os
 import logging
+import time
 from decimal import Decimal
 from wechatpayv3 import WeChatPay, WeChatPayType
 from django.conf import settings
@@ -101,11 +102,12 @@ def get_wechatpay_client():
             public_key = None
         else:
             logger.warning(f"证书目录 {wechat_cert_dir} 中没有找到有效的 CERTIFICATE 格式证书")
-            # 如果提供了公钥ID，优先使用公钥模式；否则切换到平台证书模式
-            if wechatpay_public_key_id:
-                logger.info("检测到公钥ID，将尝试使用公钥模式")
+            # 如果提供了公钥ID和公钥文件，优先使用公钥模式；否则切换到平台证书模式
+            if wechatpay_public_key_id and (wechatpay_public_key_path or wechatpay_public_key_string):
+                logger.info("✅ 检测到公钥ID和公钥配置，将使用公钥模式（忽略证书目录）")
+                # 不设置 cert_dir，让后续逻辑使用公钥模式
             else:
-                logger.info("未提供公钥ID，将切换到平台证书模式（自动获取）")
+                logger.info("未提供公钥ID或公钥配置，将切换到平台证书模式（自动获取）")
             # 不设置 cert_dir，让后续逻辑处理
     
     # 切换到平台证书模式（推荐用于生产环境）
@@ -476,6 +478,179 @@ def verify_wechatpay_notify(headers: dict, body: str) -> dict:
     except Exception as e:
         logger.exception(f"验证微信支付回调失败: {e}")
         return None
+
+
+def create_wechatpay_jsapi(order_number: str, amount: str, description: str, openid: str) -> dict:
+    """
+    创建微信支付JSAPI订单（公众号内支付）
+    
+    Args:
+        order_number: 订单号
+        amount: 金额（字符串，单位：元）
+        description: 商品描述
+        openid: 用户的openid（从公众号授权获取）
+    
+    Returns:
+        dict: 包含支付参数的字典，用于前端调起支付
+        {
+            "appId": "wx...",
+            "timeStamp": "1234567890",
+            "nonceStr": "abc123",
+            "package": "prepay_id=wx...",
+            "signType": "RSA",
+            "paySign": "..."
+        }
+    """
+    wechatpay = get_wechatpay_client()
+    
+    # 将金额转换为分（微信支付使用分为单位）
+    amount_yuan = Decimal(str(amount))
+    amount_fen = int(amount_yuan * 100)
+    
+    # 如果证书列表为空，先获取证书
+    if not wechatpay._core._certificates:
+        logger.info("证书列表为空，先获取平台证书...")
+        try:
+            wechatpay._core._update_certificates()
+            logger.info(f"成功获取平台证书，证书数量: {len(wechatpay._core._certificates)}")
+        except Exception as e:
+            logger.warning(f"获取证书失败: {e}，继续尝试调用 API（库会在调用时自动获取）")
+    
+    # 调用JSAPI支付接口
+    try:
+        code, message = wechatpay.pay(
+            description=description,
+            out_trade_no=order_number,
+            amount={"total": amount_fen, "currency": "CNY"},
+            payer={"openid": openid},
+            wechatpay_type=WeChatPayType.JSAPI,
+        )
+    except Exception as e:
+        error_str = str(e)
+        if "failed to verify the signature" in error_str:
+            # 签名验证失败，尝试重新获取证书并重试
+            logger.warning("签名验证失败，尝试重新获取证书...")
+            try:
+                wechatpay._core._certificates = []
+                wechatpay._core._update_certificates()
+                logger.info(f"重新获取证书成功，证书数量: {len(wechatpay._core._certificates)}")
+                code, message = wechatpay.pay(
+                    description=description,
+                    out_trade_no=order_number,
+                    amount={"total": amount_fen, "currency": "CNY"},
+                    payer={"openid": openid},
+                    wechatpay_type=WeChatPayType.JSAPI,
+                )
+            except Exception as e2:
+                logger.error(f"重新获取证书后仍然失败: {e2}")
+                raise ValueError(f"创建微信支付JSAPI订单失败: {e2}")
+        else:
+            raise
+    
+    # 解析返回数据
+    if isinstance(message, str):
+        import json
+        try:
+            message = json.loads(message)
+        except json.JSONDecodeError:
+            pass
+    
+    if code in range(200, 300):
+        # 成功，获取prepay_id
+        if isinstance(message, dict):
+            prepay_id = message.get('prepay_id')
+            if not prepay_id:
+                raise ValueError("微信支付返回数据中缺少prepay_id")
+            
+            # 生成前端调起支付所需的参数
+            appid = os.getenv("WECHAT_APPID")
+            timestamp = str(int(time.time()))
+            nonce_str = message.get('nonce_str', '') or os.urandom(16).hex()
+            
+            # 生成签名
+            # 签名串格式：appId\n时间戳\n随机字符串\nprepay_id=xxx\n
+            sign_str = f"{appid}\n{timestamp}\n{nonce_str}\nprepay_id={prepay_id}\n"
+            
+            # 使用wechatpayv3库的签名方法（如果可用）
+            try:
+                # 尝试使用库的签名方法
+                if hasattr(wechatpay._core, 'sign'):
+                    pay_sign = wechatpay._core.sign(sign_str)
+                else:
+                    # 如果库没有提供签名方法，使用cryptography手动签名
+                    from cryptography.hazmat.primitives import hashes, serialization
+                    from cryptography.hazmat.primitives.asymmetric import padding
+                    from cryptography.hazmat.backends import default_backend
+                    
+                    # 获取私钥
+                    private_key_path = os.getenv("WECHAT_PRIVATE_KEY_PATH")
+                    private_key_string = os.getenv("WECHAT_PRIVATE_KEY")
+                    
+                    private_key_content = None
+                    if private_key_path and os.path.exists(private_key_path):
+                        with open(private_key_path, 'r', encoding='utf-8') as f:
+                            private_key_content = f.read().strip()
+                    elif private_key_string:
+                        private_key_content = private_key_string.strip()
+                        if '-----BEGIN' not in private_key_content:
+                            private_key_content = f"-----BEGIN PRIVATE KEY-----\n{private_key_content}\n-----END PRIVATE KEY-----"
+                    
+                    if not private_key_content:
+                        raise ValueError("无法获取商户私钥用于签名")
+                    
+                    # 加载私钥并签名
+                    private_key = serialization.load_pem_private_key(
+                        private_key_content.encode('utf-8'),
+                        password=None,
+                        backend=default_backend()
+                    )
+                    
+                    signature = private_key.sign(
+                        sign_str.encode('utf-8'),
+                        padding.PKCS1v15(),
+                        hashes.SHA256()
+                    )
+                    
+                    # Base64编码签名
+                    import base64
+                    pay_sign = base64.b64encode(signature).decode('utf-8')
+            except Exception as sign_error:
+                logger.exception(f"生成JSAPI支付签名失败: {sign_error}")
+                # 如果签名失败，尝试使用库的私钥对象
+                try:
+                    # 尝试从wechatpay对象获取私钥
+                    if hasattr(wechatpay._core, '_private_key'):
+                        from cryptography.hazmat.primitives import hashes
+                        from cryptography.hazmat.primitives.asymmetric import padding
+                        import base64
+                        
+                        private_key = wechatpay._core._private_key
+                        signature = private_key.sign(
+                            sign_str.encode('utf-8'),
+                            padding.PKCS1v15(),
+                            hashes.SHA256()
+                        )
+                        pay_sign = base64.b64encode(signature).decode('utf-8')
+                    else:
+                        raise ValueError(f"无法生成JSAPI支付签名: {sign_error}")
+                except Exception as e2:
+                    logger.exception(f"使用库的私钥签名也失败: {e2}")
+                    raise ValueError(f"无法生成JSAPI支付签名: {sign_error}")
+            
+            return {
+                "appId": appid,
+                "timeStamp": timestamp,
+                "nonceStr": nonce_str,
+                "package": f"prepay_id={prepay_id}",
+                "signType": "RSA",
+                "paySign": pay_sign,
+            }
+        else:
+            raise ValueError(f"微信支付返回数据格式错误: {message}")
+    else:
+        # 失败
+        error_msg = message.get('message', '未知错误') if isinstance(message, dict) else str(message)
+        raise ValueError(f"创建微信支付JSAPI订单失败: {error_msg}")
 
 
 def query_wechatpay_order_status(order_number: str) -> dict:

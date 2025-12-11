@@ -18,11 +18,21 @@ Including another URLconf
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
+from django.http import HttpResponse
 from django.urls import include, path
+
+def wechat_verify_file(request, verify_code):
+    """返回微信验证文件内容"""
+    # verify_code 是从 URL 中提取的验证码部分
+    # URL格式：/MP_verify_验证码.txt
+    return HttpResponse(verify_code, content_type="text/plain; charset=utf-8")
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", include(("core.urls", "core"), namespace="core")),
+    # 微信验证文件路由（用于网页授权域名验证）
+    # 匹配格式：/MP_verify_验证码.txt
+    path("MP_verify_<str:verify_code>.txt", wechat_verify_file, name="wechat-verify-file"),
 ]
 
 if settings.DEBUG:

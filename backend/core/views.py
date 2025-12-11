@@ -4096,7 +4096,7 @@ def create_payment_order(request):
             # 调用微信支付接口
             # 如果之前导入失败，这里会再次尝试导入
             try:
-                from core.payment.wechat import create_wechatpay_qrcode
+                from core.payment.wechat import create_wechatpay_qrcode, create_wechatpay_jsapi
             except ImportError as import_err:
                 logger.exception(f"导入微信支付模块失败: {import_err}")
                 order.delete()
@@ -4106,18 +4106,50 @@ def create_payment_order(request):
                 )
             
             description = f"EchoDraw会员-{tier}"
-            code_url = create_wechatpay_qrcode(
-                order_number=order_number,
-                amount=str(amount),
-                description=description,
-            )
             
-            return Response({
-                'order_id': order.id,
-                'order_number': order_number,
-                'code_url': code_url,  # 微信支付二维码URL
-                'payment_method': payment_method,
-            })
+            # 检查是否有openid，如果有则使用JSAPI支付（公众号内支付）
+            openid = request.data.get('openid')
+            if openid:
+                # JSAPI支付（公众号内支付）
+                try:
+                    jsapi_params = create_wechatpay_jsapi(
+                        order_number=order_number,
+                        amount=str(amount),
+                        description=description,
+                        openid=openid,
+                    )
+                    return Response({
+                        'order_id': order.id,
+                        'order_number': order_number,
+                        'jsapi_params': jsapi_params,  # JSAPI支付参数
+                        'payment_method': payment_method,
+                        'payment_type': 'jsapi',  # 标识这是JSAPI支付
+                    })
+                except Exception as jsapi_error:
+                    logger.exception(f"创建微信JSAPI支付失败: {jsapi_error}")
+                    order.delete()
+                    error_msg = "创建支付订单失败，请稍后重试。如果问题持续，请联系客服。"
+                    if settings.DEBUG:
+                        error_msg = f"创建微信JSAPI支付失败: {str(jsapi_error)}"
+                    return Response(
+                        {"detail": error_msg},
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                    )
+            else:
+                # Native支付（扫码支付）
+                code_url = create_wechatpay_qrcode(
+                    order_number=order_number,
+                    amount=str(amount),
+                    description=description,
+                )
+                
+                return Response({
+                    'order_id': order.id,
+                    'order_number': order_number,
+                    'code_url': code_url,  # 微信支付二维码URL
+                    'payment_method': payment_method,
+                    'payment_type': 'native',  # 标识这是Native支付
+                })
         except ValueError as e:
             # 环境变量配置错误
             error_detail = str(e)
@@ -4504,6 +4536,79 @@ def get_order_status(request, order_id):
         return Response(
             {'detail': '订单不存在'},
             status=status.HTTP_404_NOT_FOUND
+        )
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def wechat_oauth_callback(request):
+    """
+    微信网页授权回调接口
+    用于获取用户的openid（用于JSAPI支付）
+    
+    GET /api/payments/wechat/oauth/callback/?code=xxx&state=xxx
+    """
+    import requests
+    
+    code = request.GET.get('code')
+    state = request.GET.get('state', '')
+    
+    if not code:
+        return Response(
+            {'detail': '缺少code参数'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    appid = os.getenv("WECHAT_APPID")
+    secret = os.getenv("WECHAT_SECRET")  # 公众号的AppSecret
+    
+    if not appid or not secret:
+        logger.error("微信网页授权配置缺失: WECHAT_APPID 或 WECHAT_SECRET 未设置")
+        return Response(
+            {'detail': '微信授权配置错误'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+    
+    # 通过code换取access_token和openid
+    token_url = f"https://api.weixin.qq.com/sns/oauth2/access_token?appid={appid}&secret={secret}&code={code}&grant_type=authorization_code"
+    
+    try:
+        response = requests.get(token_url, timeout=10)
+        response.raise_for_status()
+        token_data = response.json()
+        
+        if 'errcode' in token_data:
+            error_msg = token_data.get('errmsg', '未知错误')
+            logger.error(f"微信授权失败: {error_msg}")
+            return Response(
+                {'detail': f'微信授权失败: {error_msg}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        openid = token_data.get('openid')
+        if not openid:
+            logger.error(f"微信授权返回数据中缺少openid: {token_data}")
+            return Response(
+                {'detail': '获取openid失败'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+        # 返回openid和state（前端可以用state来恢复之前的操作）
+        return Response({
+            'openid': openid,
+            'state': state,
+        })
+    except requests.RequestException as e:
+        logger.exception(f"请求微信授权接口失败: {e}")
+        return Response(
+            {'detail': '请求微信授权接口失败'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+    except Exception as e:
+        logger.exception(f"处理微信授权回调失败: {e}")
+        return Response(
+            {'detail': '处理授权回调失败'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
 
