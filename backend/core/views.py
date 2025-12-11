@@ -3981,6 +3981,22 @@ def create_payment_order(request):
                         'payment_method': payment_method,
                         'message': '已返回您最近创建的订单',
                     })
+                elif payment_method == PointsOrder.PAYMENT_METHOD_WECHAT:
+                    # 微信支付：重新生成二维码
+                    from core.payment.wechat import create_wechatpay_qrcode
+                    description = f"EchoDraw会员-{tier}"
+                    code_url = create_wechatpay_qrcode(
+                        order_number=recent_order.order_number,
+                        amount=str(amount),
+                        description=description,
+                    )
+                    return Response({
+                        'order_id': recent_order.id,
+                        'order_number': recent_order.order_number,
+                        'code_url': code_url,
+                        'payment_method': payment_method,
+                        'message': '已返回您最近创建的订单',
+                    })
             except Exception as e:
                 logger.exception(f"为已有订单生成支付URL失败: {e}")
                 # 如果生成支付URL失败，继续创建新订单
@@ -4046,12 +4062,45 @@ def create_payment_order(request):
             )
     
     elif payment_method == PointsOrder.PAYMENT_METHOD_WECHAT:
-        # 微信支付暂未实现
-        order.delete()
-        return Response(
-            {"detail": "微信支付暂未实现"},
-            status=status.HTTP_501_NOT_IMPLEMENTED
-        )
+        try:
+            # 调用微信支付接口
+            from core.payment.wechat import create_wechatpay_qrcode
+            description = f"EchoDraw会员-{tier}"
+            code_url = create_wechatpay_qrcode(
+                order_number=order_number,
+                amount=str(amount),
+                description=description,
+            )
+            
+            return Response({
+                'order_id': order.id,
+                'order_number': order_number,
+                'code_url': code_url,  # 微信支付二维码URL
+                'payment_method': payment_method,
+            })
+        except ValueError as e:
+            # 环境变量配置错误
+            error_detail = str(e)
+            logger.exception(f"创建微信支付失败（配置错误）: {error_detail}")
+            order.delete()
+            # 配置错误应该明确告知用户，这是服务器配置问题
+            return Response(
+                {"detail": f"支付配置错误: {error_detail}。请联系管理员检查服务器环境变量配置。"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        except Exception as e:
+            # 其他错误（网络错误、API错误等）
+            error_detail = str(e)
+            logger.exception(f"创建微信支付失败: {error_detail}")
+            order.delete()
+            # 在生产环境不暴露详细错误信息，但记录到日志
+            error_msg = "创建支付订单失败，请稍后重试。如果问题持续，请联系客服。"
+            if settings.DEBUG:
+                error_msg = f"创建支付订单失败: {error_detail}"
+            return Response(
+                {"detail": error_msg},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     
     return Response(
         {"detail": "不支持的支付方式"},
@@ -4223,6 +4272,173 @@ def alipay_notify(request):
     except Exception as e:
         logger.exception(f"处理支付宝回调失败: {e}")
         return Response('fail')
+
+
+@api_view(['GET', 'POST'])
+@csrf_exempt  # 微信回调不需要CSRF验证
+@permission_classes([AllowAny])  # 微信回调不需要认证
+def wechat_notify(request):
+    """
+    微信支付回调接口
+    
+    GET请求：返回接口信息（用于测试和调试）
+    POST请求：处理微信支付回调
+    """
+    # 如果是GET请求，返回友好提示
+    if request.method == 'GET':
+        return Response({
+            'message': '微信支付回调接口',
+            'method': '此接口仅接受POST请求',
+            'description': '微信支付会在用户支付完成后，通过POST请求调用此接口',
+            'url': request.build_absolute_uri(),
+        })
+    
+    from core.payment.wechat import verify_wechatpay_notify
+    
+    # 获取请求体（微信支付使用JSON格式）
+    import json
+    try:
+        body = request.body.decode('utf-8')
+    except Exception as e:
+        logger.warning(f"微信支付回调无法解析请求体: {e}")
+        return Response({'code': 'FAIL', 'message': '无法解析请求体'}, status=400)
+    
+    if not body:
+        logger.warning("微信支付回调数据为空")
+        return Response({'code': 'FAIL', 'message': '请求体为空'}, status=400)
+    
+    # 获取请求头
+    # Django会将HTTP头转换为大写，并用下划线替换连字符
+    # 例如：Wechatpay-Signature -> HTTP_WECHATPAY_SIGNATURE
+    # 但wechatpay-python期望原始格式，所以我们需要转换回来
+    def get_header(name):
+        # 先尝试Django转换后的格式
+        django_name = f"HTTP_{name.upper().replace('-', '_')}"
+        value = request.META.get(django_name, '')
+        if not value:
+            # 如果没有找到，尝试原始格式（某些情况下可能保留）
+            value = request.META.get(name, '')
+        return value
+    
+    headers = {
+        'Wechatpay-Signature': get_header('Wechatpay-Signature'),
+        'Wechatpay-Timestamp': get_header('Wechatpay-Timestamp'),
+        'Wechatpay-Nonce': get_header('Wechatpay-Nonce'),
+        'Wechatpay-Serial': get_header('Wechatpay-Serial'),
+    }
+    
+    logger.info(f"收到微信支付回调: 订单号={json.loads(body).get('out_trade_no', 'N/A') if body else 'N/A'}")
+    
+    # 验证签名并解析数据
+    result = verify_wechatpay_notify(headers, body)
+    
+    if not result:
+        logger.warning("微信支付回调签名验证失败")
+        return Response({'code': 'FAIL', 'message': '签名验证失败'}, status=400)
+    
+    # 检查交易状态
+    trade_state = result.get('trade_state')
+    order_number = result.get('out_trade_no')
+    transaction_id = result.get('transaction_id')
+    success_time = result.get('success_time')
+    
+    logger.info(f"微信支付回调 - 订单号: {order_number}, 交易状态: {trade_state}")
+    
+    if not order_number:
+        logger.warning("微信支付回调缺少订单号")
+        return Response({'code': 'FAIL', 'message': '缺少订单号'}, status=400)
+    
+    if trade_state != 'SUCCESS':
+        logger.info(f"微信支付回调交易状态不是成功: {trade_state}, 订单号: {order_number}")
+        return Response({'code': 'SUCCESS', 'message': '已收到通知'})  # 即使不是成功状态，也返回成功，避免微信重复通知
+    
+    # 支付成功
+    try:
+        order = PointsOrder.objects.get(order_number=order_number)
+        
+        # 更新订单状态（如果还未支付）
+        order_was_paid = order.status == PointsOrder.ORDER_STATUS_PAID
+        if not order_was_paid:
+            # 更新订单状态
+            order.status = PointsOrder.ORDER_STATUS_PAID
+            order.payment_transaction_id = transaction_id
+            if success_time:
+                try:
+                    # 解析微信支付的时间格式：2024-01-01T12:00:00+08:00
+                    from dateutil import parser
+                    paid_time = parser.parse(success_time)
+                    order.paid_at = paid_time
+                except Exception:
+                    order.paid_at = timezone.now()
+            else:
+                order.paid_at = timezone.now()
+            order.save()
+            logger.info(f"订单 {order_number} 状态已更新为已支付")
+        else:
+            logger.info(f"订单 {order_number} 已经支付过，检查会员状态是否需要更新")
+        
+        # 如果是会员订单，更新用户会员状态（即使订单已经支付过，也要检查会员状态）
+        metadata = order.metadata or {}
+        if metadata.get('order_type') == 'membership':
+            tier = metadata.get('tier')
+            expires_at_str = metadata.get('expires_at')
+            
+            if tier and expires_at_str:
+                try:
+                    # 解析到期时间
+                    expires_at = datetime.strptime(expires_at_str, "%Y-%m-%d").date()
+                    expires_at_datetime = timezone.make_aware(
+                        datetime.combine(expires_at, datetime.max.time())
+                    )
+                    
+                    # 更新用户会员状态
+                    profile, _ = UserProfile.objects.get_or_create(user=order.user)
+                    
+                    # 检查会员状态是否需要更新
+                    needs_update = False
+                    if not profile.is_member:
+                        needs_update = True
+                        logger.info(f"用户 {order.user.email} 当前不是会员，需要更新")
+                    elif not profile.membership_expires or profile.membership_expires < expires_at_datetime:
+                        needs_update = True
+                        logger.info(f"用户 {order.user.email} 会员到期时间需要更新: 当前={profile.membership_expires}, 应该={expires_at_datetime}")
+                    else:
+                        logger.info(f"用户 {order.user.email} 会员状态检查: is_member={profile.is_member}, expires={profile.membership_expires}, 订单到期时间={expires_at_datetime}")
+                    
+                    # 总是更新会员状态，确保状态正确（即使看起来已经是最新的）
+                    # 这样可以修复任何可能的同步问题
+                    # 如果用户之前不是会员，或者会员已过期，记录新的开通时间
+                    was_member = profile.is_member and profile.membership_expires and profile.membership_expires > timezone.now()
+                    if not was_member:
+                        profile.membership_started_at = timezone.now()
+                        # 重置视觉分析额度周期
+                        try:
+                            from core.models import VisualAnalysisQuota
+                            quota = VisualAnalysisQuota.objects.filter(user=order.user).first()
+                            if quota:
+                                quota.current_month = ""
+                                quota.save(update_fields=["current_month"])
+                        except Exception:
+                            pass
+                    
+                    profile.is_member = True
+                    profile.membership_expires = expires_at_datetime
+                    profile.save(update_fields=["is_member", "membership_expires", "membership_started_at", "updated_at"])
+                    logger.info(f"订单 {order_number} 支付成功，已更新用户 {order.user.email} 的会员状态，到期时间: {expires_at_datetime}")
+                except Exception as e:
+                    logger.exception(f"更新会员状态失败: {e}, 订单号: {order_number}, 用户: {order.user.email}")
+                    # 即使会员状态更新失败，也返回成功，避免微信重复通知
+        else:
+            logger.info(f"订单 {order_number} 不是会员订单，跳过会员状态更新")
+        
+        return Response({'code': 'SUCCESS', 'message': '成功'})
+        
+    except PointsOrder.DoesNotExist:
+        logger.warning(f"订单不存在: {order_number}")
+        return Response({'code': 'FAIL', 'message': '订单不存在'}, status=400)
+    except Exception as e:
+        logger.exception(f"处理微信支付回调失败: {e}")
+        return Response({'code': 'FAIL', 'message': '处理失败'}, status=500)
 
 
 @api_view(['GET'])

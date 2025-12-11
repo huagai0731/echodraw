@@ -27,6 +27,7 @@ import "./Profile.css";
 import "./ProfileDashboard.css";
 import MembershipOptions, { MEMBERSHIP_PLANS, type MembershipTier } from "./MembershipOptions";
 import PaymentConfirmation from "./PaymentConfirmation";
+import WechatPayment from "./WechatPayment";
 
 type AuthPayload = {
   token: string;
@@ -44,7 +45,8 @@ type ViewState =
   | "settings"
   | "custom-tags"
   | "membership-options"
-  | "payment-confirmation";
+  | "payment-confirmation"
+  | "wechat-payment";
 
 const STORAGE_KEY = "echodraw-auth";
 const DEFAULT_SIGNATURE = "一副完整的画，一个崭新落成的次元";
@@ -809,10 +811,26 @@ function Profile({
                 throw new Error("未获取到支付链接");
               }
             } else if (paymentMethod === "wechat") {
-              // 微信支付：显示二维码（暂未实现）
-              alert("微信支付暂未实现");
-              setPendingTier(null);
-              setView("membership-options");
+              // 微信支付：显示二维码
+              if (response.data.code_url) {
+                // 保存订单ID到 localStorage，用于支付完成后检测
+                try {
+                  window.localStorage.setItem(PENDING_ORDER_KEY, JSON.stringify({
+                    order_id: response.data.order_id,
+                    order_number: response.data.order_number,
+                    timestamp: Date.now(),
+                  }));
+                } catch (e) {
+                  console.warn("[Echo] Failed to save pending order:", e);
+                }
+                // 显示微信支付二维码页面
+                setView("wechat-payment");
+                // 保存二维码URL到sessionStorage，供二维码页面使用
+                sessionStorage.setItem("wechat-payment-qrcode", response.data.code_url);
+                sessionStorage.setItem("wechat-payment-order-id", String(response.data.order_id));
+              } else {
+                throw new Error("未获取到支付二维码");
+              }
             }
           } catch (error: any) {
             console.error("[Echo] Failed to create payment order:", error);
@@ -826,6 +844,71 @@ function Profile({
             setPendingTier(null);
             setView("membership-options");
           }
+        }}
+      />
+    );
+  }
+
+  if (view === "wechat-payment" && auth) {
+    // 从sessionStorage获取二维码URL和订单ID
+    const qrcodeUrl = sessionStorage.getItem("wechat-payment-qrcode");
+    const orderIdStr = sessionStorage.getItem("wechat-payment-order-id");
+    
+    if (!qrcodeUrl || !orderIdStr) {
+      // 如果没有二维码信息，返回会员选项页面
+      setView("membership-options");
+      return null;
+    }
+    
+    const orderId = parseInt(orderIdStr, 10);
+    if (isNaN(orderId)) {
+      setView("membership-options");
+      return null;
+    }
+    
+    return (
+      <WechatPayment
+        codeUrl={qrcodeUrl}
+        orderId={orderId}
+        onBack={() => {
+          sessionStorage.removeItem("wechat-payment-qrcode");
+          sessionStorage.removeItem("wechat-payment-order-id");
+          setPendingTier(null);
+          setView("membership-options");
+        }}
+        onSuccess={async () => {
+          // 支付成功，清除sessionStorage
+          sessionStorage.removeItem("wechat-payment-qrcode");
+          sessionStorage.removeItem("wechat-payment-order-id");
+          
+          // 强制同步会员状态
+          setMembershipTierLoading(true);
+          try {
+            // 先调用同步接口，强制更新会员状态
+            try {
+              await api.post(`/payments/orders/${orderId}/sync-membership/`);
+              console.log("[Echo] Membership status synced successfully");
+            } catch (syncError: any) {
+              console.warn("[Echo] Failed to sync membership status:", syncError);
+            }
+            
+            // 然后刷新会员状态
+            const preferences = await fetchProfilePreferences();
+            if (preferences.isMember) {
+              setMembershipTier("premium");
+              setMembershipExpires(preferences.membershipExpires);
+            } else {
+              setMembershipTier("pending");
+              setMembershipExpires(null);
+            }
+          } catch (e) {
+            console.error("[Echo] Failed to refresh membership status:", e);
+          } finally {
+            setMembershipTierLoading(false);
+          }
+          
+          setPendingTier(null);
+          setView("membership-options");
         }}
       />
     );

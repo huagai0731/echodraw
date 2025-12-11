@@ -1,0 +1,188 @@
+.wechat-payment {
+  position: relative;
+  min-height: 100vh;
+  background: #221b1b;
+  color: #efeae7;
+  padding-bottom: 2rem;
+}
+
+.wechat-payment__bg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.wechat-payment__glow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.3;
+}
+
+.wechat-payment__glow--one {
+  width: 400px;
+  height: 400px;
+  background: #4a90e2;
+  top: -200px;
+  right: -100px;
+}
+
+.wechat-payment__glow--two {
+  width: 300px;
+  height: 300px;
+  background: #7ed321;
+  bottom: -150px;
+  left: -50px;
+}
+
+.wechat-payment__nav {
+  position: relative;
+  z-index: 1;
+}
+
+.wechat-payment__content {
+  position: relative;
+  z-index: 1;
+  padding-top: 5rem;
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+.wechat-payment__instructions {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.wechat-payment__instructions h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: #efeae7;
+}
+
+.wechat-payment__instructions p {
+  font-size: 0.9rem;
+  color: #c9c4c1;
+  margin: 0;
+}
+
+.wechat-payment__qrcode-container {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 2rem;
+}
+
+.wechat-payment__qrcode-wrapper {
+  position: relative;
+  background: #fff;
+  padding: 1.5rem;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.wechat-payment__qrcode {
+  display: block;
+  width: 300px;
+  height: 300px;
+  border-radius: 8px;
+}
+
+.wechat-payment__checking {
+  position: absolute;
+  bottom: -2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.85rem;
+  color: #c9c4c1;
+  white-space: nowrap;
+}
+
+.wechat-payment__tips {
+  background: rgba(239, 234, 231, 0.05);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-top: 2rem;
+}
+
+.wechat-payment__tips p {
+  font-size: 0.85rem;
+  color: #c9c4c1;
+  margin: 0.5rem 0;
+  line-height: 1.6;
+}
+
+.wechat-payment__success,
+.wechat-payment__timeout {
+  text-align: center;
+  padding: 3rem 1.5rem;
+}
+
+.wechat-payment__success-icon {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: #7ed321;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.5rem;
+  font-weight: bold;
+  margin: 0 auto 1.5rem;
+}
+
+.wechat-payment__timeout-icon {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: #f5a623;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.5rem;
+  font-weight: bold;
+  margin: 0 auto 1.5rem;
+}
+
+.wechat-payment__success h2,
+.wechat-payment__timeout h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: #efeae7;
+}
+
+.wechat-payment__success p,
+.wechat-payment__timeout p {
+  font-size: 1rem;
+  color: #c9c4c1;
+  margin-bottom: 1.5rem;
+}
+
+.wechat-payment__retry-btn {
+  background: #4a90e2;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 0.75rem 2rem;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.wechat-payment__retry-btn:hover {
+  background: #357abd;
+}
+
+.wechat-payment__retry-btn:active {
+  background: #2a5f8f;
+}
+

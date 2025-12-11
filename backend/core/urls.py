@@ -145,6 +145,7 @@ urlpatterns = [
     # 支付相关接口
     path("payments/orders/create/", views.create_payment_order, name="create-payment-order"),
     path("payments/alipay/notify/", views.alipay_notify, name="alipay-notify"),
+    path("payments/wechat/notify/", views.wechat_notify, name="wechat-notify"),
     path("payments/orders/<int:order_id>/query-and-sync/", views.query_and_sync_order, name="query-and-sync-order"),
     path("payments/orders/<int:order_id>/sync-membership/", views.sync_order_membership, name="sync-order-membership"),
     path("payments/orders/<int:order_id>/status/", views.get_order_status, name="get-order-status"),
