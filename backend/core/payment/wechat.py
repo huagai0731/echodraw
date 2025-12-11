@@ -480,6 +480,114 @@ def verify_wechatpay_notify(headers: dict, body: str) -> dict:
         return None
 
 
+def get_wechatpay_client_jsapi():
+    """
+    获取微信支付客户端实例（JSAPI支付专用）
+    
+    Returns:
+        WeChatPay: 微信支付客户端实例（JSAPI类型）
+    """
+    # 复用 get_wechatpay_client 的逻辑，但使用 JSAPI 类型
+    appid = os.getenv("WECHAT_APPID")
+    mchid = os.getenv("WECHAT_MCHID")
+    private_key_path = os.getenv("WECHAT_PRIVATE_KEY_PATH")
+    cert_serial_no = os.getenv("WECHAT_CERT_SERIAL_NO")
+    app_notify_url = os.getenv("WECHAT_NOTIFY_URL")
+    apiv3_key = os.getenv("WECHAT_APIV3_KEY")
+    wechatpay_public_key_path = os.getenv("WECHAT_PUBLIC_KEY_PATH")
+    private_key_string = os.getenv("WECHAT_PRIVATE_KEY")
+    wechatpay_public_key_string = os.getenv("WECHAT_PUBLIC_KEY")
+    wechatpay_public_key_id = os.getenv("WECHAT_PUBLIC_KEY_ID")
+    wechat_cert_dir = os.getenv("WECHAT_CERT_DIR")
+    
+    if not appid or not mchid or not apiv3_key or not cert_serial_no:
+        raise ValueError("微信支付配置不完整")
+    
+    # 处理私钥
+    private_key = None
+    if private_key_path and os.path.exists(private_key_path):
+        with open(private_key_path, 'r', encoding='utf-8') as f:
+            private_key = f.read().strip()
+    elif private_key_string:
+        private_key = private_key_string.strip()
+        if '-----BEGIN' not in private_key:
+            private_key = f"-----BEGIN PRIVATE KEY-----\n{private_key}\n-----END PRIVATE KEY-----"
+    else:
+        raise ValueError("必须设置 WECHAT_PRIVATE_KEY_PATH 或 WECHAT_PRIVATE_KEY")
+    
+    # 处理证书/公钥（复用 get_wechatpay_client 的逻辑）
+    public_key = None
+    cert_dir = None
+    
+    if wechat_cert_dir and os.path.isdir(wechat_cert_dir):
+        cert_dir = wechat_cert_dir
+    elif wechatpay_public_key_path and os.path.exists(wechatpay_public_key_path):
+        if os.path.isdir(wechatpay_public_key_path):
+            cert_dir = wechatpay_public_key_path
+        else:
+            with open(wechatpay_public_key_path, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+            if '-----BEGIN CERTIFICATE-----' in content:
+                from pathlib import Path
+                BASE_DIR = Path(__file__).resolve().parent.parent.parent
+                cert_dir_path = BASE_DIR / "wechatpay_certs_auto"
+                cert_dir_path.mkdir(exist_ok=True)
+                import shutil
+                shutil.copy(wechatpay_public_key_path, cert_dir_path / "wechatpay_cert.pem")
+                cert_dir = str(cert_dir_path.resolve())
+            elif '-----BEGIN PUBLIC KEY-----' in content and wechatpay_public_key_id:
+                public_key = content
+    elif wechatpay_public_key_string:
+        public_key = wechatpay_public_key_string.strip()
+        if '-----BEGIN' not in public_key:
+            public_key = f"-----BEGIN PUBLIC KEY-----\n{public_key}\n-----END PUBLIC KEY-----"
+        if '-----BEGIN PUBLIC KEY-----' in public_key and not wechatpay_public_key_id:
+            from pathlib import Path
+            BASE_DIR = Path(__file__).resolve().parent.parent.parent
+            auto_cert_dir = BASE_DIR / "wechatpay_certs_auto"
+            auto_cert_dir.mkdir(exist_ok=True)
+            cert_dir = str(auto_cert_dir.resolve())
+            public_key = None
+    
+    if not cert_dir and not public_key:
+        from pathlib import Path
+        BASE_DIR = Path(__file__).resolve().parent.parent.parent
+        auto_cert_dir = BASE_DIR / "wechatpay_certs_auto"
+        auto_cert_dir.mkdir(exist_ok=True)
+        cert_dir = str(auto_cert_dir.resolve())
+    
+    # 创建 JSAPI 类型的客户端
+    init_params = {
+        'wechatpay_type': WeChatPayType.JSAPI,  # 使用 JSAPI 类型
+        'mchid': mchid,
+        'private_key': private_key,
+        'cert_serial_no': cert_serial_no,
+        'appid': appid,
+        'apiv3_key': apiv3_key,
+        'notify_url': app_notify_url,
+    }
+    
+    if cert_dir:
+        init_params['cert_dir'] = cert_dir
+    elif public_key:
+        init_params['public_key'] = public_key
+        if wechatpay_public_key_id:
+            init_params['public_key_id'] = wechatpay_public_key_id
+        else:
+            init_params['public_key_id'] = ""
+    
+    wechatpay = WeChatPay(**init_params)
+    
+    # 如果证书列表为空，尝试获取
+    if cert_dir and not wechatpay._core._certificates:
+        try:
+            wechatpay._core._update_certificates()
+        except Exception as e:
+            logger.warning(f"自动获取证书失败（将在首次调用时重试）: {e}")
+    
+    return wechatpay
+
+
 def create_wechatpay_jsapi(order_number: str, amount: str, description: str, openid: str) -> dict:
     """
     创建微信支付JSAPI订单（公众号内支付）
@@ -501,7 +609,7 @@ def create_wechatpay_jsapi(order_number: str, amount: str, description: str, ope
             "paySign": "..."
         }
     """
-    wechatpay = get_wechatpay_client()
+    wechatpay = get_wechatpay_client_jsapi()
     
     # 将金额转换为分（微信支付使用分为单位）
     amount_yuan = Decimal(str(amount))
@@ -523,7 +631,6 @@ def create_wechatpay_jsapi(order_number: str, amount: str, description: str, ope
             out_trade_no=order_number,
             amount={"total": amount_fen, "currency": "CNY"},
             payer={"openid": openid},
-            wechatpay_type=WeChatPayType.JSAPI,
         )
     except Exception as e:
         error_str = str(e)
@@ -539,7 +646,6 @@ def create_wechatpay_jsapi(order_number: str, amount: str, description: str, ope
                     out_trade_no=order_number,
                     amount={"total": amount_fen, "currency": "CNY"},
                     payer={"openid": openid},
-                    wechatpay_type=WeChatPayType.JSAPI,
                 )
             except Exception as e2:
                 logger.error(f"重新获取证书后仍然失败: {e2}")
