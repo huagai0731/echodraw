@@ -40,6 +40,13 @@ def check_wechat_config():
         'WECHAT_CERT_SERIAL_NO',
     ]
     
+    # 检查公钥ID（如果使用公钥模式）
+    public_key_id = os.getenv('WECHAT_PUBLIC_KEY_ID')
+    if public_key_id:
+        print(f"✅ WECHAT_PUBLIC_KEY_ID = {public_key_id}")
+    else:
+        print("⚠️  WECHAT_PUBLIC_KEY_ID 未设置（如果使用公钥模式，需要设置此变量）")
+    
     for var in required_vars:
         value = os.getenv(var)
         if not value:

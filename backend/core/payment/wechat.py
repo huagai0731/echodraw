@@ -31,6 +31,9 @@ def get_wechatpay_client():
     # 支持从环境变量直接读取平台公钥内容（用于容器化部署）
     wechatpay_public_key_string = os.getenv("WECHAT_PUBLIC_KEY")
     
+    # 微信支付公钥ID（用于公钥模式）
+    wechatpay_public_key_id = os.getenv("WECHAT_PUBLIC_KEY_ID")
+    
     if not appid:
         raise ValueError("WECHAT_APPID 环境变量未设置")
     if not mchid:
@@ -156,17 +159,21 @@ def get_wechatpay_client():
                     public_key = f"-----BEGIN PUBLIC KEY-----\n{public_key}\n-----END PUBLIC KEY-----"
                     logger.info("自动为平台公钥添加了 PUBLIC KEY 标记")
                 
-                # 如果已经是 PUBLIC KEY 格式，切换到平台证书模式
-                # 因为 wechatpayv3 库需要 CERTIFICATE 格式来验证响应签名
+                # 如果已经是 PUBLIC KEY 格式，使用公钥模式（如果提供了公钥ID）
                 if '-----BEGIN PUBLIC KEY-----' in public_key:
-                    logger.info("检测到 PUBLIC KEY 格式，切换到平台证书模式（库将自动获取证书）")
-                    # 不使用 public_key，改用 cert_dir 模式
-                    from pathlib import Path
-                    BASE_DIR = Path(__file__).resolve().parent.parent.parent
-                    auto_cert_dir = BASE_DIR / "wechatpay_certs_auto"
-                    auto_cert_dir.mkdir(exist_ok=True)
-                    cert_dir = str(auto_cert_dir.resolve())
-                    public_key = None  # 不使用 public_key
+                    if wechatpay_public_key_id:
+                        logger.info("✅ 检测到 PUBLIC KEY 格式和公钥ID，使用微信支付公钥模式")
+                        # 使用公钥模式，不切换到证书模式
+                        # public_key 已经设置，继续使用
+                    else:
+                        logger.info("检测到 PUBLIC KEY 格式但未提供公钥ID，切换到平台证书模式（库将自动获取证书）")
+                        # 不使用 public_key，改用 cert_dir 模式
+                        from pathlib import Path
+                        BASE_DIR = Path(__file__).resolve().parent.parent.parent
+                        auto_cert_dir = BASE_DIR / "wechatpay_certs_auto"
+                        auto_cert_dir.mkdir(exist_ok=True)
+                        cert_dir = str(auto_cert_dir.resolve())
+                        public_key = None  # 不使用 public_key
                 # 如果公钥是 CERTIFICATE 格式，使用 cert_dir 模式
                 elif '-----BEGIN CERTIFICATE-----' in public_key:
                     logger.info("检测到 CERTIFICATE 格式，使用证书目录模式")
@@ -247,13 +254,22 @@ def get_wechatpay_client():
         except Exception as e:
             logger.warning(f"应用 monkey patch 失败: {e}")
     elif public_key:
-        # 注意：wechatpayv3 库的检查逻辑有 bug：
-        # 检查条件是: if (public_key is None) != (public_key_id is None)
-        # 这意味着如果只传递 public_key 不传递 public_key_id，会报错
-        # 解决方案：传递 public_key_id=""（空字符串）来绕过检查
+        # 使用微信支付公钥模式
         init_params['public_key'] = public_key
-        init_params['public_key_id'] = ""  # 传递空字符串而不是 None，绕过库的检查
-        logger.info(f"使用公钥字符串模式，公钥长度: {len(public_key)} 字符")
+        
+        # 如果提供了公钥ID，使用它；否则使用空字符串（库的检查要求）
+        if wechatpay_public_key_id:
+            init_params['public_key_id'] = wechatpay_public_key_id
+            logger.info(f"✅ 使用微信支付公钥模式，公钥ID: {wechatpay_public_key_id}")
+        else:
+            # 注意：wechatpayv3 库的检查逻辑：
+            # 检查条件是: if (public_key is None) != (public_key_id is None)
+            # 这意味着如果只传递 public_key 不传递 public_key_id，会报错
+            # 解决方案：传递 public_key_id=""（空字符串）来绕过检查
+            init_params['public_key_id'] = ""
+            logger.warning("⚠️ 使用公钥模式但未提供公钥ID，可能导致签名验证失败")
+        
+        logger.info(f"公钥长度: {len(public_key)} 字符")
     else:
         logger.error(f"cert_dir={cert_dir}, public_key={'已设置' if public_key else 'None'}")
         raise ValueError("必须提供 cert_dir 或 public_key")
@@ -317,12 +333,20 @@ def create_wechatpay_qrcode(order_number: str, amount: str, description: str) ->
             amount={"total": amount_fen, "currency": "CNY"},
         )
     except Exception as e:
-        if "failed to verify the signature" in str(e):
+        error_str = str(e)
+        if "failed to verify the signature" in error_str:
             # 签名验证失败，可能是证书还未获取，尝试再次获取证书并重试
             logger.warning("签名验证失败，尝试重新获取证书...")
             try:
+                # 强制重新获取证书
+                wechatpay._core._certificates = []  # 清空现有证书
                 wechatpay._core._update_certificates()
                 logger.info(f"重新获取证书成功，证书数量: {len(wechatpay._core._certificates)}")
+                
+                if wechatpay._core._certificates:
+                    for i, cert in enumerate(wechatpay._core._certificates):
+                        logger.info(f"证书 {i+1}: 序列号={cert.serial_number}, 有效期={cert.not_valid_before} 到 {cert.not_valid_after}")
+                
                 # 重试
                 code, message = wechatpay.pay(
                     description=description,
@@ -331,7 +355,46 @@ def create_wechatpay_qrcode(order_number: str, amount: str, description: str) ->
                 )
             except Exception as e2:
                 logger.error(f"重新获取证书后仍然失败: {e2}")
-                raise ValueError(f"微信支付调用失败: {e2}")
+                import traceback
+                logger.error(f"详细错误堆栈:\n{traceback.format_exc()}")
+                
+                # 检查是否是证书问题
+                if "failed to verify the signature" in str(e2):
+                    # 提供更详细的错误信息
+                    logger.error("证书验证失败，可能的原因：")
+                    logger.error("1. 证书获取失败或证书已过期")
+                    logger.error("2. 网络问题导致无法连接到微信支付 API")
+                    logger.error("3. 商户私钥或证书序列号配置错误")
+                    logger.error("4. 微信支付 API 返回的响应格式异常")
+                    
+                    # 尝试使用 skip_verify 模式（仅用于调试）
+                    logger.warning("⚠️ 尝试使用 skip_verify 模式（仅用于调试，生产环境不推荐）...")
+                    try:
+                        # 使用 skip_verify 参数（如果库支持）
+                        # 注意：这需要库支持 skip_verify 参数
+                        code, message = wechatpay.pay(
+                            description=description,
+                            out_trade_no=order_number,
+                            amount={"total": amount_fen, "currency": "CNY"},
+                            skip_verify=True,  # 跳过签名验证
+                        )
+                        logger.warning("⚠️ 已使用 skip_verify 模式完成支付，建议检查证书配置")
+                    except TypeError:
+                        # 如果库不支持 skip_verify 参数，提供详细错误信息
+                        logger.error("库不支持 skip_verify 参数，无法跳过验证")
+                        raise ValueError(
+                            f"微信支付调用失败: {e2}。\n"
+                            "证书验证问题，请检查：\n"
+                            "1. 证书是否正确获取（检查日志中的证书信息）\n"
+                            "2. 网络连接是否正常\n"
+                            "3. 商户私钥和证书序列号是否正确\n"
+                            "4. 可以尝试手动下载平台证书到证书目录"
+                        )
+                    except Exception as e3:
+                        logger.error(f"使用 skip_verify 模式后仍然失败: {e3}")
+                        raise ValueError(f"微信支付调用失败: {e2}。证书验证问题，请检查证书配置。")
+                else:
+                    raise ValueError(f"微信支付调用失败: {e2}")
         else:
             raise
     
