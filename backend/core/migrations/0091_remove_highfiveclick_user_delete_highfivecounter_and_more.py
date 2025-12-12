@@ -6,6 +6,60 @@ from django.conf import settings
 from django.db import migrations, models
 
 
+def safe_remove_highfive_models(apps, schema_editor):
+    """安全地删除HighFive相关模型（如果存在）"""
+    from django.db import connection
+    
+    # 检查表是否存在并删除
+    with connection.cursor() as cursor:
+        # 检查并删除HighFiveClick表
+        cursor.execute("""
+            SELECT COUNT(*) 
+            FROM information_schema.tables 
+            WHERE table_schema = DATABASE() 
+            AND table_name = 'core_highfiveclick'
+        """)
+        if cursor.fetchone()[0] > 0:
+            cursor.execute("DROP TABLE IF EXISTS core_highfiveclick")
+        
+        # 检查并删除HighFiveCounter表
+        cursor.execute("""
+            SELECT COUNT(*) 
+            FROM information_schema.tables 
+            WHERE table_schema = DATABASE() 
+            AND table_name = 'core_highfivecounter'
+        """)
+        if cursor.fetchone()[0] > 0:
+            cursor.execute("DROP TABLE IF EXISTS core_highfivecounter")
+
+
+def safe_remove_highfive_models_reverse(apps, schema_editor):
+    """反向操作：不需要实现"""
+    pass
+
+
+def safe_remove_kmeans_field(apps, schema_editor):
+    """安全地删除kmeans_segmentation_image_12字段（如果存在）"""
+    from django.db import connection
+    
+    # 检查字段是否存在并删除
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT COUNT(*) 
+            FROM information_schema.columns 
+            WHERE table_schema = DATABASE() 
+            AND table_name = 'core_visualanalysisresult'
+            AND column_name = 'kmeans_segmentation_image_12'
+        """)
+        if cursor.fetchone()[0] > 0:
+            cursor.execute("ALTER TABLE core_visualanalysisresult DROP COLUMN kmeans_segmentation_image_12")
+
+
+def safe_remove_kmeans_field_reverse(apps, schema_editor):
+    """反向操作：不需要实现"""
+    pass
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -14,16 +68,34 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RemoveField(
-            model_name="highfiveclick",
-            name="user",
+        # 使用RunPython安全删除可能不存在的模型和字段
+        migrations.RunPython(
+            safe_remove_highfive_models,
+            safe_remove_highfive_models_reverse,
         ),
-        migrations.DeleteModel(
-            name="HighFiveCounter",
+        migrations.RunPython(
+            safe_remove_kmeans_field,
+            safe_remove_kmeans_field_reverse,
         ),
-        migrations.RemoveField(
-            model_name="visualanalysisresult",
-            name="kmeans_segmentation_image_12",
+        # 更新迁移状态（即使数据库操作已执行，也需要更新状态）
+        migrations.SeparateDatabaseAndState(
+            database_operations=[],
+            state_operations=[
+                migrations.RemoveField(
+                    model_name="highfiveclick",
+                    name="user",
+                ),
+                migrations.DeleteModel(
+                    name="HighFiveCounter",
+                ),
+                migrations.DeleteModel(
+                    name="HighFiveClick",
+                ),
+                migrations.RemoveField(
+                    model_name="visualanalysisresult",
+                    name="kmeans_segmentation_image_12",
+                ),
+            ],
         ),
         migrations.AddField(
             model_name="longtermgoal",
@@ -125,8 +197,5 @@ class Migration(migrations.Migration):
             field=models.PositiveIntegerField(
                 default=0, help_text="今日已使用的每日额度"
             ),
-        ),
-        migrations.DeleteModel(
-            name="HighFiveClick",
         ),
     ]
