@@ -35,5 +35,7 @@ urlpatterns = [
     path("MP_verify_<str:verify_code>.txt", wechat_verify_file, name="wechat-verify-file"),
 ]
 
+# 开发环境：Django 直接提供静态文件和媒体文件
 if settings.DEBUG:
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

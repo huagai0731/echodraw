@@ -237,13 +237,19 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = "static/"
+STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 
 # WhiteNoise 配置：用于在生产环境提供静态文件
 # 注意：使用 WhiteNoise 后，需要运行 python manage.py collectstatic 收集静态文件
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+
+# WhiteNoise 额外配置
+# 启用压缩和缓存
+WHITENOISE_USE_FINDERS = False  # 生产环境不使用 finders，只使用 STATIC_ROOT
+WHITENOISE_AUTOREFRESH = False  # 生产环境禁用自动刷新
+WHITENOISE_MANIFEST_STRICT = False  # 如果文件不存在，不抛出异常
 
 # MEDIA_URL 和 MEDIA_ROOT 在启用TOS存储时会被覆盖
 # 如果使用TOS存储，MEDIA_ROOT不会被使用，所有文件都保存到TOS
