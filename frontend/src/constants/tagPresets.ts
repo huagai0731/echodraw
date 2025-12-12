@@ -6,17 +6,11 @@ export type TagPreset = {
 
 export const PRESET_TAGS: TagPreset[] = [
   { id: "sketch", name: "速写", defaultActive: true },
-  { id: "daily-practice", name: "日常练习", defaultActive: true },
-  { id: "abstract", name: "抽象", defaultActive: true },
-  { id: "digital", name: "数字绘", defaultActive: false },
-  { id: "concept", name: "概念设计", defaultActive: false },
-  { id: "oil", name: "油画", defaultActive: false },
-  { id: "watercolor", name: "水彩", defaultActive: false },
-  { id: "portrait", name: "人物", defaultActive: false },
-  { id: "landscape", name: "风景", defaultActive: false },
-  { id: "fanart", name: "同人", defaultActive: false },
-  { id: "comic", name: "漫画", defaultActive: false },
-  { id: "experiment", name: "实验", defaultActive: false },
+  { id: "draft", name: "草稿", defaultActive: true },
+  { id: "final", name: "成图", defaultActive: true },
+  { id: "copy", name: "临摹", defaultActive: false },
+  { id: "oc", name: "oc", defaultActive: false },
+  { id: "practice", name: "练习", defaultActive: true },
 ];
 
 export function getPresetTagById(id: string): TagPreset | undefined {

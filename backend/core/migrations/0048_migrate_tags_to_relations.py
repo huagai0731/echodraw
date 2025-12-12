@@ -6,17 +6,11 @@ from django.db import migrations
 # 预设标签列表（与前端保持一致）
 PRESET_TAGS = [
     {"id": "sketch", "name": "速写", "defaultActive": True},
-    {"id": "daily-practice", "name": "日常练习", "defaultActive": True},
-    {"id": "abstract", "name": "抽象", "defaultActive": True},
-    {"id": "digital", "name": "数字绘", "defaultActive": False},
-    {"id": "concept", "name": "概念设计", "defaultActive": False},
-    {"id": "oil", "name": "油画", "defaultActive": False},
-    {"id": "watercolor", "name": "水彩", "defaultActive": False},
-    {"id": "portrait", "name": "人物", "defaultActive": False},
-    {"id": "landscape", "name": "风景", "defaultActive": False},
-    {"id": "fanart", "name": "同人", "defaultActive": False},
-    {"id": "comic", "name": "漫画", "defaultActive": False},
-    {"id": "experiment", "name": "实验", "defaultActive": False},
+    {"id": "draft", "name": "草稿", "defaultActive": True},
+    {"id": "final", "name": "成图", "defaultActive": True},
+    {"id": "copy", "name": "临摹", "defaultActive": False},
+    {"id": "oc", "name": "oc", "defaultActive": False},
+    {"id": "practice", "name": "练习", "defaultActive": True},
 ]
 
 

@@ -82,6 +82,7 @@ function YearlyTemplateDesigner({ open, artworks, onClose }: YearlyTemplateDesig
   const [gridImages, setGridImages] = useState<GridImage[]>(
     new Array(TOTAL_CELLS).fill(null).map(() => ({ artworkId: null, image: null })),
   );
+  const gridImagesRef = useRef<GridImage[]>(gridImages);
   // 月份图片选择弹窗状态
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
   const [selectedMonthIndex, setSelectedMonthIndex] = useState<number | null>(null);
@@ -89,6 +90,11 @@ function YearlyTemplateDesigner({ open, artworks, onClose }: YearlyTemplateDesig
   const ITEMS_PER_PAGE = 12; // 每页显示12张图片
 
   const hasArtworks = artworks.length > 0;
+
+  // 同步gridImages到ref
+  useEffect(() => {
+    gridImagesRef.current = gridImages;
+  }, [gridImages]);
 
   useEffect(() => {
     if (!open) {
@@ -143,6 +149,97 @@ function YearlyTemplateDesigner({ open, artworks, onClose }: YearlyTemplateDesig
       window.removeEventListener("keydown", handleKeydown);
     };
   }, [onClose, open]);
+
+  // 自动填充功能：打开模板或切换年份时，自动填充空位
+  useEffect(() => {
+    if (!open || !hasArtworks) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const autoFillImages = async () => {
+      const currentGrid = gridImagesRef.current;
+      const fillTasks: Array<{ position: number; artwork: Artwork }> = [];
+
+      // 遍历12个月（位置0-11对应月份0-11）
+      for (let monthIndex = 0; monthIndex < 12; monthIndex++) {
+        // 只填充空位
+        const currentImage = currentGrid[monthIndex];
+        if (currentImage?.artworkId) {
+          continue;
+        }
+
+        // 获取符合条件的图片（该月的所有图片）
+        const filtered = getFilteredArtworks(monthIndex);
+        if (filtered.length === 0) {
+          continue;
+        }
+
+        // 按时间降序排序（最新的在前）
+        const sorted = [...filtered].sort((a, b) => {
+          const dateA = resolveArtworkDate(a);
+          const dateB = resolveArtworkDate(b);
+          if (!dateA || !dateB) return 0;
+          // 如果日期相同，按uploadedAt排序（降序）
+          if (dateA.getTime() === dateB.getTime()) {
+            const timeA = a.uploadedAt ? new Date(a.uploadedAt).getTime() : 0;
+            const timeB = b.uploadedAt ? new Date(b.uploadedAt).getTime() : 0;
+            return timeB - timeA;
+          }
+          return dateB.getTime() - dateA.getTime();
+        });
+
+        const firstArtwork = sorted[0];
+        if (firstArtwork) {
+          fillTasks.push({ position: monthIndex, artwork: firstArtwork });
+        }
+      }
+
+      // 异步加载所有图片并填充
+      if (fillTasks.length > 0) {
+        const loadPromises = fillTasks.map(async ({ position, artwork }) => {
+          try {
+            const img = await getOrLoadImage(artwork.imageSrc);
+            if (cancelled) return null;
+
+            return { position, artworkId: artwork.id, image: img };
+          } catch (error) {
+            // 静默处理加载失败，不显示错误
+            console.warn(`[YearlyTemplateDesigner] 自动填充位置 ${position} 失败:`, error);
+            return null;
+          }
+        });
+
+        const results = await Promise.allSettled(loadPromises);
+        if (cancelled) return;
+
+        setGridImages((current) => {
+          const newGrid = [...current];
+          let hasChanges = false;
+
+          results.forEach((result) => {
+            if (result.status === "fulfilled" && result.value) {
+              const { position, artworkId, image } = result.value;
+              // 再次检查是否仍为空位（避免并发填充）
+              if (!newGrid[position]?.artworkId) {
+                newGrid[position] = { artworkId, image };
+                hasChanges = true;
+              }
+            }
+          });
+
+          return hasChanges ? newGrid : current;
+        });
+      }
+    };
+
+    autoFillImages();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, hasArtworks, selectedYear, artworks]);
 
   const selectedArtwork = useMemo(() => {
     if (!hasArtworks) {

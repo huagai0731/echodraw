@@ -471,16 +471,22 @@ function UserApp() {
   }, []);
 
   // 监听登录态变化：当 token 写入/清除时，刷新用户数据，保证图片 URL（含 token）与权限数据最新
+  // 使用 ref 存储最新的状态，避免频繁重新注册事件监听器
+  const isForcedLogoutRef = useRef(isForcedLogout);
+  useEffect(() => {
+    isForcedLogoutRef.current = isForcedLogout;
+  }, [isForcedLogout]);
+
   useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
     const handleAuthChanged = () => {
       // 如果用户重新登录，重置强制退出登录标志
-      if (hasAuthToken() && isForcedLogout) {
+      if (hasAuthToken() && isForcedLogoutRef.current) {
         setIsForcedLogout(false);
       }
-      refreshUserArtworks().catch(() => {
+      refreshUserArtworksRef.current().catch(() => {
         /* 已在函数内部处理 */
       });
     };
@@ -488,7 +494,7 @@ function UserApp() {
     return () => {
       window.removeEventListener(AUTH_CHANGED_EVENT, handleAuthChanged as EventListener);
     };
-  }, [refreshUserArtworks, isForcedLogout]);
+  }, []); // 移除依赖，只在组件挂载时注册一次，使用 ref 访问最新值
 
   // 监听导航到会员购买页面的事件
   useEffect(() => {

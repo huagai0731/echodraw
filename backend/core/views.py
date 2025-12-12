@@ -672,11 +672,11 @@ def register(request):
         # 创建用户资料
         UserProfile.objects.create(user=user)
         
-        # 创建视觉分析额度记录，赠送10次免费额度
+        # 创建视觉分析额度记录，赠送5次免费额度
         from core.models import VisualAnalysisQuota
         VisualAnalysisQuota.objects.create(
             user=user,
-            free_quota=10,  # 新用户赠送10次
+            free_quota=5,  # 新用户赠送5次
             used_free_quota=0,
         )
 
@@ -3420,7 +3420,7 @@ def analyze_image_comprehensive(request):
         quota, created = VisualAnalysisQuota.objects.get_or_create(
             user=user,
             defaults={
-                'free_quota': 10,  # 如果是新用户（没有记录），默认赠送10次
+                'free_quota': 5,  # 如果是新用户（没有记录），默认赠送5次
                 'used_free_quota': 0,
             }
         )
@@ -3525,8 +3525,8 @@ def analyze_image_comprehensive(request):
             progress=0,
         )
         
-        # 使用一次额度
-        quota.use_quota(is_member)
+        # 注意：不在创建任务时消耗次数，而是在任务成功完成后再消耗次数
+        # 这样可以确保失败时不消耗次数
         
         return Response(
             {
@@ -3725,7 +3725,7 @@ def get_visual_analysis_quota(request):
         quota, created = VisualAnalysisQuota.objects.get_or_create(
             user=user,
             defaults={
-                'free_quota': 10,  # 如果是新用户（没有记录），默认赠送10次
+                'free_quota': 5,  # 如果是新用户（没有记录），默认赠送5次
                 'used_free_quota': 0,
             }
         )

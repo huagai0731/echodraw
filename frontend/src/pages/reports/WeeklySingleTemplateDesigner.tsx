@@ -106,8 +106,14 @@ function WeeklySingleTemplateDesigner({ open, artworks, onClose }: WeeklySingleT
   const [gridImages, setGridImages] = useState<GridImage[]>(
     new Array(9).fill(null).map(() => ({ artworkId: null, image: null })),
   );
+  const gridImagesRef = useRef<GridImage[]>(gridImages);
 
   const hasArtworks = artworks.length > 0;
+
+  // 同步gridImages到ref
+  useEffect(() => {
+    gridImagesRef.current = gridImages;
+  }, [gridImages]);
 
   useEffect(() => {
     if (!open) {
@@ -182,6 +188,105 @@ function WeeklySingleTemplateDesigner({ open, artworks, onClose }: WeeklySingleT
       window.removeEventListener("keydown", handleKeydown);
     };
   }, [onClose, open]);
+
+  // 自动填充功能：打开模板或切换日期时，自动填充空位
+  useEffect(() => {
+    if (!open || !hasArtworks) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const autoFillImages = async () => {
+      const placeholderPositions = [2, 6]; // 占位符位置
+      const editablePositions = [0, 1, 3, 4, 5, 7, 8]; // 可编辑位置（周一到周日）
+
+      // 获取当前状态
+      const currentGrid = gridImagesRef.current;
+      const fillTasks: Array<{ position: number; artwork: Artwork }> = [];
+
+      for (const position of editablePositions) {
+        // 跳过占位符位置
+        if (placeholderPositions.includes(position)) {
+          continue;
+        }
+
+        // 只填充空位
+        const currentImage = currentGrid[position];
+        if (currentImage?.artworkId) {
+          continue;
+        }
+
+        // 获取符合条件的图片
+        const filtered = getFilteredArtworks(position);
+        if (filtered.length === 0) {
+          continue;
+        }
+
+        // 按时间降序排序（最新的在前）
+        const sorted = [...filtered].sort((a, b) => {
+          const dateA = resolveArtworkDate(a);
+          const dateB = resolveArtworkDate(b);
+          if (!dateA || !dateB) return 0;
+          // 如果日期相同，按uploadedAt排序（降序）
+          if (dateA.getTime() === dateB.getTime()) {
+            const timeA = a.uploadedAt ? new Date(a.uploadedAt).getTime() : 0;
+            const timeB = b.uploadedAt ? new Date(b.uploadedAt).getTime() : 0;
+            return timeB - timeA;
+          }
+          return dateB.getTime() - dateA.getTime();
+        });
+
+        const firstArtwork = sorted[0];
+        if (firstArtwork) {
+          fillTasks.push({ position, artwork: firstArtwork });
+        }
+      }
+
+      // 异步加载所有图片并填充
+      if (fillTasks.length > 0) {
+        const loadPromises = fillTasks.map(async ({ position, artwork }) => {
+          try {
+            const img = await getOrLoadImage(artwork.imageSrc);
+            if (cancelled) return null;
+
+            return { position, artworkId: artwork.id, image: img };
+          } catch (error) {
+            // 静默处理加载失败，不显示错误
+            console.warn(`[WeeklySingleTemplateDesigner] 自动填充位置 ${position} 失败:`, error);
+            return null;
+          }
+        });
+
+        const results = await Promise.allSettled(loadPromises);
+        if (cancelled) return;
+
+        setGridImages((current) => {
+          const newGrid = [...current];
+          let hasChanges = false;
+
+          results.forEach((result) => {
+            if (result.status === "fulfilled" && result.value) {
+              const { position, artworkId, image } = result.value;
+              // 再次检查是否仍为空位（避免并发填充）
+              if (!newGrid[position]?.artworkId) {
+                newGrid[position] = { artworkId, image };
+                hasChanges = true;
+              }
+            }
+          });
+
+          return hasChanges ? newGrid : current;
+        });
+      }
+    };
+
+    autoFillImages();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, hasArtworks, weekStartDate, artworks]);
 
   const selectedArtwork = useMemo(() => {
     if (!hasArtworks) {

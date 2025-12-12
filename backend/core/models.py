@@ -2298,7 +2298,7 @@ class VisualAnalysisResult(models.Model):
 class VisualAnalysisQuota(models.Model):
     """
     视觉分析使用额度：跟踪用户视觉分析的使用次数
-    - 新用户赠送10次额度（一次性，不重置）
+    - 新用户赠送5次额度（一次性，不重置）
     - 会员用户每天15次额度（每天0点刷新，上海时区）
     """
     user = models.OneToOneField(
@@ -2307,10 +2307,10 @@ class VisualAnalysisQuota(models.Model):
         related_name="visual_analysis_quota",
         help_text="用户",
     )
-    # 赠送额度（新用户一次性赠送10次，不重置）
+    # 赠送额度（新用户一次性赠送5次，不重置）
     free_quota = models.PositiveIntegerField(
-        default=10,
-        help_text="赠送的免费额度（新用户一次性10次）",
+        default=5,
+        help_text="赠送的免费额度（新用户一次性5次）",
     )
     # 会员每日额度（每天重置）
     monthly_quota = models.PositiveIntegerField(
@@ -2397,24 +2397,26 @@ class VisualAnalysisQuota(models.Model):
             if is_member:
                 return False, "今日视觉分析次数已用完（15次/天），请明天再试"
             else:
-                return False, "视觉分析次数已用完（赠送的10次已用完），加入EchoDraw会员可享受每天15次额度"
+                return False, "视觉分析次数已用完（赠送的5次已用完），加入EchoDraw会员可享受每天15次额度"
         
         return True, ""
     
     def use_quota(self, is_member: bool):
         """
-        使用一次额度（优先使用免费额度，免费额度用完后使用每日额度）
+        使用一次额度
+        - 如果是会员，优先使用每日额度，每日额度用完后使用免费额度
+        - 如果不是会员，只使用免费额度
         """
         # 如果是会员，检查并重置每日额度
         if is_member:
             self.check_and_reset_monthly_quota()
         
-        # 优先使用免费额度
-        if self.remaining_free_quota > 0:
-            self.used_free_quota += 1
-        # 免费额度用完后，使用每日额度（仅会员）
-        elif is_member and self.remaining_monthly_quota > 0:
+        # 如果是会员，优先使用每日额度
+        if is_member and self.remaining_monthly_quota > 0:
             self.used_monthly_quota += 1
+        # 每日额度用完后，或不是会员，使用免费额度
+        elif self.remaining_free_quota > 0:
+            self.used_free_quota += 1
         else:
             raise ValueError("没有可用额度")
         

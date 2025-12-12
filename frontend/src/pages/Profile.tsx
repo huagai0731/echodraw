@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 
 import Login from "@/pages/Login";
@@ -439,8 +439,17 @@ function Profile({
     let pollCount = 0;
     const maxPolls = 60; // 最多轮询60次（约5分钟）
     const pollInterval = 5000; // 每5秒轮询一次
+    
+    // 使用数组存储所有定时器 ID，确保都能被清理
+    const timeoutIds: ReturnType<typeof setTimeout>[] = [];
+    let cancelled = false;
 
     const checkOrderStatus = async () => {
+      // 如果已取消，直接返回
+      if (cancelled) {
+        return;
+      }
+
       try {
         const response = await api.get<{
           order_id: number;
@@ -451,6 +460,11 @@ function Profile({
           paid_at: string | null;
           created_at: string;
         }>(`/payments/orders/${pendingOrder!.order_id}/status/`);
+
+        // 再次检查是否已取消
+        if (cancelled) {
+          return;
+        }
 
         if (response.data.status === "paid") {
           // 支付成功，清除待处理订单
@@ -469,39 +483,61 @@ function Profile({
               // 即使同步失败，也继续刷新会员状态
             }
             
+            // 再次检查是否已取消
+            if (cancelled) {
+              setMembershipTierLoading(false);
+              return;
+            }
+            
             // 然后刷新会员状态
             const preferences = await fetchProfilePreferences();
-            if (preferences.isMember) {
-              setMembershipTier("premium");
-              setMembershipExpires(preferences.membershipExpires);
-            } else {
-              setMembershipTier("pending");
-              setMembershipExpires(null);
+            if (!cancelled) {
+              if (preferences.isMember) {
+                setMembershipTier("premium");
+                setMembershipExpires(preferences.membershipExpires);
+              } else {
+                setMembershipTier("pending");
+                setMembershipExpires(null);
+              }
             }
           } catch (e) {
-            console.error("[Echo] Failed to refresh membership status:", e);
+            if (!cancelled) {
+              console.error("[Echo] Failed to refresh membership status:", e);
+            }
           } finally {
-            setMembershipTierLoading(false);
+            if (!cancelled) {
+              setMembershipTierLoading(false);
+            }
           }
 
           // 显示成功消息并返回会员选项页面
-          alert("支付成功！您的会员已激活。");
-          setPendingTier(null);
-          setView("membership-options");
+          if (!cancelled) {
+            alert("支付成功！您的会员已激活。");
+            setPendingTier(null);
+            setView("membership-options");
+          }
           return;
         }
 
         // 如果还没支付，继续轮询
         pollCount++;
-        if (pollCount < maxPolls) {
-          setTimeout(checkOrderStatus, pollInterval);
+        if (pollCount < maxPolls && !cancelled) {
+          const timeoutId = setTimeout(checkOrderStatus, pollInterval);
+          timeoutIds.push(timeoutId);
         } else {
           // 轮询超时，清除待处理订单
-          window.localStorage.removeItem(PENDING_ORDER_KEY);
-          setCheckingPayment(false);
-          console.warn("[Echo] Order status polling timeout");
+          if (!cancelled) {
+            window.localStorage.removeItem(PENDING_ORDER_KEY);
+            setCheckingPayment(false);
+            console.warn("[Echo] Order status polling timeout");
+          }
         }
       } catch (error: any) {
+        // 如果已取消，直接返回
+        if (cancelled) {
+          return;
+        }
+        
         console.error("[Echo] Failed to check order status:", error);
         // 如果订单不存在或出错，清除待处理订单
         if (error?.response?.status === 404) {
@@ -510,21 +546,32 @@ function Profile({
         } else {
           // 其他错误，继续重试几次
           pollCount++;
-          if (pollCount < maxPolls) {
-            setTimeout(checkOrderStatus, pollInterval);
+          if (pollCount < maxPolls && !cancelled) {
+            const timeoutId = setTimeout(checkOrderStatus, pollInterval);
+            timeoutIds.push(timeoutId);
           } else {
-            window.localStorage.removeItem(PENDING_ORDER_KEY);
-            setCheckingPayment(false);
+            if (!cancelled) {
+              window.localStorage.removeItem(PENDING_ORDER_KEY);
+              setCheckingPayment(false);
+            }
           }
         }
       }
     };
 
     // 延迟1秒后开始第一次检查（给页面一些时间加载）
-    const timeoutId = setTimeout(checkOrderStatus, 1000);
+    const initialTimeoutId = setTimeout(checkOrderStatus, 1000);
+    timeoutIds.push(initialTimeoutId);
 
     return () => {
-      clearTimeout(timeoutId);
+      // 标记为已取消，停止所有后续操作
+      cancelled = true;
+      // 清理所有定时器
+      timeoutIds.forEach((id) => {
+        clearTimeout(id);
+      });
+      // 重置状态
+      setCheckingPayment(false);
     };
   }, [auth, checkingPayment]);
 
@@ -1355,6 +1402,12 @@ function ProfileDashboard({
   // 加载用户选择的"作品"
   const [featuredArtworks, setFeaturedArtworks] = useState<Artwork[]>([]);
 
+  // 使用 useRef 存储最新的 artworks，避免频繁重新执行和重新注册事件监听器
+  const artworksRef = useRef(artworks);
+  useEffect(() => {
+    artworksRef.current = artworks;
+  }, [artworks]);
+
   // 在用户登录后，从服务器加载展示作品列表
   useEffect(() => {
     if (!email) {
@@ -1368,7 +1421,8 @@ function ProfileDashboard({
       try {
         const featuredIds = await loadFeaturedArtworkIdsFromServer();
         if (!cancelled) {
-          const featured = artworks.filter((art) => featuredIds.includes(art.id));
+          // 使用 ref 获取最新的 artworks
+          const featured = artworksRef.current.filter((art) => featuredIds.includes(art.id));
           setFeaturedArtworks(featured);
         }
       } catch (error) {
@@ -1376,7 +1430,8 @@ function ProfileDashboard({
         // 如果服务器加载失败，从localStorage加载
         if (!cancelled) {
           const featuredIds = loadFeaturedArtworkIds();
-          const featured = artworks.filter((art) => featuredIds.includes(art.id));
+          // 使用 ref 获取最新的 artworks
+          const featured = artworksRef.current.filter((art) => featuredIds.includes(art.id));
           setFeaturedArtworks(featured);
         }
       }
@@ -1387,7 +1442,7 @@ function ProfileDashboard({
     return () => {
       cancelled = true;
     };
-  }, [email, artworks]);
+  }, [email]); // 移除 artworks 依赖，只在 email 变化时重新加载
 
   // 监听"作品"变化事件
   useEffect(() => {
@@ -1397,7 +1452,8 @@ function ProfileDashboard({
 
     const handleFeaturedChanged = () => {
       const featuredIds = loadFeaturedArtworkIds();
-      const featured = artworks.filter((art) => featuredIds.includes(art.id));
+      // 使用 ref 获取最新的 artworks，避免依赖 artworks
+      const featured = artworksRef.current.filter((art) => featuredIds.includes(art.id));
       setFeaturedArtworks(featured);
     };
 
@@ -1405,7 +1461,7 @@ function ProfileDashboard({
     return () => {
       window.removeEventListener("echodraw-featured-artworks-changed", handleFeaturedChanged);
     };
-  }, [artworks]);
+  }, []); // 移除 artworks 依赖，只在组件挂载时注册一次
 
   return (
     <div className="profile-page">

@@ -7,7 +7,6 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ("core", "0086_add_points_order_metadata"),
-        ("core", "0086_merge_20251207_1202"),
     ]
 
     operations = [

@@ -99,6 +99,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",  # WhiteNoise必须在SecurityMiddleware之后，其他中间件之前
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -239,6 +240,10 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
+
+# WhiteNoise 配置：用于在生产环境提供静态文件
+# 注意：使用 WhiteNoise 后，需要运行 python manage.py collectstatic 收集静态文件
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 # MEDIA_URL 和 MEDIA_ROOT 在启用TOS存储时会被覆盖
 # 如果使用TOS存储，MEDIA_ROOT不会被使用，所有文件都保存到TOS

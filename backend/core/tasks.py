@@ -78,6 +78,30 @@ def analyze_image_comprehensive_task(self, result_id: int, image_url: str, user_
             'comprehensive_analysis': result_obj.comprehensive_analysis,
         }
         
+        # 任务成功完成，消耗一次额度
+        # 注意：必须在任务成功完成后再消耗次数，确保失败时不消耗次数
+        # 如果消耗次数失败，任务应该标记为失败，避免成功但不扣次数的情况
+        from core.models import VisualAnalysisResult, VisualAnalysisQuota
+        from core.views import is_valid_member
+        
+        # 获取用户信息
+        user = User.objects.get(id=user_id)
+        profile = getattr(user, 'profile', None)
+        is_member = is_valid_member(profile)
+        
+        # 获取或创建额度记录
+        quota, created = VisualAnalysisQuota.objects.get_or_create(
+            user=user,
+            defaults={
+                'free_quota': 5,
+                'used_free_quota': 0,
+            }
+        )
+        
+        # 消耗一次额度（如果失败会抛出异常，任务会被标记为失败）
+        quota.use_quota(is_member)
+        logger.info(f"任务成功完成，已消耗一次额度: 任务ID={task_id}, 用户ID={user_id}, 是否会员={is_member}")
+        
         # 保存结果到任务对象
         if task_obj:
             try:
