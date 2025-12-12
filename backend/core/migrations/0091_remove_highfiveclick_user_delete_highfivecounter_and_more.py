@@ -68,7 +68,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        # 使用RunPython安全删除可能不存在的模型和字段
+        # 使用RunPython安全删除可能不存在的模型和字段（数据库操作）
         migrations.RunPython(
             safe_remove_highfive_models,
             safe_remove_highfive_models_reverse,
@@ -77,26 +77,9 @@ class Migration(migrations.Migration):
             safe_remove_kmeans_field,
             safe_remove_kmeans_field_reverse,
         ),
-        # 更新迁移状态（即使数据库操作已执行，也需要更新状态）
-        migrations.SeparateDatabaseAndState(
-            database_operations=[],
-            state_operations=[
-                migrations.RemoveField(
-                    model_name="highfiveclick",
-                    name="user",
-                ),
-                migrations.DeleteModel(
-                    name="HighFiveCounter",
-                ),
-                migrations.DeleteModel(
-                    name="HighFiveClick",
-                ),
-                migrations.RemoveField(
-                    model_name="visualanalysisresult",
-                    name="kmeans_segmentation_image_12",
-                ),
-            ],
-        ),
+        # 注意：我们不使用SeparateDatabaseAndState来更新迁移状态
+        # 因为如果模型在迁移状态中不存在，会导致KeyError
+        # 数据库操作已经完成，迁移状态会在后续操作中自动更新
         migrations.AddField(
             model_name="longtermgoal",
             name="goal_type",
