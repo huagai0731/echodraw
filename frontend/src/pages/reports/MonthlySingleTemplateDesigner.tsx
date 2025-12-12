@@ -235,6 +235,55 @@ function MonthlySingleTemplateDesigner({ open, artworks, onClose }: MonthlySingl
     };
   }, [onClose, open]);
 
+  // 计算占位符位置（使用动态计算的行数）- 必须在自动填充 useEffect 之前声明
+  const placeholderPositions = useMemo(() => {
+    const year = monthDate.getFullYear();
+    const month = monthDate.getMonth();
+    
+    // 获取月份第一天
+    const firstDay = new Date(year, month, 1);
+    // 获取月份最后一天
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    
+    // 获取第一天是星期几（0=周日，1=周一，...，6=周六）
+    const firstDayWeekday = firstDay.getDay();
+    // 转换为周一为0的格式（0=周一，1=周二，...，6=周日）
+    const firstDayMondayIndex = firstDayWeekday === 0 ? 6 : firstDayWeekday - 1;
+    
+    // 获取最后一天是星期几
+    const lastDayWeekday = lastDay.getDay();
+    // 转换为周一为0的格式
+    const lastDayMondayIndex = lastDayWeekday === 0 ? 6 : lastDayWeekday - 1;
+    
+    // 计算开头占位符数量（从周一到第一天之间的天数）
+    const leadingPlaceholders = firstDayMondayIndex;
+    
+    // 计算结尾占位符数量（从最后一天到周日之间的天数）
+    const trailingPlaceholders = 6 - lastDayMondayIndex;
+    
+    const positions: number[] = [];
+    
+    // 添加开头占位符（从0开始）
+    for (let i = 0; i < leadingPlaceholders; i++) {
+      positions.push(i);
+    }
+    
+    // 添加结尾占位符
+    if (trailingPlaceholders > 0) {
+      // 计算总天数（开头占位符 + 月份天数）
+      const totalDays = leadingPlaceholders + daysInMonth;
+      // 计算结尾占位符的起始位置
+      const trailingStart = totalDays;
+      // 添加结尾占位符
+      for (let i = 0; i < trailingPlaceholders; i++) {
+        positions.push(trailingStart + i);
+      }
+    }
+    
+    return positions;
+  }, [monthDate, gridRowsAndCells]);
+
   // 自动填充功能：打开模板或切换日期时，自动填充空位
   useEffect(() => {
     if (!open || !hasArtworks) {
@@ -441,7 +490,7 @@ function MonthlySingleTemplateDesigner({ open, artworks, onClose }: MonthlySingl
       });
   }, [open, selectedArtwork]);
 
-  // 计算月份信息和占位符位置
+  // 计算月份信息
   const monthInfo = useMemo(() => {
     const year = monthDate.getFullYear();
     const month = monthDate.getMonth() + 1;
@@ -452,63 +501,6 @@ function MonthlySingleTemplateDesigner({ open, artworks, onClose }: MonthlySingl
       month: monthName,
       year: yearStr,
     };
-  }, [monthDate]);
-
-  // 计算占位符位置（使用动态计算的行数）
-  const placeholderPositions = useMemo(() => {
-    const year = monthDate.getFullYear();
-    const month = monthDate.getMonth();
-    
-    // 获取月份第一天
-    const firstDay = new Date(year, month, 1);
-    // 获取月份最后一天
-    const lastDay = new Date(year, month + 1, 0);
-    const daysInMonth = lastDay.getDate();
-    
-    // 获取第一天是星期几（0=周日，1=周一，...，6=周六）
-    const firstDayWeekday = firstDay.getDay();
-    // 转换为周一为0的格式（0=周一，1=周二，...，6=周日）
-    const firstDayMondayIndex = firstDayWeekday === 0 ? 6 : firstDayWeekday - 1;
-    
-    // 获取最后一天是星期几
-    const lastDayWeekday = lastDay.getDay();
-    // 转换为周一为0的格式
-    const lastDayMondayIndex = lastDayWeekday === 0 ? 6 : lastDayWeekday - 1;
-    
-    // 计算开头占位符数量（从周一到第一天之间的天数）
-    const leadingPlaceholders = firstDayMondayIndex;
-    
-    // 计算结尾占位符数量（从最后一天到周日之间的天数）
-    const trailingPlaceholders = 6 - lastDayMondayIndex;
-    
-    const positions: number[] = [];
-    
-    // 添加开头占位符（从0开始）
-    for (let i = 0; i < leadingPlaceholders; i++) {
-      positions.push(i);
-    }
-    
-    // 添加结尾占位符
-    if (trailingPlaceholders > 0) {
-      // 计算总天数（开头占位符 + 月份天数）
-      const totalDays = leadingPlaceholders + daysInMonth;
-      // 计算需要多少行（每行7列）
-      const totalRows = Math.ceil(totalDays / GRID_COLS);
-      // 计算总格子数
-      const totalCells = totalRows * GRID_COLS;
-      // 结尾占位符从总格子数减去结尾占位符数量开始
-      const trailingStart = totalCells - trailingPlaceholders;
-      // 确保trailingStart不为负数
-      const actualTrailingStart = Math.max(0, trailingStart);
-      const actualTrailingPlaceholders = Math.min(trailingPlaceholders, totalCells - actualTrailingStart);
-      for (let i = actualTrailingStart; i < actualTrailingStart + actualTrailingPlaceholders; i++) {
-        if (i < totalCells) {
-          positions.push(i);
-        }
-      }
-    }
-    
-    return positions;
   }, [monthDate]);
 
   const templateData = useMemo<TemplateViewModel | null>(() => {

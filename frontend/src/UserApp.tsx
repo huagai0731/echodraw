@@ -470,13 +470,6 @@ function UserApp() {
     };
   }, []);
 
-  // 监听登录态变化：当 token 写入/清除时，刷新用户数据，保证图片 URL（含 token）与权限数据最新
-  // 使用 ref 存储最新的状态，避免频繁重新注册事件监听器
-  const isForcedLogoutRef = useRef(isForcedLogout);
-  useEffect(() => {
-    isForcedLogoutRef.current = isForcedLogout;
-  }, [isForcedLogout]);
-
   useEffect(() => {
     if (typeof window === "undefined") {
       return;
