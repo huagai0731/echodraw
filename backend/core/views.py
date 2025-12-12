@@ -624,12 +624,14 @@ def register(request):
     # 同时限制查询时间范围（只查询最近15分钟），提升性能
     with transaction.atomic():
         now = timezone.now()
+        # 查询验证码时，先不过滤is_used，使用select_for_update锁定后再检查状态
+        # 这样可以避免在查询和检查之间的时间窗口内，验证码状态被其他请求改变
+        # 移除is_used=False过滤，在锁定后检查状态，确保准确性
         verification = (
             EmailVerification.objects.filter(
                 email__iexact=email,
                 purpose=EmailVerification.PURPOSE_REGISTER,
                 code=code,
-                is_used=False,
                 created_at__gte=now - timedelta(minutes=15),  # 性能优化：只查询最近15分钟
             )
             .select_for_update()  # 锁定记录，防止并发使用同一验证码
@@ -643,16 +645,17 @@ def register(request):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if verification.is_expired:
-            return Response(
-                {"detail": "验证码已过期，请重新获取"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # 双重检查：防止在查询和标记之间被其他请求使用
+        # 在锁定后检查验证码状态，确保准确性
+        # 注意：由于使用了select_for_update，此时验证码的状态是准确的
         if verification.is_used:
             return Response(
                 {"detail": "验证码已被使用"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if verification.is_expired:
+            return Response(
+                {"detail": "验证码已过期，请重新获取"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
