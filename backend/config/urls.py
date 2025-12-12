@@ -21,6 +21,11 @@ from django.contrib import admin
 from django.http import HttpResponse
 from django.urls import include, path
 
+# 自定义 Admin 站点配置
+admin.site.site_header = "Echo Admin"
+admin.site.site_title = "Echo Admin"
+admin.site.index_title = "管理后台"
+
 def wechat_verify_file(request, verify_code):
     """返回微信验证文件内容"""
     # verify_code 是从 URL 中提取的验证码部分
