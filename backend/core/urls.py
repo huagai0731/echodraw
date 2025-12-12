@@ -192,10 +192,11 @@ urlpatterns = [
         views.short_term_task_presets,
         name="goals-short-term-presets",
     ),
+    # 更具体的路由需要放在前面
     path(
-        "goals/long-term/",
+        "goals/long-term/active/",
         views.LongTermGoalView.as_view(),
-        name="goals-long-term",
+        name="goals-long-term-active",
     ),
     path(
         "goals/long-term/completed/",
@@ -211,6 +212,11 @@ urlpatterns = [
         "goals/long-term/<int:goal_id>/round/",
         views.update_three_months_round,
         name="goals-long-term-round",
+    ),
+    path(
+        "goals/long-term/",
+        views.LongTermGoalView.as_view(),
+        name="goals-long-term",
     ),
     path(
         "goals/long-term-copy/",
