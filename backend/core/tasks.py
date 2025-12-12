@@ -83,24 +83,31 @@ def analyze_image_comprehensive_task(self, result_id: int, image_url: str, user_
         # 如果消耗次数失败，任务应该标记为失败，避免成功但不扣次数的情况
         from core.models import VisualAnalysisResult, VisualAnalysisQuota
         from core.views import is_valid_member
+        from django.db import transaction
         
         # 获取用户信息
         user = User.objects.get(id=user_id)
         profile = getattr(user, 'profile', None)
         is_member = is_valid_member(profile)
         
-        # 获取或创建额度记录
-        quota, created = VisualAnalysisQuota.objects.get_or_create(
-            user=user,
-            defaults={
-                'free_quota': 5,
-                'used_free_quota': 0,
-            }
-        )
-        
-        # 消耗一次额度（如果失败会抛出异常，任务会被标记为失败）
-        quota.use_quota(is_member)
-        logger.info(f"任务成功完成，已消耗一次额度: 任务ID={task_id}, 用户ID={user_id}, 是否会员={is_member}")
+        # 获取或创建额度记录（使用事务确保原子性）
+        try:
+            with transaction.atomic():
+                quota, created = VisualAnalysisQuota.objects.select_for_update().get_or_create(
+                    user=user,
+                    defaults={
+                        'free_quota': 5,
+                        'used_free_quota': 0,
+                    }
+                )
+                
+                # 消耗一次额度（如果失败会抛出异常，任务会被标记为失败）
+                quota.use_quota(is_member)
+                logger.info(f"任务成功完成，已消耗一次额度: 任务ID={task_id}, 用户ID={user_id}, 是否会员={is_member}, 剩余免费额度={quota.remaining_free_quota}, 剩余每日额度={quota.remaining_monthly_quota}")
+        except Exception as quota_error:
+            # 次数扣减失败，记录错误并抛出异常，让任务标记为失败
+            logger.error(f"消耗次数失败: 任务ID={task_id}, 用户ID={user_id}, 错误: {str(quota_error)}", exc_info=True)
+            raise Exception(f"分析完成，但消耗次数失败: {str(quota_error)}") from quota_error
         
         # 保存结果到任务对象
         if task_obj:

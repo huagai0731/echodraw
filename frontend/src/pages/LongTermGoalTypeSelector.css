@@ -1,0 +1,209 @@
+.long-term-type-selector {
+  position: relative;
+  min-height: 100svh;
+  background: #221b1b;
+  color: #efeae7;
+  font-family: "Manrope", "Segoe UI", system-ui, -apple-system, sans-serif;
+  overflow: hidden;
+}
+
+.long-term-type-selector__background {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.long-term-type-selector__glow {
+  position: absolute;
+  border-radius: 999px;
+  pointer-events: none;
+  filter: blur(180px);
+  opacity: 0.7;
+}
+
+.long-term-type-selector__glow--mint {
+  top: -20%;
+  left: -30%;
+  width: 520px;
+  height: 520px;
+  background: rgba(152, 219, 198, 0.18);
+}
+
+.long-term-type-selector__glow--brown {
+  bottom: -30%;
+  right: -15%;
+  width: 480px;
+  height: 480px;
+  background: rgba(74, 63, 58, 0.28);
+}
+
+.long-term-type-selector__shell {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100svh;
+  padding: 1.25rem 1.25rem 6rem;
+  gap: 1.5rem;
+}
+
+.long-term-type-selector__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.75rem;
+}
+
+.long-term-type-selector__icon-button {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(239, 234, 231, 0.12);
+  background: rgba(74, 63, 58, 0.25);
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.long-term-type-selector__icon-button:hover {
+  background: rgba(74, 63, 58, 0.4);
+  border-color: rgba(152, 219, 198, 0.3);
+}
+
+.long-term-type-selector__title {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 400;
+  text-align: center;
+  flex: 1;
+  letter-spacing: 0.1em;
+}
+
+.long-term-type-selector__header-placeholder {
+  width: 3rem;
+  height: 3rem;
+}
+
+.long-term-type-selector__main {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  flex: 1;
+}
+
+.long-term-type-selector__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+  padding: 0.5rem 0;
+}
+
+.long-term-type-selector__card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 2rem 1.5rem;
+  border-radius: 1.25rem;
+  border: 1px solid rgba(239, 234, 231, 0.12);
+  background: rgba(74, 63, 58, 0.28);
+  backdrop-filter: blur(14px);
+  color: inherit;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: center;
+  min-height: 200px;
+}
+
+.long-term-type-selector__card:hover:not(:disabled) {
+  transform: translateY(-4px);
+  border-color: rgba(152, 219, 198, 0.4);
+  background: rgba(74, 63, 58, 0.4);
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.25);
+}
+
+.long-term-type-selector__card:active:not(:disabled) {
+  transform: translateY(-2px);
+}
+
+.long-term-type-selector__card--disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  position: relative;
+}
+
+.long-term-type-selector__card--disabled::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+}
+
+.long-term-type-selector__card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 4rem;
+  height: 4rem;
+  border-radius: 1rem;
+  background: rgba(152, 219, 198, 0.15);
+  color: #98dbc6;
+  font-size: 2rem;
+  transition: all 0.3s ease;
+}
+
+.long-term-type-selector__card:hover:not(:disabled) .long-term-type-selector__card-icon {
+  background: rgba(152, 219, 198, 0.25);
+  transform: scale(1.1);
+}
+
+.long-term-type-selector__card-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  color: #efeae7;
+}
+
+.long-term-type-selector__card-description {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 300;
+  line-height: 1.5;
+  color: rgba(239, 234, 231, 0.7);
+  letter-spacing: 0.02em;
+}
+
+.long-term-type-selector__card-badge {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 0.5rem;
+  background: rgba(152, 219, 198, 0.2);
+  color: #98dbc6;
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  border: 1px solid rgba(152, 219, 198, 0.3);
+}
+
+@media (max-width: 720px) {
+  .long-term-type-selector__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .long-term-type-selector__card {
+    min-height: 180px;
+    padding: 1.5rem 1.25rem;
+  }
+}
+

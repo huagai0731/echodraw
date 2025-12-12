@@ -2455,30 +2455,58 @@ class LongTermGoalView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        goal = (
-            LongTermGoal.objects.filter(
-                user=request.user,
-                is_archived=False,
-                target_hours__isnull=False,
-                checkpoint_count__isnull=False,
+        # 支持获取单个目标（向后兼容）或所有进行中的目标
+        goal_type = request.query_params.get("type", None)
+        
+        if goal_type:
+            # 获取指定类型的单个目标
+            goal = (
+                LongTermGoal.objects.filter(
+                    user=request.user,
+                    is_archived=False,
+                    goal_type=goal_type,
+                )
+                .order_by("-created_at", "-id")
+                .first()
             )
-            .order_by("-created_at", "-id")
-            .first()
-        )
-        if goal is None:
-            # 返回 200 状态码和 null，而不是 404
-            # 这样更符合 RESTful 规范，避免控制台显示错误
-            return Response(None, status=status.HTTP_200_OK)
-
-        uploads = self._fetch_uploads(request.user, goal.started_at)
-        serializer = LongTermGoalSerializer(
-            goal,
-            context={
-                "request": request,
-                "uploads": uploads,
-            },
-        )
-        return Response(serializer.data)
+            if goal is None:
+                return Response(None, status=status.HTTP_200_OK)
+            
+            uploads = self._fetch_uploads(request.user, goal.started_at)
+            serializer = LongTermGoalSerializer(
+                goal,
+                context={
+                    "request": request,
+                    "uploads": uploads,
+                },
+            )
+            return Response(serializer.data)
+        else:
+            # 获取所有进行中的目标
+            goals = (
+                LongTermGoal.objects.filter(
+                    user=request.user,
+                    is_archived=False,
+                )
+                .order_by("-created_at", "-id")
+            )
+            
+            if not goals.exists():
+                return Response([], status=status.HTTP_200_OK)
+            
+            result = []
+            for goal in goals:
+                uploads = self._fetch_uploads(request.user, goal.started_at)
+                serializer = LongTermGoalSerializer(
+                    goal,
+                    context={
+                        "request": request,
+                        "uploads": uploads,
+                    },
+                )
+                result.append(serializer.data)
+            
+            return Response(result, status=status.HTTP_200_OK)
 
     def post(self, request):
         payload_serializer = LongTermGoalSetupSerializer(data=request.data)
@@ -2499,38 +2527,58 @@ class LongTermGoalView(APIView):
                 started_at_shanghai = timezone.make_aware(started_at_shanghai)
 
         should_reset = data.get("reset_progress", False)
+        goal_type = data.get("goal_type", LongTermGoal.GOAL_TYPE_10000_HOURS)
 
         # 只针对未归档的当前目标进行创建 / 更新，历史归档记录保留
+        # 注意：现在支持多个目标，需要根据goal_type查找
         try:
-            goal = LongTermGoal.objects.get(user=request.user)
+            goal = LongTermGoal.objects.get(
+                user=request.user,
+                is_archived=False,
+                goal_type=goal_type
+            )
             created = False
         except LongTermGoal.DoesNotExist:
             # 完全不存在，创建新记录
             goal = LongTermGoal.objects.create(
                 user=request.user,
+                goal_type=goal_type,
                 title=data["title"],
                 description=data.get("description", ""),
-                target_hours=data["target_hours"],
-                checkpoint_count=data["checkpoint_count"],
+                target_hours=data.get("target_hours"),
+                checkpoint_count=data.get("checkpoint_count"),
+                target_rounds=data.get("target_rounds"),
                 started_at=started_at_shanghai,
                 is_archived=False,
             )
             created = True
 
         if not created:
-            # 检查目标是否不完整（target_hours 或 checkpoint_count 为 NULL 或 0）
-            is_incomplete = (
-                goal.target_hours is None 
-                or goal.checkpoint_count is None
-                or goal.target_hours == 0 
-                or goal.checkpoint_count == 0
-            )
+            # 检查目标是否不完整
+            if goal_type == LongTermGoal.GOAL_TYPE_10000_HOURS:
+                is_incomplete = (
+                    goal.target_hours is None 
+                    or goal.checkpoint_count is None
+                    or goal.target_hours == 0 
+                    or goal.checkpoint_count == 0
+                )
+            elif goal_type == LongTermGoal.GOAL_TYPE_3_MONTHS:
+                is_incomplete = (
+                    goal.target_rounds is None
+                    or goal.target_rounds < 2
+                )
+            else:
+                is_incomplete = False
             
             # 更新所有字段
             goal.title = data["title"]
             goal.description = data.get("description", "")
-            goal.target_hours = data["target_hours"]
-            goal.checkpoint_count = data["checkpoint_count"]
+            goal.goal_type = goal_type
+            if goal_type == LongTermGoal.GOAL_TYPE_10000_HOURS:
+                goal.target_hours = data.get("target_hours")
+                goal.checkpoint_count = data.get("checkpoint_count")
+            elif goal_type == LongTermGoal.GOAL_TYPE_3_MONTHS:
+                goal.target_rounds = data.get("target_rounds")
             goal.is_archived = False
 
             # 如果不完整或者是重置请求，更新 started_at
@@ -2544,8 +2592,7 @@ class LongTermGoalView(APIView):
                 # 记录错误以便调试
                 logger.error(
                     f"保存长期目标失败: user_id={request.user.id}, "
-                    f"target_hours={data['target_hours']}, "
-                    f"checkpoint_count={data['checkpoint_count']}, "
+                    f"goal_type={goal_type}, "
                     f"error={str(e)}",
                     exc_info=True
                 )
@@ -2555,6 +2602,30 @@ class LongTermGoalView(APIView):
         if goal.started_at is None:
             goal.started_at = started_at_shanghai
             goal.save(update_fields=["started_at"])
+
+        # 如果是3个月学习法且是新创建的，初始化轮次数据
+        if goal_type == LongTermGoal.GOAL_TYPE_3_MONTHS and created:
+            target_rounds = data.get("target_rounds", 0)
+            if target_rounds >= 2:
+                rounds = []
+                for i in range(1, target_rounds + 1):
+                    round_data = {
+                        "roundIndex": i,
+                        "status": "in-progress" if i == 1 else "not-started",
+                        "planImage": None,
+                        "planText": None,
+                        "doImageId": None,
+                        "checkText": None,
+                        "actionText": None,
+                        "completedAt": None,
+                    }
+                    rounds.append(round_data)
+                
+                # 更新metadata
+                metadata = goal.metadata or {}
+                metadata["rounds"] = rounds
+                goal.metadata = metadata
+                goal.save(update_fields=["metadata"])
 
         try:
             uploads = self._fetch_uploads(request.user, goal.started_at)
@@ -2757,6 +2828,176 @@ def update_checkpoint(request):
         goal.metadata[checkpoint_key]["completion_note"] = completion_note
     
     # 只更新metadata字段
+    goal.save(update_fields=["metadata", "updated_at"])
+    
+    # 重新获取并序列化goal
+    uploads = LongTermGoalView._fetch_uploads(request.user, goal.started_at)
+    serializer = LongTermGoalSerializer(
+        goal,
+        context={
+            "request": request,
+            "uploads": uploads,
+        },
+    )
+    return Response(serializer.data)
+
+
+@api_view(["PATCH"])
+@permission_classes([IsAuthenticated])
+def update_three_months_round(request, goal_id):
+    """更新3个月学习法的轮次数据"""
+    try:
+        goal = LongTermGoal.objects.get(id=goal_id, user=request.user, is_archived=False)
+    except LongTermGoal.DoesNotExist:
+        return Response(
+            {"detail": "长期目标不存在"},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    
+    # 验证目标类型
+    if goal.goal_type != LongTermGoal.GOAL_TYPE_3_MONTHS:
+        return Response(
+            {"detail": "该目标不是3个月学习法类型"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    
+    round_index = request.data.get("round_index")
+    if round_index is None:
+        return Response(
+            {"detail": "round_index是必需的"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    
+    # 确保metadata存在
+    if not hasattr(goal, "metadata") or goal.metadata is None:
+        goal.metadata = {}
+    elif not isinstance(goal.metadata, dict):
+        goal.metadata = {}
+    
+    # 获取rounds数组
+    rounds = goal.metadata.get("rounds", [])
+    if not isinstance(rounds, list):
+        rounds = []
+    
+    # 查找对应的轮次
+    round_data = None
+    round_idx = None
+    for idx, r in enumerate(rounds):
+        if isinstance(r, dict) and r.get("roundIndex") == round_index:
+            round_data = r
+            round_idx = idx
+            break
+    
+    if round_data is None:
+        return Response(
+            {"detail": f"轮次 {round_index} 不存在"},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    
+    # 更新轮次数据
+    if "plan_image" in request.data:
+        round_data["planImage"] = request.data["plan_image"]
+    if "plan_text" in request.data:
+        round_data["planText"] = request.data["plan_text"]
+    if "do_image_id" in request.data:
+        do_image_id = request.data["do_image_id"]
+        # 如果提供了do_image_id，验证该upload是否存在且在3个月时间范围内
+        if do_image_id is not None:
+            try:
+                upload = UserUpload.objects.get(id=do_image_id, user=request.user)
+                # 验证upload是否在3个月时间范围内
+                if goal.started_at:
+                    if timezone.is_naive(goal.started_at):
+                        started_at = timezone.make_aware(goal.started_at)
+                    else:
+                        started_at = goal.started_at
+                    
+                    # 计算结束时间（3个月后）
+                    if SHANGHAI_TZ is not None:
+                        started_at_shanghai = started_at.astimezone(SHANGHAI_TZ)
+                        from datetime import timedelta
+                        end_at_shanghai = started_at_shanghai + timedelta(days=90)
+                        if settings.USE_TZ:
+                            end_at = end_at_shanghai.astimezone(dt_timezone.utc)
+                        else:
+                            end_at = end_at_shanghai
+                    else:
+                        from datetime import timedelta
+                        end_at = started_at + timedelta(days=90)
+                    
+                    if upload.uploaded_at < started_at or upload.uploaded_at > end_at:
+                        return Response(
+                            {"detail": "选择的图片必须在3个月学习法的时间范围内"},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+            except UserUpload.DoesNotExist:
+                return Response(
+                    {"detail": "指定的图片不存在"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+        round_data["doImageId"] = do_image_id
+    if "check_text" in request.data:
+        check_text = request.data["check_text"]
+        # 限制最多1000字
+        if check_text and len(check_text) > 1000:
+            return Response(
+                {"detail": "CHECK文字不能超过1000字"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        round_data["checkText"] = check_text
+    if "action_text" in request.data:
+        action_text = request.data["action_text"]
+        # 限制最多1000字
+        if action_text and len(action_text) > 1000:
+            return Response(
+                {"detail": "ACTION文字不能超过1000字"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        round_data["actionText"] = action_text
+    
+    # 处理完成本轮逻辑
+    complete_round = request.data.get("complete_round", False)
+    if complete_round:
+        # 验证必填字段
+        if not round_data.get("planImage"):
+            return Response(
+                {"detail": "完成本轮需要填写PLAN图片"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not round_data.get("doImageId"):
+            return Response(
+                {"detail": "完成本轮需要选择DO图片"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not round_data.get("checkText"):
+            return Response(
+                {"detail": "完成本轮需要填写CHECK文字"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not round_data.get("actionText"):
+            return Response(
+                {"detail": "完成本轮需要填写ACTION文字"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        # 标记当前轮为已完成
+        round_data["status"] = "completed"
+        round_data["completedAt"] = timezone.now().isoformat()
+        
+        # 查找下一轮并设置为进行中
+        next_round_index = round_index + 1
+        for idx, r in enumerate(rounds):
+            if isinstance(r, dict) and r.get("roundIndex") == next_round_index:
+                if r.get("status") == "not-started":
+                    r["status"] = "in-progress"
+                    rounds[idx] = r
+                break
+    
+    # 更新rounds数组
+    rounds[round_idx] = round_data
+    goal.metadata["rounds"] = rounds
+    
+    # 保存
     goal.save(update_fields=["metadata", "updated_at"])
     
     # 重新获取并序列化goal

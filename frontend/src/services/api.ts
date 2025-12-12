@@ -603,15 +603,29 @@ export type LongTermGoalCheckpoint = {
 
 export type LongTermGoal = {
   id: number;
+  goalType?: "10000-hours" | "3-months" | "yearly";
   title: string;
   description: string;
   targetHours: number;
   checkpointCount: number;
+  targetRounds?: number; // 3个月学习法的目标轮数
   startedAt: string;
   createdAt: string;
   updatedAt: string;
   progress: LongTermGoalProgress;
   checkpoints: LongTermGoalCheckpoint[];
+  rounds?: ThreeMonthsRound[]; // 3个月学习法的轮次数据
+};
+
+export type ThreeMonthsRound = {
+  roundIndex: number;
+  status: "not-started" | "in-progress" | "completed";
+  planImage?: string | null;
+  planText?: string | null;
+  doImageId?: number | null;
+  checkText?: string | null;
+  actionText?: string | null;
+  completedAt?: string | null;
 };
 
 type ShortTermGoalTaskResponse = {
@@ -820,29 +834,56 @@ export async function deleteUserTaskPreset(id: number) {
 
 type LongTermGoalResponse = {
   id: number;
+  goal_type?: "10000-hours" | "3-months" | "yearly";
   title: string;
   description: string;
   target_hours: number;
   checkpoint_count: number;
+  target_rounds?: number;
   started_at: string;
   created_at: string;
   updated_at: string;
   progress: LongTermGoalProgress;
   checkpoints: LongTermGoalCheckpoint[];
+  rounds?: Array<{
+    round_index: number;
+    status: "not-started" | "in-progress" | "completed";
+    plan_image?: string | null;
+    plan_text?: string | null;
+    do_image_id?: number | null;
+    check_text?: string | null;
+    action_text?: string | null;
+    completed_at?: string | null;
+  }>;
 };
 
 function mapLongTermGoal(goal: LongTermGoalResponse): LongTermGoal {
+  // 映射rounds数据
+  const rounds = goal.rounds?.map((r) => ({
+    roundIndex: r.round_index,
+    status: r.status,
+    planImage: r.plan_image ?? null,
+    planText: r.plan_text ?? null,
+    doImageId: r.do_image_id ?? null,
+    checkText: r.check_text ?? null,
+    actionText: r.action_text ?? null,
+    completedAt: r.completed_at ?? null,
+  }));
+
   return {
     id: goal.id,
+    goalType: goal.goal_type ?? "10000-hours",
     title: goal.title,
     description: goal.description,
     targetHours: goal.target_hours ?? 0,
     checkpointCount: goal.checkpoint_count ?? 0,
+    targetRounds: goal.target_rounds,
     startedAt: goal.started_at,
     createdAt: goal.created_at,
     updatedAt: goal.updated_at,
     progress: goal.progress,
     checkpoints: goal.checkpoints,
+    rounds,
   };
 }
 
@@ -867,29 +908,46 @@ export async function fetchLongTermGoal(): Promise<LongTermGoal | null> {
   }
 }
 
+export async function fetchActiveLongTermGoals(): Promise<LongTermGoal[]> {
+  const response = await api.get<LongTermGoalResponse[]>("/goals/long-term/active/");
+  return response.data.map(mapLongTermGoal);
+}
+
 export async function fetchCompletedLongTermGoals(): Promise<LongTermGoal[]> {
   const response = await api.get<LongTermGoalResponse[]>("/goals/long-term/completed/");
   return response.data.map(mapLongTermGoal);
 }
 
 export type UpsertLongTermGoalInput = {
+  goalType?: "10000-hours" | "3-months" | "yearly";
   title?: string;
   description?: string;
-  targetHours: number;
-  checkpointCount: number;
+  targetHours?: number;
+  checkpointCount?: number;
+  targetRounds?: number; // 3个月学习法的目标轮数
   resetProgress?: boolean;
 };
 
 export async function upsertLongTermGoal(
   input: UpsertLongTermGoalInput,
 ): Promise<LongTermGoal> {
-  const payload = {
+  const payload: Record<string, unknown> = {
     title: input.title?.trim(),
     description: input.description?.trim(),
-    target_hours: input.targetHours,
-    checkpoint_count: input.checkpointCount,
     reset_progress: input.resetProgress ?? false,
   };
+  if (input.goalType) {
+    payload.goal_type = input.goalType;
+  }
+  if (input.targetHours !== undefined) {
+    payload.target_hours = input.targetHours;
+  }
+  if (input.checkpointCount !== undefined) {
+    payload.checkpoint_count = input.checkpointCount;
+  }
+  if (input.targetRounds !== undefined) {
+    payload.target_rounds = input.targetRounds;
+  }
   const response = await api.post<LongTermGoalResponse>("/goals/long-term/", payload);
   return mapLongTermGoal(response.data);
 }
@@ -917,6 +975,48 @@ export async function updateCheckpoint(
     payload.completion_note = input.completionNote;
   }
   const response = await api.patch<LongTermGoalResponse>("/goals/long-term/checkpoint/", payload);
+  return mapLongTermGoal(response.data);
+}
+
+export type UpdateThreeMonthsRoundInput = {
+  goalId: number;
+  roundIndex: number;
+  planImage?: string | null;
+  planText?: string | null;
+  doImageId?: number | null;
+  checkText?: string | null;
+  actionText?: string | null;
+  completeRound?: boolean; // 是否完成本轮
+};
+
+export async function updateThreeMonthsRound(
+  input: UpdateThreeMonthsRoundInput,
+): Promise<LongTermGoal> {
+  const payload: Record<string, unknown> = {
+    round_index: input.roundIndex,
+  };
+  if (input.planImage !== undefined) {
+    payload.plan_image = input.planImage;
+  }
+  if (input.planText !== undefined) {
+    payload.plan_text = input.planText;
+  }
+  if (input.doImageId !== undefined) {
+    payload.do_image_id = input.doImageId;
+  }
+  if (input.checkText !== undefined) {
+    payload.check_text = input.checkText;
+  }
+  if (input.actionText !== undefined) {
+    payload.action_text = input.actionText;
+  }
+  if (input.completeRound !== undefined) {
+    payload.complete_round = input.completeRound;
+  }
+  const response = await api.patch<LongTermGoalResponse>(
+    `/goals/long-term/${input.goalId}/round/`,
+    payload
+  );
   return mapLongTermGoal(response.data);
 }
 

@@ -4,6 +4,10 @@ import MaterialIcon from "@/components/MaterialIcon";
 import NewChallengeWizard from "@/pages/NewChallengeWizard";
 import LongTermGoalSetup from "@/pages/LongTermGoalSetup";
 import LongTermGoalDetails from "@/pages/LongTermGoalDetails";
+import LongTermGoalTypeSelector from "@/pages/LongTermGoalTypeSelector";
+import ThreeMonthsIntro from "@/pages/ThreeMonthsIntro";
+import ThreeMonthsRoundSetup from "@/pages/ThreeMonthsRoundSetup";
+import ThreeMonthsDetails from "@/pages/ThreeMonthsDetails";
 import ShortTermGoalDetails from "@/pages/ShortTermGoalDetails";
 import ShortTermGoalSavedDetails from "@/pages/ShortTermGoalSavedDetails";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -12,11 +16,13 @@ import {
   AUTH_CHANGED_EVENT,
   fetchGoalsCalendar,
   fetchLongTermGoal,
+  fetchActiveLongTermGoals,
   fetchCompletedLongTermGoals,
   hasAuthToken,
   updateCheckpoint,
   deleteLongTermGoal,
   fetchShortTermGoalTaskCompletions,
+  upsertLongTermGoal,
   type GoalsCalendarDay,
   type LongTermGoal,
   type LongTermGoalCheckpoint,
@@ -500,10 +506,18 @@ function Goals() {
   const [editingGoal, setEditingGoal] = useState<ShortTermGoal | null>(null);
   const [showLongTermSetup, setShowLongTermSetup] = useState(false);
   const [showLongTermMetaEdit, setShowLongTermMetaEdit] = useState(false);
+  const [showLongTermTypeSelector, setShowLongTermTypeSelector] = useState(false);
+  const [showThreeMonthsIntro, setShowThreeMonthsIntro] = useState(false);
+  const [showThreeMonthsRoundSetup, setShowThreeMonthsRoundSetup] = useState(false);
+  const [showThreeMonthsConfirm, setShowThreeMonthsConfirm] = useState(false);
+  const [pendingRounds, setPendingRounds] = useState<number | null>(null);
+  const [selectedGoalType, setSelectedGoalType] = useState<"10000-hours" | "3-months" | "yearly" | null>(null);
   // 初始化长期目标：先从缓存加载，避免闪烁
   const [longTermGoal, setLongTermGoal] = useState<LongTermGoal | null>(() => {
     return loadCachedLongTermGoal();
   });
+  // 支持多个长期目标
+  const [activeLongTermGoals, setActiveLongTermGoals] = useState<LongTermGoal[]>([]);
   const [longTermLoading, setLongTermLoading] = useState(false);
   const [longTermError, setLongTermError] = useState<string | null>(null);
   const [longTermRetryable, setLongTermRetryable] = useState(true);
@@ -606,6 +620,7 @@ function Goals() {
   }, []);
 
   const hasLongTermGoal = Boolean(longTermGoal);
+  const hasActiveLongTermGoals = activeLongTermGoals.length > 0;
 
   // 获取上海时区的当前日期用于统计
   const todayInShanghai = useMemo(() => {
@@ -633,6 +648,7 @@ function Goals() {
   const reloadLongTermGoal = useCallback(async () => {
     if (!hasAuthToken()) {
       setLongTermGoal(null);
+      setActiveLongTermGoals([]);
       setLongTermError("登录后可同步长期目标。");
       setLongTermRetryable(false);
       return;
@@ -640,19 +656,28 @@ function Goals() {
 
     setLongTermLoading(true);
     try {
-      const goal = await fetchLongTermGoal();
-      setLongTermGoal(goal);
+      // 获取活跃的长期目标列表
+      const goals = await fetchActiveLongTermGoals();
+      setActiveLongTermGoals(goals);
+      // 为了向后兼容，如果只有一个目标，也设置到longTermGoal
+      if (goals.length === 1) {
+        setLongTermGoal(goals[0]);
+      } else {
+        setLongTermGoal(null);
+      }
       setLongTermError(null);
       setLongTermRetryable(true);
     } catch (error) {
       const status = (error as { response?: { status?: number } })?.response?.status;
       if (status === 401 || status === 403) {
         setLongTermGoal(null);
+        setActiveLongTermGoals([]);
         setLongTermError("登录后可同步长期目标。");
         setLongTermRetryable(false);
       } else {
-        console.warn("Failed to load long-term goal", error);
+        console.warn("Failed to load long-term goals", error);
         setLongTermGoal(null);
+        setActiveLongTermGoals([]);
         setLongTermError("获取长期目标失败，请稍后重试。");
         setLongTermRetryable(true);
       }
@@ -906,19 +931,24 @@ function Goals() {
         if (!hasAuthToken()) {
           if (!isActive.current) return;
           setLongTermGoal(null);
+          setActiveLongTermGoals([]);
           setLongTermError("登录后可同步长期目标。");
           setLongTermRetryable(false);
           saveCachedLongTermGoal(null);
           return;
         }
 
-        const goal = await fetchLongTermGoal();
+        // 获取活跃的长期目标列表
+        const goals = await fetchActiveLongTermGoals();
         if (!isActive.current) {
           return;
         }
         
-        // 验证从服务器获取的数据有效性
-        if (goal) {
+        setActiveLongTermGoals(goals);
+        // 为了向后兼容，如果只有一个目标，也设置到longTermGoal
+        if (goals.length === 1) {
+          const goal = goals[0];
+          // 验证从服务器获取的数据有效性
           const targetHours = goal.targetHours ?? 0;
           const checkpointCount = goal.checkpointCount ?? 0;
           // 如果数据不完整，不保存到状态和缓存
@@ -946,16 +976,18 @@ function Goals() {
         const status = (error as { response?: { status?: number } })?.response?.status;
         if (status === 401 || status === 403) {
           setLongTermGoal(null);
+          setActiveLongTermGoals([]);
           setLongTermError("登录后可同步长期目标。");
           setLongTermRetryable(false);
           saveCachedLongTermGoal(null);
         } else {
-          console.warn("Failed to load long-term goal", error);
+          console.warn("Failed to load long-term goals", error);
           // 如果出错但有缓存，验证缓存有效性
           const cached = loadCachedLongTermGoal();
           const validCached = cached && (cached.targetHours ?? 0) > 0 && (cached.checkpointCount ?? 0) > 0;
           if (!validCached) {
             setLongTermGoal(null);
+            setActiveLongTermGoals([]);
             setLongTermError("获取长期目标失败，请稍后重试。");
             saveCachedLongTermGoal(null);
           } else {
@@ -1163,11 +1195,64 @@ function Goals() {
       setLongTermGoal(goal);
       setLongTermError(null);
       setShowLongTermSetup(false);
+      setShowLongTermTypeSelector(false);
+      setSelectedGoalType(null);
       setActiveLongTermGoal(goal);
       saveCachedLongTermGoal(goal);
+      // 重新加载活跃目标列表
+      reloadLongTermGoal();
+    },
+    [reloadLongTermGoal],
+  );
+
+  const handleLongTermTypeSelected = useCallback(
+    (type: "10000-hours" | "3-months" | "yearly") => {
+      setSelectedGoalType(type);
+      setShowLongTermTypeSelector(false);
+      if (type === "10000-hours") {
+        setShowLongTermSetup(true);
+      } else if (type === "3-months") {
+        setShowThreeMonthsIntro(true);
+      } else {
+        // yearly类型暂时未实现
+        setShowLongTermTypeSelector(true);
+      }
     },
     [],
   );
+
+  const handleThreeMonthsIntroNext = useCallback(() => {
+    setShowThreeMonthsIntro(false);
+    setShowThreeMonthsRoundSetup(true);
+  }, []);
+
+  const handleThreeMonthsRoundConfirm = useCallback((rounds: number) => {
+    setPendingRounds(rounds);
+    setShowThreeMonthsRoundSetup(false);
+    setShowThreeMonthsConfirm(true);
+  }, []);
+
+  const handleThreeMonthsConfirmStart = useCallback(async () => {
+    if (!pendingRounds) return;
+    
+    try {
+      const goal = await upsertLongTermGoal({
+        goalType: "3-months",
+        title: "3个月学习法",
+        description: "使用戴明环理论进行系统性练习",
+        targetRounds: pendingRounds,
+        targetHours: 0, // 3个月学习法不使用小时数
+        checkpointCount: 0, // 3个月学习法不使用检查点
+      });
+      setShowThreeMonthsConfirm(false);
+      setPendingRounds(null);
+      setSelectedGoalType(null);
+      handleLongTermSaved(goal);
+    } catch (error) {
+      console.error("Failed to create 3-months goal", error);
+      // 错误处理
+    }
+  }, [pendingRounds, handleLongTermSaved]);
 
   const handleLongTermMetaSaved = useCallback(
     (goal: LongTermGoal) => {
@@ -1408,6 +1493,42 @@ function Goals() {
   }
 
   if (activeLongTermGoal) {
+    // 如果是3个月学习法，显示ThreeMonthsDetails
+    if (activeLongTermGoal.goalType === "3-months") {
+      return (
+        <ErrorBoundary
+          fallback={
+            <div className="goals-card goals-card--error" style={{ margin: "1rem" }}>
+              <p className="goals-card__error-text">3个月学习法详情渲染失败。</p>
+              <button
+                type="button"
+                className="goals-card__retry"
+                onClick={handleCloseLongTermDetails}
+              >
+                返回
+              </button>
+            </div>
+          }
+          onError={(error) => {
+            if (typeof console !== "undefined" && typeof console.error === "function") {
+              console.error("[Goals] ThreeMonthsDetails render failed:", error, {
+                goal: activeLongTermGoal,
+              });
+            }
+          }}
+        >
+          <ThreeMonthsDetails
+            goal={activeLongTermGoal}
+            onClose={handleCloseLongTermDetails}
+            onGoalUpdated={(updatedGoal) => {
+              setActiveLongTermGoal(updatedGoal);
+              reloadLongTermGoal();
+            }}
+          />
+        </ErrorBoundary>
+      );
+    }
+
     // 验证数据完整性，确保 progress 和 checkpoints 存在
     const safeGoal: LongTermGoal = {
       ...activeLongTermGoal,
@@ -1505,6 +1626,19 @@ function Goals() {
     );
   }
 
+  if (showLongTermTypeSelector) {
+    return (
+      <LongTermGoalTypeSelector
+        onClose={() => {
+          setShowLongTermTypeSelector(false);
+          setSelectedGoalType(null);
+        }}
+        onSelect={handleLongTermTypeSelected}
+        existingGoals={activeLongTermGoals}
+      />
+    );
+  }
+
   if (showLongTermSetup) {
     return (
       <LongTermGoalSetup
@@ -1513,6 +1647,68 @@ function Goals() {
         onSaved={handleLongTermSaved}
         initialGoal={longTermGoal}
       />
+    );
+  }
+
+  if (showThreeMonthsRoundSetup) {
+    return (
+      <ThreeMonthsRoundSetup
+        onClose={() => {
+          setShowThreeMonthsRoundSetup(false);
+          setSelectedGoalType(null);
+        }}
+        onConfirm={handleThreeMonthsRoundConfirm}
+      />
+    );
+  }
+
+  // 启动确认弹窗
+  if (showThreeMonthsConfirm && pendingRounds) {
+    return (
+      <div
+        className="artwork-delete-confirm-overlay"
+        onClick={() => {
+          setShowThreeMonthsConfirm(false);
+          setPendingRounds(null);
+        }}
+      >
+        <div
+          className="artwork-delete-confirm-modal"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <h2 className="artwork-delete-confirm-title">启动3个月学习法</h2>
+          <div className="artwork-delete-confirm-content">
+            <p className="artwork-delete-confirm-text">
+              点击确认后，本次3个月学习法就会启动。
+            </p>
+            <p className="artwork-delete-confirm-text">
+              你将完成 {pendingRounds} 轮PDCA循环练习。
+            </p>
+            <p className="artwork-delete-confirm-text artwork-delete-confirm-text--highlight">
+              确认要启动吗？
+            </p>
+          </div>
+          <div className="artwork-delete-confirm-actions">
+            <button
+              type="button"
+              className="artwork-delete-confirm-button artwork-delete-confirm-button--cancel"
+              onClick={() => {
+                setShowThreeMonthsConfirm(false);
+                setPendingRounds(null);
+              }}
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              className="artwork-delete-confirm-button artwork-delete-confirm-button--confirm"
+              onClick={handleThreeMonthsConfirmStart}
+            >
+              确认
+            </button>
+          </div>
+        </div>
+      </div>
     );
   }
 
@@ -1828,14 +2024,24 @@ function Goals() {
         <section className="goals-section">
           <div className="goals-section__header">
             <h2 className="goals-section__title">长期目标</h2>
-            <button
-              type="button"
-              className="goals-section__action"
-              onClick={() => setShowCompletedLongTermGoals(true)}
-              aria-label="查看已完成的长期目标"
-            >
-              <MaterialIcon name="arrow_forward" />
-            </button>
+            <div style={{ display: "flex", gap: "0.5rem" }}>
+              <button
+                type="button"
+                className="goals-section__action"
+                onClick={() => setShowLongTermTypeSelector(true)}
+                aria-label="新建长期目标"
+              >
+                <MaterialIcon name="add" />
+              </button>
+              <button
+                type="button"
+                className="goals-section__action"
+                onClick={() => setShowCompletedLongTermGoals(true)}
+                aria-label="查看已完成的长期目标"
+              >
+                <MaterialIcon name="arrow_forward" />
+              </button>
+            </div>
           </div>
           {longTermLoading ? (
             <article className="goals-card goals-card--primary goals-card--loading">
@@ -1853,6 +2059,255 @@ function Goals() {
                   重试
                 </button>
               ) : null}
+            </div>
+          ) : hasActiveLongTermGoals ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+              {activeLongTermGoals
+                .sort((a, b) => {
+                  // 按创建时间排序（最新的在前）
+                  const aTime = new Date(a.createdAt).getTime();
+                  const bTime = new Date(b.createdAt).getTime();
+                  return bTime - aTime;
+                })
+                .map((goal) => {
+                  // 根据目标类型渲染不同的卡片
+                  if (goal.goalType === "3-months") {
+                    // 3个月学习法卡片
+                    const rounds = goal.rounds ?? [];
+                    const completedRounds = rounds.filter(r => r.status === "completed").length;
+                    const targetRounds = goal.targetRounds ?? 0;
+                    const progressPercent = targetRounds > 0 
+                      ? Math.min(Math.round((completedRounds / targetRounds) * 100), 100)
+                      : 0;
+                    
+                    // 计算剩余时间
+                    const startDate = goal.startedAt ? new Date(goal.startedAt) : null;
+                    const endDate = startDate ? new Date(startDate.getTime() + 90 * 24 * 60 * 60 * 1000) : null;
+                    const now = new Date();
+                    const remainingDays = endDate && endDate > now
+                      ? Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+                      : 0;
+                    
+                    return (
+                      <button
+                        key={goal.id}
+                        type="button"
+                        className="goals-card goals-card--primary goals-card--actionable goals-card--long-term"
+                        onClick={() => setActiveLongTermGoal(goal)}
+                        aria-label={`查看3个月学习法 ${goal.title}`}
+                      >
+                        <div className="goals-long-term__header">
+                          <p className="goals-long-term__title">{goal.title}</p>
+                          <p className="goals-long-term__checkpoint">
+                            {completedRounds} / {targetRounds} 轮
+                          </p>
+                        </div>
+                        <div className="goals-long-term__content">
+                          <div className="goals-long-term__track" aria-hidden="true">
+                            <div
+                              className="goals-long-term__bar"
+                              style={{ width: `${progressPercent}%` }}
+                            >
+                              {progressPercent >= 50 ? (
+                                <span className="goals-long-term__bar-label goals-long-term__bar-label--inside">
+                                  {completedRounds} / {targetRounds}
+                                </span>
+                              ) : null}
+                            </div>
+                            {progressPercent < 50 ? (
+                              <span className="goals-long-term__bar-label goals-long-term__bar-label--outside">
+                                {completedRounds} / {targetRounds}
+                              </span>
+                            ) : null}
+                          </div>
+                          <div className="goals-long-term__summary">
+                            <p className="goals-long-term__caption">
+                              {remainingDays > 0 ? `还剩 ${remainingDays} 天` : "已到期"}
+                            </p>
+                            <p className="goals-long-term__percent">{progressPercent}%</p>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  } else {
+                    // 一万小时定律卡片（原有逻辑）
+                    return (() => {
+                      const progress = goal.progress ?? {
+                        progressPercent: 0,
+                        spentHours: 0,
+                        elapsedDays: 0,
+                        completedCheckpoints: 0,
+                        totalCheckpoints: 0,
+                      };
+                      const progressPercent = clampPercent(progress.progressPercent);
+                      const spentHours = progress.spentHours;
+                      const targetHours = goal.targetHours ?? 0;
+                      const checkpointCount = goal.checkpointCount ?? 0;
+                      
+                      // 验证目标数据是否完整有效
+                      const isValidGoal = targetHours > 0 && checkpointCount > 0;
+                      
+                      // 只有当目标有效且真正完成时才显示完成状态
+                      const isCompleted = isValidGoal && (
+                        progressPercent >= 100 || 
+                        (targetHours > 0 && spentHours >= targetHours)
+                      );
+                      
+                      if (!isValidGoal) {
+                        const spentLabel = `${formatHours(spentHours)}h`;
+                        const targetLabel = `${formatHours(targetHours)}h`;
+                        const startDateLabel = formatDateLabel(goal.startedAt);
+                        const elapsedDays = progress.elapsedDays;
+                        const checkpointSummary = `${progress.completedCheckpoints}/${progress.totalCheckpoints}`;
+                        const progressLabel = `${spentLabel} / ${targetLabel}`;
+                        const showLabelInside = progressPercent >= 50;
+                        
+                        return (
+                          <button
+                            key={goal.id}
+                            type="button"
+                            className="goals-card goals-card--primary goals-card--actionable goals-card--long-term"
+                            onClick={() => setActiveLongTermGoal(goal)}
+                            aria-label={`查看长期目标 ${goal.title}`}
+                          >
+                            <div className="goals-long-term__header">
+                              <p className="goals-long-term__title">{goal.title}</p>
+                              <p className="goals-long-term__checkpoint">检查点 {checkpointSummary}</p>
+                            </div>
+                            <div className="goals-long-term__content">
+                              <div className="goals-long-term__track" aria-hidden="true">
+                                <div
+                                  className="goals-long-term__bar"
+                                  style={{ width: `${progressPercent}%` }}
+                                >
+                                  {showLabelInside ? (
+                                    <span className="goals-long-term__bar-label goals-long-term__bar-label--inside">
+                                      {progressLabel}
+                                    </span>
+                                  ) : null}
+                                </div>
+                                {showLabelInside ? null : (
+                                  <span className="goals-long-term__bar-label goals-long-term__bar-label--outside">
+                                    {progressLabel}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="goals-long-term__summary">
+                                <p className="goals-long-term__caption">
+                                  Started: {startDateLabel} • {elapsedDays} days passed
+                                </p>
+                                <p className="goals-long-term__percent">{progressPercent}%</p>
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      }
+                      
+                      const spentLabel = `${formatHours(spentHours)}h`;
+                      const targetLabel = `${formatHours(targetHours)}h`;
+                      const startDateLabel = formatDateLabel(goal.startedAt);
+                      const elapsedDays = progress.elapsedDays;
+                      const checkpointSummary = `${progress.completedCheckpoints}/${progress.totalCheckpoints}`;
+                      const progressLabel = `${spentLabel} / ${targetLabel}`;
+                      const showLabelInside = progressPercent >= 50;
+                      
+                      // 如果达成，显示达成样式
+                      if (isCompleted) {
+                        const completedCheckpoints = (goal.checkpoints ?? []).filter(
+                          (cp) => cp.status === "completed" && cp.reachedAt
+                        );
+                        const lastCompletedCheckpoint = completedCheckpoints.length > 0
+                          ? completedCheckpoints[completedCheckpoints.length - 1]
+                          : null;
+                        const completedDate = lastCompletedCheckpoint?.reachedAt
+                          ? formatDateLabel(lastCompletedCheckpoint.reachedAt)
+                          : formatDateLabel(new Date().toISOString());
+                        
+                        return (
+                          <button
+                            key={goal.id}
+                            type="button"
+                            className="goals-card goals-card--primary goals-card--actionable goals-card--long-term goals-card--long-term--completed"
+                            onClick={() => {
+                              setCompletingGoal(goal);
+                              setShowFinalCheckpointImageModal(true);
+                            }}
+                            aria-label={`查看长期目标 ${goal.title}`}
+                          >
+                            <div className="goals-long-term__wave goals-long-term__wave--1" />
+                            <div className="goals-long-term__wave goals-long-term__wave--2" />
+                            <div className="goals-long-term__wave goals-long-term__wave--3" />
+                            {Array.from({ length: 8 }).map((_, i) => (
+                              <div
+                                key={`left-${i}`}
+                                className="goals-long-term__firework goals-long-term__firework--left"
+                                style={{
+                                  animationDelay: `${i * 0.2}s`,
+                                  top: `${15 + i * 10}%`,
+                                }}
+                              />
+                            ))}
+                            {Array.from({ length: 8 }).map((_, i) => (
+                              <div
+                                key={`right-${i}`}
+                                className="goals-long-term__firework goals-long-term__firework--right"
+                                style={{
+                                  animationDelay: `${i * 0.2 + 0.5}s`,
+                                  top: `${15 + i * 10}%`,
+                                }}
+                              />
+                            ))}
+                            <div className="goals-long-term__completed-content">
+                              <div className="goals-long-term__completed-title">{targetLabel} 达成</div>
+                              <div className="goals-long-term__completed-subtitle">{goal.title}</div>
+                              <div className="goals-long-term__completed-date">达成于 {completedDate}</div>
+                            </div>
+                          </button>
+                        );
+                      }
+                      
+                      return (
+                        <button
+                          key={goal.id}
+                          type="button"
+                          className="goals-card goals-card--primary goals-card--actionable goals-card--long-term"
+                          onClick={() => setActiveLongTermGoal(goal)}
+                          aria-label={`查看长期目标 ${goal.title}`}
+                        >
+                          <div className="goals-long-term__header">
+                            <p className="goals-long-term__title">{goal.title}</p>
+                            <p className="goals-long-term__checkpoint">检查点 {checkpointSummary}</p>
+                          </div>
+                          <div className="goals-long-term__content">
+                            <div className="goals-long-term__track" aria-hidden="true">
+                              <div
+                                className="goals-long-term__bar"
+                                style={{ width: `${progressPercent}%` }}
+                              >
+                                {showLabelInside ? (
+                                  <span className="goals-long-term__bar-label goals-long-term__bar-label--inside">
+                                    {progressLabel}
+                                  </span>
+                                ) : null}
+                              </div>
+                              {showLabelInside ? null : (
+                                <span className="goals-long-term__bar-label goals-long-term__bar-label--outside">
+                                  {progressLabel}
+                                </span>
+                              )}
+                            </div>
+                            <div className="goals-long-term__summary">
+                              <p className="goals-long-term__caption">
+                                Started: {startDateLabel} • {elapsedDays} days passed
+                              </p>
+                              <p className="goals-long-term__percent">{progressPercent}%</p>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })();
+                  }
+                })}
             </div>
           ) : hasLongTermGoal && longTermGoal ? (
             (() => {
@@ -2039,7 +2494,7 @@ function Goals() {
             <button
               type="button"
               className="goals-card goals-card--cta"
-              onClick={() => setShowLongTermSetup(true)}
+              onClick={() => setShowLongTermTypeSelector(true)}
             >
               <div className="goals-card__cta-icon">
                 <MaterialIcon name="add" />

@@ -1,0 +1,207 @@
+.round-complete-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.round-complete-modal {
+  background: #221b1b;
+  border-radius: 1rem;
+  width: 100%;
+  max-width: 800px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  animation: slideUp 0.3s ease-out;
+  overflow: hidden;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.round-complete-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.5rem;
+  border-bottom: 1px solid rgba(239, 234, 231, 0.1);
+}
+
+.round-complete-modal-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 500;
+  color: #efeae7;
+}
+
+.round-complete-modal-close {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: rgba(239, 234, 231, 0.1);
+  border: none;
+  color: #efeae7;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.round-complete-modal-close:hover {
+  background: rgba(239, 234, 231, 0.2);
+  transform: scale(1.1);
+}
+
+.round-complete-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem;
+}
+
+.round-complete-modal-description {
+  margin: 0 0 1.5rem;
+  color: rgba(239, 234, 231, 0.7);
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.round-complete-modal-preview {
+  background: rgba(239, 234, 231, 0.05);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  border: 1px solid rgba(239, 234, 231, 0.1);
+}
+
+.round-complete-modal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+@media (max-width: 768px) {
+  .round-complete-modal-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.round-complete-modal-cell {
+  background: rgba(239, 234, 231, 0.03);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  border: 1px solid rgba(239, 234, 231, 0.1);
+}
+
+.round-complete-modal-cell-label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #98dbc6;
+  margin-bottom: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.round-complete-modal-image {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  background: rgba(239, 234, 231, 0.05);
+}
+
+.round-complete-modal-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.round-complete-modal-placeholder {
+  width: 100%;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(239, 234, 231, 0.4);
+  font-size: 0.9rem;
+  background: rgba(239, 234, 231, 0.05);
+  border-radius: 0.5rem;
+}
+
+.round-complete-modal-text {
+  color: rgba(239, 234, 231, 0.8);
+  font-size: 0.9rem;
+  line-height: 1.6;
+  max-height: 150px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.round-complete-modal-actions {
+  display: flex;
+  gap: 1rem;
+  padding: 1.5rem;
+  border-top: 1px solid rgba(239, 234, 231, 0.1);
+}
+
+.round-complete-modal-button {
+  flex: 1;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.round-complete-modal-button--cancel {
+  background: rgba(239, 234, 231, 0.1);
+  color: rgba(239, 234, 231, 0.7);
+  border: 1px solid rgba(239, 234, 231, 0.2);
+}
+
+.round-complete-modal-button--cancel:hover {
+  background: rgba(239, 234, 231, 0.15);
+  color: #efeae7;
+}
+
+.round-complete-modal-button--confirm {
+  background: #98dbc6;
+  color: #221b1b;
+}
+
+.round-complete-modal-button--confirm:hover {
+  background: #7fc9b0;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(152, 219, 198, 0.3);
+}
+

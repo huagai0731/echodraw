@@ -1118,23 +1118,30 @@ class LongTermGoalSerializer(serializers.ModelSerializer):
     # 重写字段以处理类型转换问题
     target_hours = serializers.SerializerMethodField()
     checkpoint_count = serializers.SerializerMethodField()
+    goal_type = serializers.CharField(read_only=True)
+    target_rounds = serializers.SerializerMethodField()
+    rounds = serializers.SerializerMethodField()
 
     class Meta:
         model = LongTermGoal
         fields = [
             "id",
+            "goal_type",
             "title",
             "description",
             "target_hours",
             "checkpoint_count",
+            "target_rounds",
             "started_at",
             "created_at",
             "updated_at",
             "progress",
             "checkpoints",
+            "rounds",
         ]
         read_only_fields = [
             "id",
+            "goal_type",
             "started_at",
             "created_at",
             "updated_at",
@@ -1142,6 +1149,8 @@ class LongTermGoalSerializer(serializers.ModelSerializer):
             "checkpoints",
             "target_hours",
             "checkpoint_count",
+            "target_rounds",
+            "rounds",
         ]
     
     def get_target_hours(self, obj):
@@ -1162,6 +1171,18 @@ class LongTermGoalSerializer(serializers.ModelSerializer):
             return int(float(obj.checkpoint_count))
         except (ValueError, TypeError):
             return 0
+    
+    def get_target_rounds(self, obj):
+        """获取目标轮数（3个月学习法）"""
+        if obj.goal_type == LongTermGoal.GOAL_TYPE_3_MONTHS:
+            return obj.target_rounds if obj.target_rounds is not None else 0
+        return None
+    
+    def get_rounds(self, obj):
+        """获取轮次数据（3个月学习法）"""
+        if obj.goal_type == LongTermGoal.GOAL_TYPE_3_MONTHS:
+            return obj.metadata.get("rounds", [])
+        return None
 
     def get_progress(self, obj: LongTermGoal) -> dict[str, object]:
         stats = self._ensure_goal_stats(obj)
@@ -1458,27 +1479,53 @@ class LongTermGoalSetupSerializer(serializers.Serializer):
         max_length=1000,
         trim_whitespace=True,
     )
-    target_hours = serializers.IntegerField(min_value=1, max_value=5000)
-    checkpoint_count = serializers.IntegerField(min_value=1, max_value=90)
+    goal_type = serializers.ChoiceField(
+        choices=LongTermGoal.GOAL_TYPE_CHOICES,
+        required=False,
+        default=LongTermGoal.GOAL_TYPE_10000_HOURS,
+    )
+    target_hours = serializers.IntegerField(min_value=0, max_value=5000, required=False, allow_null=True)
+    checkpoint_count = serializers.IntegerField(min_value=1, max_value=90, required=False, allow_null=True)
+    target_rounds = serializers.IntegerField(min_value=2, max_value=60, required=False, allow_null=True)
     reset_progress = serializers.BooleanField(required=False, default=False)
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-        title = attrs.get("title", "")
-        if not title:
-            attrs["title"] = f"{attrs['target_hours']} 小时计划"
+        goal_type = attrs.get("goal_type", LongTermGoal.GOAL_TYPE_10000_HOURS)
         
-        # 验证每个检查点至少5小时
-        target_hours = attrs.get("target_hours", 0)
-        checkpoint_count = attrs.get("checkpoint_count", 1)
-        if checkpoint_count > 0:
-            hours_per_checkpoint = target_hours / checkpoint_count
-            MIN_HOURS_PER_CHECKPOINT = 5
-            if hours_per_checkpoint < MIN_HOURS_PER_CHECKPOINT:
-                raise serializers.ValidationError(
-                    f"每个检查点最少需要 {MIN_HOURS_PER_CHECKPOINT} 小时。"
-                    f"当前总时长 {target_hours} 小时，{checkpoint_count} 个检查点，"
-                    f"每个检查点约 {hours_per_checkpoint:.1f} 小时。"
-                )
+        if goal_type == LongTermGoal.GOAL_TYPE_10000_HOURS:
+            # 一万小时定律：需要target_hours和checkpoint_count
+            target_hours = attrs.get("target_hours")
+            checkpoint_count = attrs.get("checkpoint_count")
+            
+            if target_hours is None or target_hours <= 0:
+                raise serializers.ValidationError("一万小时定律类型需要设置target_hours")
+            if checkpoint_count is None or checkpoint_count <= 0:
+                raise serializers.ValidationError("一万小时定律类型需要设置checkpoint_count")
+            
+            title = attrs.get("title", "")
+            if not title:
+                attrs["title"] = f"{target_hours} 小时计划"
+            
+            # 验证每个检查点至少5小时
+            if checkpoint_count > 0:
+                hours_per_checkpoint = target_hours / checkpoint_count
+                MIN_HOURS_PER_CHECKPOINT = 5
+                if hours_per_checkpoint < MIN_HOURS_PER_CHECKPOINT:
+                    raise serializers.ValidationError(
+                        f"每个检查点最少需要 {MIN_HOURS_PER_CHECKPOINT} 小时。"
+                        f"当前总时长 {target_hours} 小时，{checkpoint_count} 个检查点，"
+                        f"每个检查点约 {hours_per_checkpoint:.1f} 小时。"
+                    )
+        
+        elif goal_type == LongTermGoal.GOAL_TYPE_3_MONTHS:
+            # 3个月学习法：需要target_rounds
+            target_rounds = attrs.get("target_rounds")
+            if target_rounds is None or target_rounds < 2:
+                raise serializers.ValidationError("3个月学习法类型需要设置target_rounds（2-60）")
+            
+            title = attrs.get("title", "")
+            if not title:
+                attrs["title"] = "3个月学习法"
         
         return attrs
 

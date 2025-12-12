@@ -404,6 +404,13 @@ async function handleExistingResults(
 
     // 加载结果
     const processedResult = processSavedResultUrls(savedResult);
+    
+    // 关键：设置 savedResultData 和 comprehensiveResults，确保刷新后能正确显示
+    callbacks.onSetSavedResultData(processedResult);
+    if (savedResult.comprehensive_analysis) {
+      callbacks.onSetComprehensiveResults(savedResult.comprehensive_analysis);
+    }
+    
     await callbacks.onLoadResult(processedResult);
 
     if (!isMountedRef.current) return;

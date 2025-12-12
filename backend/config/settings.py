@@ -243,12 +243,13 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 
 # WhiteNoise 配置：用于在生产环境提供静态文件
 # 注意：使用 WhiteNoise 后，需要运行 python manage.py collectstatic 收集静态文件
-STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+# 使用简单的存储后端，避免manifest文件问题
+STATICFILES_STORAGE = "whitenoise.storage.CompressedStaticFilesStorage"
 
 # WhiteNoise 额外配置
-# 启用压缩和缓存
 WHITENOISE_USE_FINDERS = False  # 生产环境不使用 finders，只使用 STATIC_ROOT
 WHITENOISE_AUTOREFRESH = False  # 生产环境禁用自动刷新
+WHITENOISE_ROOT = str(STATIC_ROOT)  # 明确指定根目录（转换为字符串）
 WHITENOISE_MANIFEST_STRICT = False  # 如果文件不存在，不抛出异常
 
 # MEDIA_URL 和 MEDIA_ROOT 在启用TOS存储时会被覆盖

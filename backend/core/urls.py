@@ -208,6 +208,11 @@ urlpatterns = [
         name="goals-long-term-checkpoint",
     ),
     path(
+        "goals/long-term/<int:goal_id>/round/",
+        views.update_three_months_round,
+        name="goals-long-term-round",
+    ),
+    path(
         "goals/long-term-copy/",
         views.LongTermPlanCopyListView.as_view(),
         name="goals-long-term-copy",

@@ -458,10 +458,25 @@ class UserUpload(models.Model):
 
 
 class LongTermGoal(models.Model):
-    user = models.OneToOneField(
+    GOAL_TYPE_10000_HOURS = "10000-hours"
+    GOAL_TYPE_3_MONTHS = "3-months"
+    GOAL_TYPE_YEARLY = "yearly"
+    GOAL_TYPE_CHOICES = [
+        (GOAL_TYPE_10000_HOURS, "一万小时定律"),
+        (GOAL_TYPE_3_MONTHS, "3个月学习法"),
+        (GOAL_TYPE_YEARLY, "全年计划"),
+    ]
+    
+    user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name="long_term_goal",
+        related_name="long_term_goals",
+    )
+    goal_type = models.CharField(
+        max_length=32,
+        choices=GOAL_TYPE_CHOICES,
+        default=GOAL_TYPE_10000_HOURS,
+        help_text="长期目标类型。",
     )
     title = models.CharField(
         max_length=160,
@@ -473,11 +488,22 @@ class LongTermGoal(models.Model):
     )
     target_hours = models.PositiveIntegerField(
         validators=[MinValueValidator(1), MaxValueValidator(5000)],
-        help_text="目标投入总小时数。",
+        help_text="目标投入总小时数（仅用于10000-hours类型）。",
+        null=True,
+        blank=True,
     )
     checkpoint_count = models.PositiveSmallIntegerField(
         validators=[MinValueValidator(1), MaxValueValidator(90)],
-        help_text="检查点数量，用于划分阶段。",
+        help_text="检查点数量，用于划分阶段（仅用于10000-hours类型）。",
+        null=True,
+        blank=True,
+    )
+    # 3个月学习法专用字段
+    target_rounds = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(2), MaxValueValidator(60)],
+        help_text="目标轮数（仅用于3-months类型）。",
+        null=True,
+        blank=True,
     )
     started_at = models.DateTimeField(
         default=timezone.now,
@@ -486,7 +512,7 @@ class LongTermGoal(models.Model):
     metadata = models.JSONField(
         default=dict,
         blank=True,
-        help_text="附加元数据，用于存储checkpoint的自定义数据（showcase和completionNote）。",
+        help_text="附加元数据，用于存储checkpoint的自定义数据（showcase和completionNote）或rounds数据（3个月学习法）。",
     )
     is_archived = models.BooleanField(
         default=False,
