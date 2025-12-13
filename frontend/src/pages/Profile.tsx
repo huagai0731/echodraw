@@ -307,37 +307,14 @@ function Profile({
     const state = urlParams.get("state");
 
     // 只有在有code和state，且在微信浏览器中，且当前不在支付确认页面时才处理
-    // 如果在支付确认页面，让onConfirm回调处理，避免重复处理
-    if (code && state && isWechatBrowser() && view !== "payment-confirmation") {
-      // 是微信授权回调，且当前在微信浏览器中
-      try {
-        // 解析state参数（包含支付信息）
-        const paymentInfo = JSON.parse(decodeURIComponent(state)) as {
-          tier: MembershipTier;
-          expiresAt: string;
-          paymentMethod: string;
-          quantity: number;
-          totalAmount: number;
-        };
-
-        // 清除URL中的code和state参数，避免重复处理
-        const newUrl = window.location.pathname;
-        window.history.replaceState({}, "", newUrl);
-
-        // 切换到支付确认页面，让onConfirm回调处理支付流程
-        setPendingTier(paymentInfo.tier);
-        setView("payment-confirmation");
-      } catch (error: any) {
-        console.error("[Echo] Failed to parse state parameter:", error);
-        // 在测试阶段，显示详细的错误信息
-        const errorMessage = `解析支付参数失败\n\n错误信息: ${error?.message || '未知错误'}\n\nState参数: ${state?.substring(0, 100) || 'N/A'}...`;
-        alert(errorMessage);
-        // 如果state解析失败，清除参数并返回会员选项页面
-        const newUrl = window.location.pathname;
-        window.history.replaceState({}, "", newUrl);
-        setPendingTier(null);
-        setView("membership-options");
-      }
+    // 如果URL中有code和state参数（微信授权回调），但不应该在这里处理
+    // 因为支付信息现在通过token存储在服务端，需要在onConfirm回调中通过API恢复
+    // 这里只做简单的跳转提示，实际处理在onConfirm回调中进行
+    if (code && state && isWechatBrowser() && view !== "payment-confirmation" && view !== "membership-options") {
+      // 如果有code和state，说明是授权回调，切换到会员选项页面
+      // 用户需要重新点击支付按钮，此时onConfirm会处理授权回调并恢复支付信息
+      console.log("[Echo] 检测到微信授权回调，等待用户重新发起支付");
+      // 不自动切换到支付确认页面，因为支付信息需要从服务端恢复
     }
   }, [auth, view]); // 依赖auth和view，确保在正确的时机处理
 
