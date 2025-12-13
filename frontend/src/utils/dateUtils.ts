@@ -407,3 +407,48 @@ export function getVisibleMonthlyReports(userRegistrationDate?: string | null): 
   return reports;
 }
 
+/**
+ * 计算全年计划的阶段数据
+ * @param daysPerPhase 每个阶段的天数（7-21）
+ * @returns 阶段数组，每个阶段包含index、startDate、endDate
+ */
+export function calculateYearlyPhases(daysPerPhase: number): Array<{
+  index: number;
+  startDate: string;
+  endDate: string;
+}> {
+  if (daysPerPhase < 7 || daysPerPhase > 21) {
+    return [];
+  }
+  
+  // 阶段数量：floor(365 / daysPerPhase)，忽略余数
+  const phaseCount = Math.floor(365 / daysPerPhase);
+  const phases: Array<{ index: number; startDate: string; endDate: string }> = [];
+  
+  // 起始日期：2026-01-01
+  const startDate = new Date(2026, 0, 1); // 月份从0开始，所以0表示1月
+  
+  for (let i = 1; i <= phaseCount; i++) {
+    // 计算每个阶段的开始和结束日期
+    const phaseStart = new Date(startDate);
+    phaseStart.setDate(startDate.getDate() + (i - 1) * daysPerPhase);
+    
+    const phaseEnd = new Date(phaseStart);
+    phaseEnd.setDate(phaseStart.getDate() + daysPerPhase - 1);
+    
+    // 格式化为ISO日期字符串（YYYY-MM-DD）
+    const startDateStr = formatISODateInShanghai(phaseStart);
+    const endDateStr = formatISODateInShanghai(phaseEnd);
+    
+    if (startDateStr && endDateStr) {
+      phases.push({
+        index: i,
+        startDate: startDateStr,
+        endDate: endDateStr,
+      });
+    }
+  }
+  
+  return phases;
+}
+

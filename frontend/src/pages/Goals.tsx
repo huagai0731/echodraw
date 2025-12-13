@@ -5,6 +5,7 @@ import NewChallengeWizard from "@/pages/NewChallengeWizard";
 import LongTermGoalSetup from "@/pages/LongTermGoalSetup";
 import LongTermGoalDetails from "@/pages/LongTermGoalDetails";
 import LongTermGoalTypeSelector from "@/pages/LongTermGoalTypeSelector";
+import YearlyGoalSetup from "@/pages/YearlyGoalSetup";
 import ThreeMonthsIntro from "@/pages/ThreeMonthsIntro";
 import ThreeMonthsRoundSetup from "@/pages/ThreeMonthsRoundSetup";
 import ThreeMonthsDetails from "@/pages/ThreeMonthsDetails";
@@ -507,6 +508,7 @@ function Goals() {
   const [showLongTermSetup, setShowLongTermSetup] = useState(false);
   const [showLongTermMetaEdit, setShowLongTermMetaEdit] = useState(false);
   const [showLongTermTypeSelector, setShowLongTermTypeSelector] = useState(false);
+  const [showYearlyGoalSetup, setShowYearlyGoalSetup] = useState(false);
   const [showThreeMonthsIntro, setShowThreeMonthsIntro] = useState(false);
   const [showThreeMonthsRoundSetup, setShowThreeMonthsRoundSetup] = useState(false);
   const [showThreeMonthsConfirm, setShowThreeMonthsConfirm] = useState(false);
@@ -1213,9 +1215,8 @@ function Goals() {
         setShowLongTermSetup(true);
       } else if (type === "3-months") {
         setShowThreeMonthsIntro(true);
-      } else {
-        // yearly类型暂时未实现
-        setShowLongTermTypeSelector(true);
+      } else if (type === "yearly") {
+        setShowYearlyGoalSetup(true);
       }
     },
     [],
@@ -1634,6 +1635,21 @@ function Goals() {
         }}
         onSelect={handleLongTermTypeSelected}
         existingGoals={activeLongTermGoals}
+      />
+    );
+  }
+
+  if (showYearlyGoalSetup) {
+    // 查找是否已有全年计划
+    const existingYearlyGoal = activeLongTermGoals.find((g) => g.goalType === "yearly");
+    return (
+      <YearlyGoalSetup
+        onClose={() => {
+          setShowYearlyGoalSetup(false);
+          setSelectedGoalType(null);
+        }}
+        onSaved={handleLongTermSaved}
+        initialGoal={existingYearlyGoal ?? null}
       />
     );
   }

@@ -20,6 +20,7 @@ from core.models import (
     TestOptionText,
     TestOption,
     UserTestResult,
+    YearlyGoalPreset,
 )
 
 
@@ -587,6 +588,22 @@ class DailyQuizOptionAdmin(admin.ModelAdmin):
         return bool(obj.image)
 
 
+
+
+@admin.register(YearlyGoalPreset)
+class YearlyGoalPresetAdmin(admin.ModelAdmin):
+    list_display = ("content", "is_active", "display_order", "updated_at")
+    list_filter = ("is_active",)
+    search_fields = ("content",)
+    ordering = ("display_order", "id")
+    fieldsets = (
+        (
+            "基础信息",
+            {"fields": ("content", "is_active", "display_order")},
+        ),
+        ("时间戳", {"fields": ("created_at", "updated_at")}),
+    )
+    readonly_fields = ("created_at", "updated_at")
 
 
 @admin.register(MonthlyReport)

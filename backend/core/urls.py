@@ -224,6 +224,11 @@ urlpatterns = [
         name="goals-long-term-copy",
     ),
     path(
+        "goals/yearly-presets/",
+        views.YearlyGoalPresetView.as_view(),
+        name="goals-yearly-presets",
+    ),
+    path(
         "admin/test-accounts/<int:profile_pk>/checkins/",
         TestAccountCheckInListCreateView.as_view(),
         name="admin-test-account-checkins",

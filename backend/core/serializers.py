@@ -45,6 +45,7 @@ from core.models import (
     UserUpload,
     UserProfile,
     VisualAnalysisResult,
+    YearlyGoalPreset,
 )
 class MoodSerializer(serializers.ModelSerializer):
     """创作状态序列化器"""
@@ -1037,6 +1038,32 @@ class LongTermPlanCopyPublicSerializer(serializers.ModelSerializer):
             "message",
         ]
 
+
+class YearlyGoalPresetSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = YearlyGoalPreset
+        fields = [
+            "id",
+            "content",
+            "is_active",
+            "display_order",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class YearlyGoalPresetPublicSerializer(serializers.ModelSerializer):
+    """全年计划预设内容公开序列化器（仅返回启用的预设）"""
+    class Meta:
+        model = YearlyGoalPreset
+        fields = [
+            "id",
+            "content",
+            "display_order",
+        ]
+
+
 class ShortTermTaskPresetPublicSerializer(serializers.ModelSerializer):
     class Meta:
         model = ShortTermTaskPreset
@@ -1121,6 +1148,7 @@ class LongTermGoalSerializer(serializers.ModelSerializer):
     goal_type = serializers.CharField(read_only=True)
     target_rounds = serializers.SerializerMethodField()
     rounds = serializers.SerializerMethodField()
+    days_per_phase = serializers.SerializerMethodField()
 
     class Meta:
         model = LongTermGoal
@@ -1132,6 +1160,7 @@ class LongTermGoalSerializer(serializers.ModelSerializer):
             "target_hours",
             "checkpoint_count",
             "target_rounds",
+            "days_per_phase",
             "started_at",
             "created_at",
             "updated_at",
@@ -1150,6 +1179,7 @@ class LongTermGoalSerializer(serializers.ModelSerializer):
             "target_hours",
             "checkpoint_count",
             "target_rounds",
+            "days_per_phase",
             "rounds",
         ]
     
@@ -1182,6 +1212,12 @@ class LongTermGoalSerializer(serializers.ModelSerializer):
         """获取轮次数据（3个月学习法）"""
         if obj.goal_type == LongTermGoal.GOAL_TYPE_3_MONTHS:
             return obj.metadata.get("rounds", [])
+        return None
+    
+    def get_days_per_phase(self, obj):
+        """获取每个阶段的天数（全年计划）"""
+        if obj.goal_type == LongTermGoal.GOAL_TYPE_YEARLY:
+            return obj.days_per_phase if obj.days_per_phase is not None else None
         return None
 
     def get_progress(self, obj: LongTermGoal) -> dict[str, object]:
@@ -1487,6 +1523,7 @@ class LongTermGoalSetupSerializer(serializers.Serializer):
     target_hours = serializers.IntegerField(min_value=0, max_value=5000, required=False, allow_null=True)
     checkpoint_count = serializers.IntegerField(min_value=1, max_value=90, required=False, allow_null=True)
     target_rounds = serializers.IntegerField(min_value=2, max_value=60, required=False, allow_null=True)
+    days_per_phase = serializers.IntegerField(min_value=7, max_value=21, required=False, allow_null=True)
     reset_progress = serializers.BooleanField(required=False, default=False)
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
@@ -1526,6 +1563,16 @@ class LongTermGoalSetupSerializer(serializers.Serializer):
             title = attrs.get("title", "")
             if not title:
                 attrs["title"] = "3个月学习法"
+        
+        elif goal_type == LongTermGoal.GOAL_TYPE_YEARLY:
+            # 全年计划：需要days_per_phase
+            days_per_phase = attrs.get("days_per_phase")
+            if days_per_phase is None or days_per_phase < 7 or days_per_phase > 21:
+                raise serializers.ValidationError("全年计划类型需要设置days_per_phase（7-21）")
+            
+            title = attrs.get("title", "")
+            if not title:
+                attrs["title"] = "全年计划"
         
         return attrs
 

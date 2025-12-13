@@ -209,6 +209,7 @@ from core.models import (
     UserProfile,
     UserTaskPreset,
     UserUpload,
+    YearlyGoalPreset,
 )
 from core.serializers import (
     LongTermGoalSerializer,
@@ -223,6 +224,7 @@ from core.serializers import (
     UserUploadSerializer,
     UserProfileSerializer,
     VisualAnalysisResultSerializer,
+    YearlyGoalPresetPublicSerializer,
 )
 
 CODE_EXPIRY_MINUTES = 10
@@ -2535,6 +2537,21 @@ class LongTermGoalView(APIView):
 
         should_reset = data.get("reset_progress", False)
         goal_type = data.get("goal_type", LongTermGoal.GOAL_TYPE_10000_HOURS)
+        
+        # 全年计划：设置started_at为2026-01-01 00:00:00（上海时区）
+        if goal_type == LongTermGoal.GOAL_TYPE_YEARLY:
+            if SHANGHAI_TZ is not None:
+                yearly_start = datetime(2026, 1, 1, 0, 0, 0)
+                try:
+                    yearly_start = SHANGHAI_TZ.localize(yearly_start)
+                except AttributeError:
+                    yearly_start = yearly_start.replace(tzinfo=SHANGHAI_TZ)
+                if settings.USE_TZ:
+                    yearly_start = yearly_start.astimezone(dt_timezone.utc)
+                started_at_shanghai = yearly_start
+            else:
+                yearly_start = datetime(2026, 1, 1, 0, 0, 0)
+                started_at_shanghai = timezone.make_aware(yearly_start) if settings.USE_TZ else yearly_start
 
         # 只针对未归档的当前目标进行创建 / 更新，历史归档记录保留
         # 注意：现在支持多个目标，需要根据goal_type查找
@@ -2563,6 +2580,8 @@ class LongTermGoalView(APIView):
                 create_kwargs["checkpoint_count"] = data.get("checkpoint_count")
             elif goal_type == LongTermGoal.GOAL_TYPE_3_MONTHS:
                 create_kwargs["target_rounds"] = data.get("target_rounds")
+            elif goal_type == LongTermGoal.GOAL_TYPE_YEARLY:
+                create_kwargs["days_per_phase"] = data.get("days_per_phase")
             
             goal = LongTermGoal.objects.create(**create_kwargs)
             created = True
@@ -2581,6 +2600,12 @@ class LongTermGoalView(APIView):
                     goal.target_rounds is None
                     or goal.target_rounds < 2
                 )
+            elif goal_type == LongTermGoal.GOAL_TYPE_YEARLY:
+                is_incomplete = (
+                    goal.days_per_phase is None
+                    or goal.days_per_phase < 7
+                    or goal.days_per_phase > 21
+                )
             else:
                 is_incomplete = False
             
@@ -2593,6 +2618,8 @@ class LongTermGoalView(APIView):
                 goal.checkpoint_count = data.get("checkpoint_count")
             elif goal_type == LongTermGoal.GOAL_TYPE_3_MONTHS:
                 goal.target_rounds = data.get("target_rounds")
+            elif goal_type == LongTermGoal.GOAL_TYPE_YEARLY:
+                goal.days_per_phase = data.get("days_per_phase")
             goal.is_archived = False
 
             # 如果不完整或者是重置请求，更新 started_at
@@ -2638,6 +2665,38 @@ class LongTermGoalView(APIView):
                 # 更新metadata
                 metadata = goal.metadata or {}
                 metadata["rounds"] = rounds
+                goal.metadata = metadata
+                goal.save(update_fields=["metadata"])
+        
+        # 如果是全年计划且是新创建的，初始化阶段数据
+        if goal_type == LongTermGoal.GOAL_TYPE_YEARLY and created:
+            days_per_phase = data.get("days_per_phase", 0)
+            if 7 <= days_per_phase <= 21:
+                # 计算阶段数量：floor(365 / days_per_phase)，忽略余数
+                phase_count = 365 // days_per_phase
+                phases = []
+                
+                # 起始日期：2026-01-01
+                start_date = date(2026, 1, 1)
+                
+                for i in range(1, phase_count + 1):
+                    # 计算每个阶段的开始和结束日期
+                    phase_start = start_date + timedelta(days=(i - 1) * days_per_phase)
+                    phase_end = phase_start + timedelta(days=days_per_phase - 1)
+                    
+                    phase_data = {
+                        "index": i,
+                        "startDate": phase_start.isoformat(),
+                        "endDate": phase_end.isoformat(),
+                        "goal": "",
+                        "artworkId": None,
+                        "note": "",
+                    }
+                    phases.append(phase_data)
+                
+                # 更新metadata
+                metadata = goal.metadata or {}
+                metadata["phases"] = phases
                 goal.metadata = metadata
                 goal.save(update_fields=["metadata"])
 
@@ -2700,6 +2759,16 @@ class LongTermGoalView(APIView):
                 uploaded_at__gte=start_datetime
             ).order_by("uploaded_at", "id")
         )
+
+
+class YearlyGoalPresetView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """获取所有启用的全年计划预设内容列表"""
+        presets = YearlyGoalPreset.objects.filter(is_active=True).order_by("display_order", "id")
+        serializer = YearlyGoalPresetPublicSerializer(presets, many=True)
+        return Response(serializer.data)
 
 
 @api_view(["GET"])
@@ -2774,75 +2843,178 @@ def completed_long_term_goals(request):
 @api_view(["PATCH"])
 @permission_classes([IsAuthenticated])
 def update_checkpoint(request):
-    """更新checkpoint的showcase和completionNote"""
-    try:
-        goal = request.user.long_term_goal
-    except LongTermGoal.DoesNotExist:
-        return Response(
-            {"detail": "长期目标不存在"},
-            status=status.HTTP_404_NOT_FOUND,
-        )
+    """更新checkpoint的showcase和completionNote，或全年计划阶段的图片和文字"""
+    # 支持通过goal_id或goal_type查找目标
+    goal_id = request.data.get("goal_id")
+    goal_type = request.data.get("goal_type")
     
-    checkpoint_index = request.data.get("checkpoint_index")
-    if checkpoint_index is None:
-        return Response(
-            {"detail": "checkpoint_index是必需的"},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-    
-    # 如果提供了upload_id，验证该upload是否存在且在目标开始时间之后
-    if "upload_id" in request.data and request.data["upload_id"] is not None:
-        upload_id = request.data["upload_id"]
+    if goal_id:
         try:
-            upload = UserUpload.objects.get(id=upload_id, user=request.user)
-            # 验证upload是否在目标开始时间之后
-            if goal.started_at:
-                if timezone.is_naive(goal.started_at):
-                    started_at = timezone.make_aware(goal.started_at)
-                else:
-                    started_at = goal.started_at
-                
-                if upload.uploaded_at < started_at:
-                    return Response(
-                        {"detail": "选择的图片必须在目标开始时间之后"},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-        except UserUpload.DoesNotExist:
+            goal = LongTermGoal.objects.get(id=goal_id, user=request.user, is_archived=False)
+        except LongTermGoal.DoesNotExist:
             return Response(
-                {"detail": "指定的图片不存在"},
+                {"detail": "长期目标不存在"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+    elif goal_type:
+        try:
+            goal = LongTermGoal.objects.get(user=request.user, is_archived=False, goal_type=goal_type)
+        except LongTermGoal.DoesNotExist:
+            return Response(
+                {"detail": "长期目标不存在"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+    else:
+        # 向后兼容：尝试获取用户的长期目标
+        try:
+            goal = request.user.long_term_goal
+        except LongTermGoal.DoesNotExist:
+            return Response(
+                {"detail": "长期目标不存在"},
                 status=status.HTTP_404_NOT_FOUND,
             )
     
-    # 使用metadata字段存储checkpoint的自定义数据
-    try:
-        if not hasattr(goal, "metadata") or goal.metadata is None:
-            goal.metadata = {}
-        elif not isinstance(goal.metadata, dict):
-            goal.metadata = {}
-    except (AttributeError, TypeError):
-        goal.metadata = {}
-    
-    checkpoint_key = f"checkpoint_{checkpoint_index}"
-    if not isinstance(goal.metadata, dict):
-        goal.metadata = {}
-    if checkpoint_key not in goal.metadata:
-        goal.metadata[checkpoint_key] = {}
-    
-    if "upload_id" in request.data:
-        goal.metadata[checkpoint_key]["upload_id"] = request.data["upload_id"]
-    
-    if "completion_note" in request.data:
-        completion_note = request.data["completion_note"]
-        # 限制最多500字
-        if completion_note and len(completion_note) > 500:
+    # 全年计划使用phases，其他类型使用checkpoints
+    if goal.goal_type == LongTermGoal.GOAL_TYPE_YEARLY:
+        phase_index = request.data.get("phase_index")
+        if phase_index is None:
             return Response(
-                {"detail": "留言内容不能超过500字"},
+                {"detail": "phase_index是必需的"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        goal.metadata[checkpoint_key]["completion_note"] = completion_note
-    
-    # 只更新metadata字段
-    goal.save(update_fields=["metadata", "updated_at"])
+        
+        # 获取阶段数据
+        metadata = goal.metadata or {}
+        phases = metadata.get("phases", [])
+        
+        # 查找对应的阶段
+        phase = None
+        for p in phases:
+            if p.get("index") == phase_index:
+                phase = p
+                break
+        
+        if phase is None:
+            return Response(
+                {"detail": f"阶段 {phase_index} 不存在"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        
+        # 如果提供了upload_id，验证该upload是否存在且在阶段日期范围内
+        if "upload_id" in request.data and request.data["upload_id"] is not None:
+            upload_id = request.data["upload_id"]
+            try:
+                upload = UserUpload.objects.get(id=upload_id, user=request.user)
+                
+                # 验证图片上传日期是否在阶段日期范围内
+                phase_start = date.fromisoformat(phase["startDate"])
+                phase_end = date.fromisoformat(phase["endDate"])
+                
+                # 将upload.uploaded_at转换为date（使用上海时区）
+                if SHANGHAI_TZ is not None:
+                    upload_date_utc = upload.uploaded_at
+                    if timezone.is_naive(upload_date_utc):
+                        upload_date_utc = timezone.make_aware(upload_date_utc)
+                    upload_date_shanghai = upload_date_utc.astimezone(SHANGHAI_TZ)
+                    upload_date = upload_date_shanghai.date()
+                else:
+                    upload_date = upload.uploaded_at.date()
+                
+                if upload_date < phase_start or upload_date > phase_end:
+                    return Response(
+                        {"detail": f"选择的图片必须在阶段日期范围内（{phase_start} 至 {phase_end}）"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                
+                phase["artworkId"] = upload_id
+            except UserUpload.DoesNotExist:
+                return Response(
+                    {"detail": "指定的图片不存在"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+        
+        # 更新阶段目标文字
+        if "goal" in request.data:
+            goal_text = request.data["goal"]
+            # 限制最多50字
+            if goal_text and len(goal_text) > 50:
+                return Response(
+                    {"detail": "阶段目标不能超过50字"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            phase["goal"] = goal_text or ""
+        
+        # 更新阶段备注文字
+        if "note" in request.data:
+            note_text = request.data["note"]
+            phase["note"] = note_text or ""
+        
+        # 更新metadata
+        metadata["phases"] = phases
+        goal.metadata = metadata
+        goal.save(update_fields=["metadata", "updated_at"])
+    else:
+        # 原有的一万小时目标和3个月学习法逻辑
+        checkpoint_index = request.data.get("checkpoint_index")
+        if checkpoint_index is None:
+            return Response(
+                {"detail": "checkpoint_index是必需的"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        # 如果提供了upload_id，验证该upload是否存在且在目标开始时间之后
+        if "upload_id" in request.data and request.data["upload_id"] is not None:
+            upload_id = request.data["upload_id"]
+            try:
+                upload = UserUpload.objects.get(id=upload_id, user=request.user)
+                # 验证upload是否在目标开始时间之后
+                if goal.started_at:
+                    if timezone.is_naive(goal.started_at):
+                        started_at = timezone.make_aware(goal.started_at)
+                    else:
+                        started_at = goal.started_at
+                    
+                    if upload.uploaded_at < started_at:
+                        return Response(
+                            {"detail": "选择的图片必须在目标开始时间之后"},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+            except UserUpload.DoesNotExist:
+                return Response(
+                    {"detail": "指定的图片不存在"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+        
+        # 使用metadata字段存储checkpoint的自定义数据
+        try:
+            if not hasattr(goal, "metadata") or goal.metadata is None:
+                goal.metadata = {}
+            elif not isinstance(goal.metadata, dict):
+                goal.metadata = {}
+        except (AttributeError, TypeError):
+            goal.metadata = {}
+        
+        checkpoint_key = f"checkpoint_{checkpoint_index}"
+        if not isinstance(goal.metadata, dict):
+            goal.metadata = {}
+        if checkpoint_key not in goal.metadata:
+            goal.metadata[checkpoint_key] = {}
+        
+        if "upload_id" in request.data:
+            goal.metadata[checkpoint_key]["upload_id"] = request.data["upload_id"]
+        
+        if "completion_note" in request.data:
+            completion_note = request.data["completion_note"]
+            # 限制最多500字
+            if completion_note and len(completion_note) > 500:
+                return Response(
+                    {"detail": "留言内容不能超过500字"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            goal.metadata[checkpoint_key]["completion_note"] = completion_note
+        
+        # 只更新metadata字段
+        goal.save(update_fields=["metadata", "updated_at"])
     
     # 重新获取并序列化goal
     uploads = LongTermGoalView._fetch_uploads(request.user, goal.started_at)

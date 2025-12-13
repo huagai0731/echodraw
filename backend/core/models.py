@@ -505,6 +505,13 @@ class LongTermGoal(models.Model):
         null=True,
         blank=True,
     )
+    # 全年计划专用字段
+    days_per_phase = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(7), MaxValueValidator(21)],
+        help_text="每个阶段的天数，范围7-21天（仅用于yearly类型）。",
+        null=True,
+        blank=True,
+    )
     started_at = models.DateTimeField(
         default=timezone.now,
         help_text="计划开始时间，用于统计进度。",
@@ -512,7 +519,7 @@ class LongTermGoal(models.Model):
     metadata = models.JSONField(
         default=dict,
         blank=True,
-        help_text="附加元数据，用于存储checkpoint的自定义数据（showcase和completionNote）或rounds数据（3个月学习法）。",
+        help_text="附加元数据，用于存储checkpoint的自定义数据（showcase和completionNote）、rounds数据（3个月学习法）或phases数据（全年计划）。",
     )
     is_archived = models.BooleanField(
         default=False,
@@ -634,6 +641,37 @@ class LongTermPlanCopy(models.Model):
     def __str__(self) -> str:
         upper = f"{self.max_hours}" if self.max_hours is not None else "∞"
         return f"{self.min_hours}-{upper}h"
+
+
+class YearlyGoalPreset(models.Model):
+    """
+    全年计划预设内容模型：存储用户在选择阶段目标时可以使用的预设文字。
+    """
+    content = models.CharField(
+        max_length=50,
+        help_text="预设内容文字，最多50个字符。",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="是否启用该预设内容。",
+    )
+    display_order = models.PositiveIntegerField(
+        default=100,
+        help_text="显示顺序，数值越小越靠前。",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["display_order", "id"]
+        indexes = [
+            models.Index(fields=["is_active", "display_order"]),
+        ]
+        verbose_name = "全年计划预设内容"
+        verbose_name_plural = "全年计划预设内容"
+
+    def __str__(self) -> str:
+        return self.content[:32] + ("..." if len(self.content) > 32 else "")
 
 
 class ShortTermTaskPreset(models.Model):

@@ -609,12 +609,14 @@ export type LongTermGoal = {
   targetHours: number;
   checkpointCount: number;
   targetRounds?: number; // 3个月学习法的目标轮数
+  daysPerPhase?: number; // 全年计划每个阶段的天数
   startedAt: string;
   createdAt: string;
   updatedAt: string;
   progress: LongTermGoalProgress;
   checkpoints: LongTermGoalCheckpoint[];
   rounds?: ThreeMonthsRound[]; // 3个月学习法的轮次数据
+  phases?: YearlyPhase[]; // 全年计划的阶段数据
 };
 
 export type ThreeMonthsRound = {
@@ -626,6 +628,21 @@ export type ThreeMonthsRound = {
   checkText?: string | null;
   actionText?: string | null;
   completedAt?: string | null;
+};
+
+export type YearlyPhase = {
+  index: number;
+  startDate: string; // ISO日期字符串 YYYY-MM-DD
+  endDate: string; // ISO日期字符串 YYYY-MM-DD
+  goal: string; // 阶段目标文字，最多50字
+  artworkId: number | null; // 关联的画集图片ID
+  note: string; // 阶段备注文字
+};
+
+export type YearlyGoalPreset = {
+  id: number;
+  content: string; // 预设内容文字，最多50字
+  displayOrder: number;
 };
 
 type ShortTermGoalTaskResponse = {
@@ -840,6 +857,7 @@ type LongTermGoalResponse = {
   target_hours: number;
   checkpoint_count: number;
   target_rounds?: number;
+  days_per_phase?: number; // 全年计划每个阶段的天数
   started_at: string;
   created_at: string;
   updated_at: string;
@@ -854,6 +872,14 @@ type LongTermGoalResponse = {
     check_text?: string | null;
     action_text?: string | null;
     completed_at?: string | null;
+  }>;
+  phases?: Array<{
+    index: number;
+    start_date: string; // ISO日期字符串 YYYY-MM-DD
+    end_date: string; // ISO日期字符串 YYYY-MM-DD
+    goal?: string;
+    artwork_id?: number | null;
+    note?: string;
   }>;
 };
 
@@ -870,6 +896,16 @@ function mapLongTermGoal(goal: LongTermGoalResponse): LongTermGoal {
     completedAt: r.completed_at ?? null,
   }));
 
+  // 映射phases数据（全年计划）
+  const phases = goal.phases?.map((p) => ({
+    index: p.index,
+    startDate: p.start_date,
+    endDate: p.end_date,
+    goal: p.goal ?? "",
+    artworkId: p.artwork_id ?? null,
+    note: p.note ?? "",
+  }));
+
   return {
     id: goal.id,
     goalType: goal.goal_type ?? "10000-hours",
@@ -878,12 +914,14 @@ function mapLongTermGoal(goal: LongTermGoalResponse): LongTermGoal {
     targetHours: goal.target_hours ?? 0,
     checkpointCount: goal.checkpoint_count ?? 0,
     targetRounds: goal.target_rounds,
+    daysPerPhase: goal.days_per_phase,
     startedAt: goal.started_at,
     createdAt: goal.created_at,
     updatedAt: goal.updated_at,
     progress: goal.progress,
     checkpoints: goal.checkpoints,
     rounds,
+    phases,
   };
 }
 
@@ -925,6 +963,7 @@ export type UpsertLongTermGoalInput = {
   targetHours?: number;
   checkpointCount?: number;
   targetRounds?: number; // 3个月学习法的目标轮数
+  daysPerPhase?: number; // 全年计划每个阶段的天数（7-21）
   resetProgress?: boolean;
 };
 
@@ -948,6 +987,9 @@ export async function upsertLongTermGoal(
   if (input.targetRounds !== undefined) {
     payload.target_rounds = input.targetRounds;
   }
+  if (input.daysPerPhase !== undefined) {
+    payload.days_per_phase = input.daysPerPhase;
+  }
   const response = await api.post<LongTermGoalResponse>("/goals/long-term/", payload);
   return mapLongTermGoal(response.data);
 }
@@ -957,23 +999,46 @@ export async function deleteLongTermGoal() {
 }
 
 export type UpdateCheckpointInput = {
-  checkpointIndex: number;
+  checkpointIndex?: number; // 一万小时目标和3个月学习法使用
+  phaseIndex?: number; // 全年计划使用
+  goalId?: number; // 可选，用于指定目标ID
+  goalType?: "10000-hours" | "3-months" | "yearly"; // 可选，用于指定目标类型
   uploadId?: number | null;
   completionNote?: string | null;
+  goal?: string | null; // 全年计划阶段目标文字
+  note?: string | null; // 全年计划阶段备注文字
 };
 
 export async function updateCheckpoint(
   input: UpdateCheckpointInput,
 ): Promise<LongTermGoal> {
-  const payload: Record<string, unknown> = {
-    checkpoint_index: input.checkpointIndex,
-  };
+  const payload: Record<string, unknown> = {};
+  
+  if (input.checkpointIndex !== undefined) {
+    payload.checkpoint_index = input.checkpointIndex;
+  }
+  if (input.phaseIndex !== undefined) {
+    payload.phase_index = input.phaseIndex;
+  }
+  if (input.goalId !== undefined) {
+    payload.goal_id = input.goalId;
+  }
+  if (input.goalType !== undefined) {
+    payload.goal_type = input.goalType;
+  }
   if (input.uploadId !== undefined) {
     payload.upload_id = input.uploadId;
   }
   if (input.completionNote !== undefined) {
     payload.completion_note = input.completionNote;
   }
+  if (input.goal !== undefined) {
+    payload.goal = input.goal;
+  }
+  if (input.note !== undefined) {
+    payload.note = input.note;
+  }
+  
   const response = await api.patch<LongTermGoalResponse>("/goals/long-term/checkpoint/", payload);
   return mapLongTermGoal(response.data);
 }
@@ -988,6 +1053,27 @@ export type UpdateThreeMonthsRoundInput = {
   actionText?: string | null;
   completeRound?: boolean; // 是否完成本轮
 };
+
+/**
+ * 获取全年计划预设内容列表
+ */
+export async function fetchYearlyGoalPresets(): Promise<YearlyGoalPreset[]> {
+  if (!hasAuthToken()) {
+    throw createUnauthorizedError();
+  }
+  
+  const response = await api.get<Array<{
+    id: number;
+    content: string;
+    display_order: number;
+  }>>("/goals/yearly-presets/");
+  
+  return response.data.map((preset) => ({
+    id: preset.id,
+    content: preset.content,
+    displayOrder: preset.display_order,
+  }));
+}
 
 export async function updateThreeMonthsRound(
   input: UpdateThreeMonthsRoundInput,
