@@ -78,16 +78,44 @@ class Command(BaseCommand):
                 # 执行修复
                 self.stdout.write(f'开始修复 {table_name} 表...')
                 
-                # 根据字段类型确定修复SQL
-                if 'bigint' in column_type.lower():
-                    modify_sql = f"ALTER TABLE `{table_name}` MODIFY COLUMN `id` BIGINT AUTO_INCREMENT NOT NULL"
-                elif 'int' in column_type.lower():
-                    modify_sql = f"ALTER TABLE `{table_name}` MODIFY COLUMN `id` INT AUTO_INCREMENT NOT NULL"
-                else:
-                    # 默认使用 BIGINT
-                    modify_sql = f"ALTER TABLE `{table_name}` MODIFY COLUMN `id` BIGINT AUTO_INCREMENT NOT NULL"
+                # 检查是否有外键约束
+                cursor.execute("""
+                    SELECT CONSTRAINT_NAME, TABLE_NAME
+                    FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+                    WHERE REFERENCED_TABLE_SCHEMA = DATABASE()
+                    AND REFERENCED_TABLE_NAME = %s
+                    AND REFERENCED_COLUMN_NAME = 'id'
+                """, [table_name])
                 
-                cursor.execute(modify_sql)
+                foreign_keys = cursor.fetchall()
+                if foreign_keys:
+                    self.stdout.write(f'发现 {len(foreign_keys)} 个外键约束引用此表:')
+                    for fk_name, fk_table in foreign_keys:
+                        self.stdout.write(f'  - {fk_name} (表: {fk_table})')
+                    self.stdout.write('')
+                
+                # 临时禁用外键检查（MySQL 需要这样才能修改有外键引用的列）
+                self.stdout.write('临时禁用外键检查...')
+                cursor.execute("SET FOREIGN_KEY_CHECKS = 0")
+                
+                try:
+                    # 根据字段类型确定修复SQL
+                    if 'bigint' in column_type.lower():
+                        modify_sql = f"ALTER TABLE `{table_name}` MODIFY COLUMN `id` BIGINT AUTO_INCREMENT NOT NULL"
+                    elif 'int' in column_type.lower():
+                        modify_sql = f"ALTER TABLE `{table_name}` MODIFY COLUMN `id` INT AUTO_INCREMENT NOT NULL"
+                    else:
+                        # 默认使用 INT（因为当前类型是 int）
+                        modify_sql = f"ALTER TABLE `{table_name}` MODIFY COLUMN `id` INT AUTO_INCREMENT NOT NULL"
+                    
+                    self.stdout.write(f'执行: {modify_sql}')
+                    cursor.execute(modify_sql)
+                    self.stdout.write('✓ 字段修改成功')
+                    
+                finally:
+                    # 重新启用外键检查
+                    self.stdout.write('重新启用外键检查...')
+                    cursor.execute("SET FOREIGN_KEY_CHECKS = 1")
                 
                 # 再次检查确认
                 cursor.execute("""
