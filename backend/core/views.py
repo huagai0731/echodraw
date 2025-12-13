@@ -2547,17 +2547,24 @@ class LongTermGoalView(APIView):
             created = False
         except LongTermGoal.DoesNotExist:
             # 完全不存在，创建新记录
-            goal = LongTermGoal.objects.create(
-                user=request.user,
-                goal_type=goal_type,
-                title=data["title"],
-                description=data.get("description", ""),
-                target_hours=data.get("target_hours"),
-                checkpoint_count=data.get("checkpoint_count"),
-                target_rounds=data.get("target_rounds"),
-                started_at=started_at_shanghai,
-                is_archived=False,
-            )
+            # 根据目标类型设置相应的字段
+            create_kwargs = {
+                "user": request.user,
+                "goal_type": goal_type,
+                "title": data["title"],
+                "description": data.get("description", ""),
+                "started_at": started_at_shanghai,
+                "is_archived": False,
+            }
+            
+            # 根据目标类型设置特定字段
+            if goal_type == LongTermGoal.GOAL_TYPE_10000_HOURS:
+                create_kwargs["target_hours"] = data.get("target_hours")
+                create_kwargs["checkpoint_count"] = data.get("checkpoint_count")
+            elif goal_type == LongTermGoal.GOAL_TYPE_3_MONTHS:
+                create_kwargs["target_rounds"] = data.get("target_rounds")
+            
+            goal = LongTermGoal.objects.create(**create_kwargs)
             created = True
 
         if not created:
