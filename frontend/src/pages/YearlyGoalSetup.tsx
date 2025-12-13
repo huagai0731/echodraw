@@ -673,8 +673,9 @@ function DigitColumn({
         if (clampedIndex === -1) {
           return;
         }
-        // 由于digit-list有padding（等于一个height），需要减去padding
-        const target = clampedIndex * height;
+        // digit-list有padding-top = height * 1，需要加上这个padding
+        const paddingTop = height * 1;
+        const target = clampedIndex * height + paddingTop;
         isSyncingRef.current = true;
         scrollRef.current.scrollTo({ top: target, behavior });
         if (syncTimeoutRef.current) {
@@ -685,8 +686,9 @@ function DigitColumn({
         }, behavior === "auto" ? 0 : 180);
         return;
       }
-      // 由于digit-list有padding（等于一个height），需要减去padding
-      const target = index * height;
+      // digit-list有padding-top = height * 1，需要加上这个padding
+      const paddingTop = height * 1;
+      const target = index * height + paddingTop;
       isSyncingRef.current = true;
       scrollRef.current.scrollTo({ top: target, behavior });
       if (syncTimeoutRef.current) {
@@ -721,7 +723,9 @@ function DigitColumn({
       return;
     }
 
-    const maxTop = height * (DAYS_PER_PHASE_VALUES.length - 1);
+    // digit-list有padding-top = height * 1，最大scrollTop需要考虑padding
+    const paddingTop = height * 1;
+    const maxTop = height * (DAYS_PER_PHASE_VALUES.length - 1) + paddingTop;
     if (scrollTop > maxTop) {
       scrollRef.current.scrollTop = maxTop;
       return;
@@ -742,9 +746,9 @@ function DigitColumn({
         return;
       }
       const currentScrollTop = scrollRef.current.scrollTop;
-      // 由于digit-list有padding（等于一个height），scrollTop已经包含了padding的偏移
-      // 所以直接除以height就能得到正确的索引
-      const raw = currentScrollTop / height;
+      // digit-list有padding-top = height * 1，需要减去这个padding
+      const paddingTop = height * 1;
+      const raw = (currentScrollTop - paddingTop) / height;
       const index = Math.min(Math.max(Math.round(raw), 0), DAYS_PER_PHASE_VALUES.length - 1);
       const next = DAYS_PER_PHASE_VALUES[index];
       if (next !== value) {

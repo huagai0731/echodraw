@@ -90,6 +90,45 @@
   height: 3rem;
 }
 
+.long-term-setup__step-indicator {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+  padding: 1rem 0;
+}
+
+.long-term-setup__step {
+  height: 0.35rem;
+  border-radius: 999px;
+  background: rgba(239, 234, 231, 0.16);
+  transition: background 0.3s ease;
+}
+
+.long-term-setup__step--active {
+  background: #98dbc6;
+  box-shadow: 0 0 14px rgba(152, 219, 198, 0.45);
+}
+
+.long-term-setup__intro-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.long-term-setup__intro-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  color: rgba(239, 234, 231, 0.75);
+  line-height: 1.7;
+  font-size: 0.95rem;
+  letter-spacing: 0.03em;
+}
+
+.long-term-setup__intro-text p {
+  margin: 0;
+}
+
 .long-term-setup__subtitle {
   margin: -0.25rem 0 0;
   padding-bottom: 2.25rem;

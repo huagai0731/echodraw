@@ -18,7 +18,17 @@ type ThreeMonthsDetailsProps = {
 
 function ThreeMonthsDetails({ goal, onClose, onGoalUpdated }: ThreeMonthsDetailsProps) {
   const rounds = goal.rounds ?? [];
-  const [currentRoundIndex, setCurrentRoundIndex] = useState(1);
+  
+  // 初始化当前轮次索引：优先找第一个进行中的轮次，否则找第一个轮次，否则默认为1
+  const getInitialRoundIndex = () => {
+    if (rounds.length === 0) return 1;
+    const sortedRounds = [...rounds].sort((a, b) => a.roundIndex - b.roundIndex);
+    const inProgressRound = sortedRounds.find((r) => r.status === "in-progress");
+    if (inProgressRound) return inProgressRound.roundIndex;
+    return sortedRounds[0]?.roundIndex ?? 1;
+  };
+  
+  const [currentRoundIndex, setCurrentRoundIndex] = useState(getInitialRoundIndex);
   const [showArtworkSelector, setShowArtworkSelector] = useState(false);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -27,6 +37,22 @@ function ThreeMonthsDetails({ goal, onClose, onGoalUpdated }: ThreeMonthsDetails
 
   // 找到当前轮次
   const currentRound = rounds.find((r) => r.roundIndex === currentRoundIndex) ?? null;
+
+  // 确保 currentRoundIndex 始终有效
+  useEffect(() => {
+    if (rounds.length > 0) {
+      const sortedRounds = [...rounds].sort((a, b) => a.roundIndex - b.roundIndex);
+      const exists = sortedRounds.some((r) => r.roundIndex === currentRoundIndex);
+      if (!exists) {
+        // 如果当前轮次不存在，切换到第一个进行中的轮次，否则切换到第一个轮次
+        const inProgressRound = sortedRounds.find((r) => r.status === "in-progress");
+        const targetRoundIndex = inProgressRound?.roundIndex ?? sortedRounds[0]?.roundIndex;
+        if (targetRoundIndex && typeof targetRoundIndex === "number") {
+          setCurrentRoundIndex(targetRoundIndex);
+        }
+      }
+    }
+  }, [rounds, currentRoundIndex]);
 
   // 本地状态管理
   const [localRound, setLocalRound] = useState<Partial<ThreeMonthsRound>>(() => {
@@ -142,9 +168,15 @@ function ThreeMonthsDetails({ goal, onClose, onGoalUpdated }: ThreeMonthsDetails
       const currentIdx = sortedRounds.findIndex((r) => r.roundIndex === currentRoundIndex);
 
       if (direction === "prev" && currentIdx > 0) {
-        setCurrentRoundIndex(sortedRounds[currentIdx - 1].roundIndex);
+        const prevRound = sortedRounds[currentIdx - 1];
+        if (prevRound && typeof prevRound.roundIndex === "number") {
+          setCurrentRoundIndex(prevRound.roundIndex);
+        }
       } else if (direction === "next" && currentIdx < sortedRounds.length - 1) {
-        setCurrentRoundIndex(sortedRounds[currentIdx + 1].roundIndex);
+        const nextRound = sortedRounds[currentIdx + 1];
+        if (nextRound && typeof nextRound.roundIndex === "number") {
+          setCurrentRoundIndex(nextRound.roundIndex);
+        }
       }
     },
     [currentRoundIndex, rounds, hasUnsavedChanges, saveDraft]
@@ -161,7 +193,7 @@ function ThreeMonthsDetails({ goal, onClose, onGoalUpdated }: ThreeMonthsDetails
         // 使用特殊标题标记，以便区分
         const upload = await createUserUpload({
           file,
-          title: `[3个月学习法-附件] 第${currentRoundIndex}轮-PLAN`,
+          title: `[3个月学习法-附件] 第${typeof currentRoundIndex === "number" ? currentRoundIndex : 1}轮-PLAN`,
           description: "3个月学习法PLAN图片附件",
           tags: [],
           moodId: null,
@@ -274,7 +306,7 @@ function ThreeMonthsDetails({ goal, onClose, onGoalUpdated }: ThreeMonthsDetails
 
       <TopNav
         title="3个月学习法"
-        subtitle={`第 ${currentRoundIndex} 轮`}
+        subtitle={typeof currentRoundIndex === "number" ? `第 ${currentRoundIndex} 轮` : "第 1 轮"}
         className="top-nav--fixed top-nav--flush"
         leadingAction={{
           icon: "arrow_back",
@@ -319,7 +351,7 @@ function ThreeMonthsDetails({ goal, onClose, onGoalUpdated }: ThreeMonthsDetails
             </button>
             <div className="three-months-details__round-info">
               <span className="three-months-details__round-label">
-                第 {currentRoundIndex} 轮
+                第 {typeof currentRoundIndex === "number" ? currentRoundIndex : 1} 轮
                 {currentRound?.status === "completed" && "（已完成）"}
                 {currentRound?.status === "not-started" && "（未开始）"}
               </span>
@@ -339,7 +371,7 @@ function ThreeMonthsDetails({ goal, onClose, onGoalUpdated }: ThreeMonthsDetails
         {/* 未开始轮次提示 */}
         {currentRound?.status === "not-started" && (
           <div className="three-months-details__not-started">
-            <p>第 {currentRoundIndex} 轮（未开始）</p>
+            <p>第 {typeof currentRoundIndex === "number" ? currentRoundIndex : 1} 轮（未开始）</p>
             <p className="three-months-details__not-started-hint">
               完成前面的轮次后，此轮次将自动开始
             </p>

@@ -34,6 +34,7 @@ const MIN_ROUNDS = 2;
 const MAX_ROUNDS = 60;
 
 function ThreeMonthsRoundSetup({ onClose, onConfirm, initialRounds }: ThreeMonthsRoundSetupProps) {
+  const [step, setStep] = useState(1);
   const [rounds, setRounds] = useState(initialRounds ?? 12);
   const [isConfirming, setIsConfirming] = useState(false);
 
@@ -43,6 +44,20 @@ function ThreeMonthsRoundSetup({ onClose, onConfirm, initialRounds }: ThreeMonth
       setRounds(initialRounds);
     }
   }, [initialRounds]);
+
+  const handleNext = () => {
+    if (step === 1) {
+      setStep(2);
+    }
+  };
+
+  const handleBack = () => {
+    if (step > 1) {
+      setStep(step - 1);
+    } else {
+      onClose();
+    }
+  };
 
   const roundsDigits = useMemo(() => toDigits(rounds, 2), [rounds]);
 
@@ -67,47 +82,121 @@ function ThreeMonthsRoundSetup({ onClose, onConfirm, initialRounds }: ThreeMonth
           <button
             type="button"
             className="three-months-round-setup__icon-button"
-            onClick={onClose}
+            onClick={handleBack}
             aria-label="返回"
           >
             <MaterialIcon name="arrow_back" />
           </button>
-          <h1 className="three-months-round-setup__title">设置练习轮数</h1>
+          <h1 className="three-months-round-setup__title">3个月学习法</h1>
           <span className="three-months-round-setup__header-placeholder" />
         </header>
 
+        <div className="three-months-round-setup__step-indicator">
+          <span
+            className={
+              step >= 1
+                ? "three-months-round-setup__step three-months-round-setup__step--active"
+                : "three-months-round-setup__step"
+            }
+          />
+          <span
+            className={
+              step >= 2
+                ? "three-months-round-setup__step three-months-round-setup__step--active"
+                : "three-months-round-setup__step"
+            }
+          />
+        </div>
+
         <main className="three-months-round-setup__main">
-          <section className="three-months-round-setup__section">
-            <h2 className="three-months-round-setup__section-title">期望完成轮数</h2>
-            <p className="three-months-round-setup__section-hint">
-              在3个月内，你希望完成多少轮PDCA循环练习？
-            </p>
-            <div className="three-months-round-setup__digit-row">
-              {roundsDigits.map((digit, index) => (
-                <DigitColumn
-                  key={`rounds-${index}`}
-                  value={digit}
-                  size="large"
-                  onChange={handleChangeRoundDigit(index)}
-                  aria-label={`轮数第 ${index + 1} 位数字`}
-                />
-              ))}
-              <span className="three-months-round-setup__unit">轮</span>
-            </div>
-            <p className="three-months-round-setup__hint">数值范围：{MIN_ROUNDS} - {MAX_ROUNDS} 轮</p>
-          </section>
+          {step === 1 ? (
+            <section className="three-months-round-setup__section">
+              <div className="three-months-round-setup__intro-content">
+                <div className="three-months-round-setup__icon-wrapper">
+                  <MaterialIcon name="loop" />
+                </div>
+                <h2 className="three-months-round-setup__section-title">斋藤直葵老师的三个月学习法</h2>
+                <div className="three-months-round-setup__intro-text">
+                  <p>
+                    斋藤直葵老师提出的三个月学习法，是一种系统性的绘画练习方法。
+                    通过持续三个月的循环练习，帮助画师建立稳定的创作节奏和进步轨迹。
+                  </p>
+                  <p>
+                    这个方法强调的不是速度，而是持续性和系统性。
+                    每天坚持练习，三个月后你会看到明显的进步。
+                  </p>
+                </div>
+                <div className="three-months-round-setup__icon-wrapper" style={{ marginTop: "2rem" }}>
+                  <MaterialIcon name="autorenew" />
+                </div>
+                <h2 className="three-months-round-setup__section-title">戴明环理论（PDCA）</h2>
+                <div className="three-months-round-setup__intro-text">
+                  <p>
+                    3个月学习法基于戴明环（PDCA循环）理论：
+                  </p>
+                  <ul className="three-months-round-setup__list">
+                    <li>
+                      <strong>PLAN（计划）</strong>：制定练习计划，明确要练习的内容和目标
+                    </li>
+                    <li>
+                      <strong>DO（执行）</strong>：按照计划进行练习，完成作品
+                    </li>
+                    <li>
+                      <strong>CHECK（检查）</strong>：对比计划与实际，找出差异和问题
+                    </li>
+                    <li>
+                      <strong>ACTION（改进）</strong>：总结经验教训，改进下一轮练习
+                    </li>
+                  </ul>
+                  <p>
+                    通过不断循环这四个步骤，你的绘画技能会在三个月内得到系统性的提升。
+                  </p>
+                </div>
+              </div>
+            </section>
+          ) : (
+            <section className="three-months-round-setup__section">
+              <h2 className="three-months-round-setup__section-title">期望完成轮数</h2>
+              <p className="three-months-round-setup__section-hint">
+                在3个月内，你希望完成多少轮PDCA循环练习？
+              </p>
+              <div className="three-months-round-setup__digit-row">
+                {roundsDigits.map((digit, index) => (
+                  <DigitColumn
+                    key={`rounds-${index}`}
+                    value={digit}
+                    size="large"
+                    onChange={handleChangeRoundDigit(index)}
+                    aria-label={`轮数第 ${index + 1} 位数字`}
+                  />
+                ))}
+                <span className="three-months-round-setup__unit">轮</span>
+              </div>
+              <p className="three-months-round-setup__hint">数值范围：{MIN_ROUNDS} - {MAX_ROUNDS} 轮</p>
+            </section>
+          )}
         </main>
 
         <footer className="three-months-round-setup__footer">
-          <button
-            type="button"
-            className="three-months-round-setup__primary"
-            onClick={handleConfirm}
-            disabled={isConfirming}
-            aria-busy={isConfirming ? "true" : undefined}
-          >
-            {isConfirming ? "确认中..." : "确认"}
-          </button>
+          {step === 1 ? (
+            <button
+              type="button"
+              className="three-months-round-setup__primary"
+              onClick={handleNext}
+            >
+              下一步
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="three-months-round-setup__primary"
+              onClick={handleConfirm}
+              disabled={isConfirming}
+              aria-busy={isConfirming ? "true" : undefined}
+            >
+              {isConfirming ? "确认中..." : "确认"}
+            </button>
+          )}
         </footer>
       </div>
     </div>
@@ -150,7 +239,9 @@ function DigitColumn({
       if (!scrollRef.current) {
         return;
       }
-      const target = value * height;
+      // digit-list有padding-top = height * 0.5，所以需要加上这个padding
+      const paddingTop = height * 0.5;
+      const target = value * height + paddingTop;
       isSyncingRef.current = true;
       scrollRef.current.scrollTo({ top: target, behavior });
       if (syncTimeoutRef.current) {
@@ -184,7 +275,9 @@ function DigitColumn({
       return;
     }
 
-    const maxTop = height * (DIGIT_VALUES.length - 1);
+    // digit-list有padding-top = height * 0.5，最大scrollTop需要考虑padding
+    const paddingTop = height * 0.5;
+    const maxTop = height * (DIGIT_VALUES.length - 1) + paddingTop;
     if (scrollTop > maxTop) {
       scrollRef.current.scrollTop = maxTop;
       return;
@@ -203,7 +296,9 @@ function DigitColumn({
         return;
       }
       const currentScrollTop = scrollRef.current.scrollTop;
-      const raw = currentScrollTop / height;
+      // digit-list有padding-top = height * 0.5，需要减去这个padding
+      const paddingTop = height * 0.5;
+      const raw = (currentScrollTop - paddingTop) / height;
       const next = Math.min(Math.max(Math.round(raw), 0), 9);
       if (next !== value) {
         isSyncingRef.current = true;

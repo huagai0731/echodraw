@@ -213,16 +213,58 @@ def create_wechatpay_jsapi(order_number: str, amount: str, description: str, ope
             sign_str = f"{appid}\n{timestamp}\n{nonce_str}\nprepay_id={prepay_id}\n"
             logger.debug(f"JSAPI支付签名串: {repr(sign_str)}")
             
-            # 使用wechatpayv3库的签名方法（如果可用）
+            # 生成JSAPI支付签名（使用SHA256withRSA算法）
+            # 尝试多种方式获取私钥并签名
+            pay_sign = None
+            sign_error = None
+            
+            # 方法1: 尝试使用wechatpayv3库的签名方法（如果可用）
             try:
-                # 尝试使用库的签名方法
-                if hasattr(wechatpay._core, 'sign'):
+                # 检查是否有sign方法
+                if hasattr(wechatpay, 'sign'):
+                    pay_sign = wechatpay.sign(sign_str)
+                    logger.debug("使用wechatpay.sign()方法签名成功")
+                elif hasattr(wechatpay, '_core') and hasattr(wechatpay._core, 'sign'):
                     pay_sign = wechatpay._core.sign(sign_str)
-                else:
-                    # 如果库没有提供签名方法，使用cryptography手动签名
+                    logger.debug("使用wechatpay._core.sign()方法签名成功")
+            except Exception as e:
+                logger.debug(f"库的签名方法不可用或失败: {e}")
+                sign_error = e
+            
+            # 方法2: 尝试从wechatpay对象获取私钥对象进行签名
+            if not pay_sign:
+                try:
+                    # 尝试从wechatpay对象获取私钥
+                    private_key_obj = None
+                    if hasattr(wechatpay, '_core') and hasattr(wechatpay._core, '_private_key'):
+                        private_key_obj = wechatpay._core._private_key
+                    elif hasattr(wechatpay, '_private_key'):
+                        private_key_obj = wechatpay._private_key
+                    
+                    if private_key_obj:
+                        from cryptography.hazmat.primitives import hashes
+                        from cryptography.hazmat.primitives.asymmetric import padding
+                        import base64
+                        
+                        signature = private_key_obj.sign(
+                            sign_str.encode('utf-8'),
+                            padding.PKCS1v15(),
+                            hashes.SHA256()
+                        )
+                        pay_sign = base64.b64encode(signature).decode('utf-8')
+                        logger.debug("使用库中的私钥对象签名成功")
+                except Exception as e:
+                    logger.debug(f"使用库的私钥对象签名失败: {e}")
+                    if not sign_error:
+                        sign_error = e
+            
+            # 方法3: 手动加载私钥并签名（最终后备方案）
+            if not pay_sign:
+                try:
                     from cryptography.hazmat.primitives import hashes, serialization
                     from cryptography.hazmat.primitives.asymmetric import padding
                     from cryptography.hazmat.backends import default_backend
+                    import base64
                     
                     # 获取私钥
                     private_key_path = os.getenv("WECHAT_PRIVATE_KEY_PATH")
@@ -253,31 +295,18 @@ def create_wechatpay_jsapi(order_number: str, amount: str, description: str, ope
                         hashes.SHA256()
                     )
                     
-                    # Base64编码签名
-                    import base64
                     pay_sign = base64.b64encode(signature).decode('utf-8')
-            except Exception as sign_error:
-                logger.exception(f"生成JSAPI支付签名失败: {sign_error}")
-                # 如果签名失败，尝试使用库的私钥对象
-                try:
-                    # 尝试从wechatpay对象获取私钥
-                    if hasattr(wechatpay._core, '_private_key'):
-                        from cryptography.hazmat.primitives import hashes
-                        from cryptography.hazmat.primitives.asymmetric import padding
-                        import base64
-                        
-                        private_key = wechatpay._core._private_key
-                        signature = private_key.sign(
-                            sign_str.encode('utf-8'),
-                            padding.PKCS1v15(),
-                            hashes.SHA256()
-                        )
-                        pay_sign = base64.b64encode(signature).decode('utf-8')
-                    else:
-                        raise ValueError(f"无法生成JSAPI支付签名: {sign_error}")
-                except Exception as e2:
-                    logger.exception(f"使用库的私钥签名也失败: {e2}")
-                    raise ValueError(f"无法生成JSAPI支付签名: {sign_error}")
+                    logger.debug("使用手动加载的私钥签名成功")
+                except Exception as e:
+                    logger.exception(f"手动签名也失败: {e}")
+                    sign_error = e
+            
+            # 如果所有方法都失败，抛出错误
+            if not pay_sign:
+                error_msg = f"无法生成JSAPI支付签名"
+                if sign_error:
+                    error_msg += f": {sign_error}"
+                raise ValueError(error_msg)
             
             result = {
                 "appId": appid,

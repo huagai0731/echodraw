@@ -6,7 +6,6 @@ import LongTermGoalSetup from "@/pages/LongTermGoalSetup";
 import LongTermGoalDetails from "@/pages/LongTermGoalDetails";
 import LongTermGoalTypeSelector from "@/pages/LongTermGoalTypeSelector";
 import YearlyGoalSetup from "@/pages/YearlyGoalSetup";
-import ThreeMonthsIntro from "@/pages/ThreeMonthsIntro";
 import ThreeMonthsRoundSetup from "@/pages/ThreeMonthsRoundSetup";
 import ThreeMonthsDetails from "@/pages/ThreeMonthsDetails";
 import ShortTermGoalDetails from "@/pages/ShortTermGoalDetails";
@@ -509,7 +508,6 @@ function Goals() {
   const [showLongTermMetaEdit, setShowLongTermMetaEdit] = useState(false);
   const [showLongTermTypeSelector, setShowLongTermTypeSelector] = useState(false);
   const [showYearlyGoalSetup, setShowYearlyGoalSetup] = useState(false);
-  const [showThreeMonthsIntro, setShowThreeMonthsIntro] = useState(false);
   const [showThreeMonthsRoundSetup, setShowThreeMonthsRoundSetup] = useState(false);
   const [showThreeMonthsConfirm, setShowThreeMonthsConfirm] = useState(false);
   const [pendingRounds, setPendingRounds] = useState<number | null>(null);
@@ -1214,18 +1212,13 @@ function Goals() {
       if (type === "10000-hours") {
         setShowLongTermSetup(true);
       } else if (type === "3-months") {
-        setShowThreeMonthsIntro(true);
+        setShowThreeMonthsRoundSetup(true);
       } else if (type === "yearly") {
         setShowYearlyGoalSetup(true);
       }
     },
     [],
   );
-
-  const handleThreeMonthsIntroNext = useCallback(() => {
-    setShowThreeMonthsIntro(false);
-    setShowThreeMonthsRoundSetup(true);
-  }, []);
 
   const handleThreeMonthsRoundConfirm = useCallback((rounds: number) => {
     setPendingRounds(rounds);
@@ -1661,18 +1654,6 @@ function Goals() {
         onClose={() => setShowLongTermSetup(false)}
         onSaved={handleLongTermSaved}
         initialGoal={longTermGoal}
-      />
-    );
-  }
-
-  if (showThreeMonthsIntro) {
-    return (
-      <ThreeMonthsIntro
-        onNext={handleThreeMonthsIntroNext}
-        onClose={() => {
-          setShowThreeMonthsIntro(false);
-          setSelectedGoalType(null);
-        }}
       />
     );
   }

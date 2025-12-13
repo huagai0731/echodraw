@@ -5127,12 +5127,11 @@ def wechat_oauth_callback(request):
 @permission_classes([IsAuthenticated])
 def query_and_sync_order(request, order_id):
     """
-    查询支付宝订单状态并同步到本地订单（用于修复已支付但状态未更新的订单）
+    查询订单状态并同步到本地订单（用于修复已支付但状态未更新的订单）
+    支持支付宝和微信支付
     
     POST /api/payments/orders/{order_id}/query-and-sync/
     """
-    from core.payment.alipay import query_alipay_order_status
-    
     try:
         order = PointsOrder.objects.get(id=order_id, user=request.user)
         
@@ -5144,95 +5143,185 @@ def query_and_sync_order(request, order_id):
                 'order_status': order.status,
             })
         
-        # 只有支付宝订单才能查询
-        if order.payment_method != PointsOrder.PAYMENT_METHOD_ALIPAY:
-            return Response(
-                {'detail': '只有支付宝订单可以查询状态'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # 查询支付宝订单状态
-        result = query_alipay_order_status(order.order_number)
-        
-        if not result.get('success'):
-            return Response(
-                {'detail': f'查询失败: {result.get("msg")}'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        trade_status = result.get('trade_status')
-        
-        # 如果订单已支付，更新本地订单状态
-        if trade_status in ('TRADE_SUCCESS', 'TRADE_FINISHED'):
-            trade_no = result.get('trade_no')
-            gmt_payment = result.get('gmt_payment')
+        # 根据支付方式查询订单状态
+        if order.payment_method == PointsOrder.PAYMENT_METHOD_ALIPAY:
+            from core.payment.alipay import query_alipay_order_status
             
-            # 更新订单状态
-            order.status = PointsOrder.ORDER_STATUS_PAID
-            order.payment_transaction_id = trade_no
-            if gmt_payment:
-                try:
-                    from datetime import datetime as dt
-                    paid_time = dt.strptime(gmt_payment, "%Y-%m-%d %H:%M:%S")
-                    order.paid_at = timezone.make_aware(paid_time)
-                except Exception:
-                    order.paid_at = timezone.now()
-            else:
-                order.paid_at = timezone.now()
-            order.save()
+            # 查询支付宝订单状态
+            result = query_alipay_order_status(order.order_number)
             
-            # 如果是会员订单，更新用户会员状态
-            metadata = order.metadata or {}
-            if metadata.get('order_type') == 'membership':
-                tier = metadata.get('tier')
-                expires_at_str = metadata.get('expires_at')
+            if not result.get('success'):
+                return Response(
+                    {'detail': f'查询失败: {result.get("msg")}'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            trade_status = result.get('trade_status')
+            
+            # 如果订单已支付，更新本地订单状态
+            if trade_status in ('TRADE_SUCCESS', 'TRADE_FINISHED'):
+                trade_no = result.get('trade_no')
+                gmt_payment = result.get('gmt_payment')
                 
-                if tier and expires_at_str:
+                # 更新订单状态
+                order.status = PointsOrder.ORDER_STATUS_PAID
+                order.payment_transaction_id = trade_no
+                if gmt_payment:
                     try:
-                        # 解析到期时间
-                        expires_at = datetime.strptime(expires_at_str, "%Y-%m-%d").date()
-                        expires_at_datetime = timezone.make_aware(
-                            datetime.combine(expires_at, datetime.max.time())
-                        )
-                        
-                        # 更新用户会员状态
-                        profile, _ = UserProfile.objects.get_or_create(user=order.user)
-                        
-                        # 如果用户之前不是会员，或者会员已过期，记录新的开通时间
-                        was_member = profile.is_member and profile.membership_expires and profile.membership_expires > timezone.now()
-                        if not was_member:
-                            profile.membership_started_at = timezone.now()
-                            # 重置视觉分析额度周期
-                            try:
-                                from core.models import VisualAnalysisQuota
-                                quota = VisualAnalysisQuota.objects.filter(user=order.user).first()
-                                if quota:
-                                    quota.current_month = ""
-                                    quota.save(update_fields=["current_month"])
-                            except Exception:
-                                pass
-                        
-                        profile.is_member = True
-                        profile.membership_expires = expires_at_datetime
-                        profile.save(update_fields=["is_member", "membership_expires", "membership_started_at", "updated_at"])
-                        
-                        logger.info(f"订单 {order.order_number} 查询并同步成功，已更新用户 {order.user.email} 的会员状态")
-                    except Exception as e:
-                        logger.exception(f"更新会员状态失败: {e}")
+                        from datetime import datetime as dt
+                        paid_time = dt.strptime(gmt_payment, "%Y-%m-%d %H:%M:%S")
+                        order.paid_at = timezone.make_aware(paid_time)
+                    except Exception:
+                        order.paid_at = timezone.now()
+                else:
+                    order.paid_at = timezone.now()
+                order.save()
+                
+                # 如果是会员订单，更新用户会员状态
+                metadata = order.metadata or {}
+                if metadata.get('order_type') == 'membership':
+                    tier = metadata.get('tier')
+                    expires_at_str = metadata.get('expires_at')
+                    
+                    if tier and expires_at_str:
+                        try:
+                            # 解析到期时间
+                            expires_at = datetime.strptime(expires_at_str, "%Y-%m-%d").date()
+                            expires_at_datetime = timezone.make_aware(
+                                datetime.combine(expires_at, datetime.max.time())
+                            )
+                            
+                            # 更新用户会员状态
+                            profile, _ = UserProfile.objects.get_or_create(user=order.user)
+                            
+                            # 如果用户之前不是会员，或者会员已过期，记录新的开通时间
+                            was_member = profile.is_member and profile.membership_expires and profile.membership_expires > timezone.now()
+                            if not was_member:
+                                profile.membership_started_at = timezone.now()
+                                # 重置视觉分析额度周期
+                                try:
+                                    from core.models import VisualAnalysisQuota
+                                    quota = VisualAnalysisQuota.objects.filter(user=order.user).first()
+                                    if quota:
+                                        quota.current_month = ""
+                                        quota.save(update_fields=["current_month"])
+                                except Exception:
+                                    pass
+                            
+                            profile.is_member = True
+                            profile.membership_expires = expires_at_datetime
+                            profile.save(update_fields=["is_member", "membership_expires", "membership_started_at", "updated_at"])
+                            
+                            logger.info(f"订单 {order.order_number} 查询并同步成功，已更新用户 {order.user.email} 的会员状态")
+                        except Exception as e:
+                            logger.exception(f"更新会员状态失败: {e}")
+                
+                return Response({
+                    'success': True,
+                    'message': '订单状态已更新为已支付',
+                    'order_status': order.status,
+                    'trade_no': trade_no,
+                })
+            else:
+                return Response({
+                    'success': True,
+                    'message': f'订单在支付宝的状态是: {trade_status}，尚未支付',
+                    'order_status': order.status,
+                    'alipay_status': trade_status,
+                })
+        
+        elif order.payment_method == PointsOrder.PAYMENT_METHOD_WECHAT:
+            from core.payment.wechat import query_wechatpay_order_status
             
-            return Response({
-                'success': True,
-                'message': '订单状态已更新为已支付',
-                'order_status': order.status,
-                'trade_no': trade_no,
-            })
+            # 查询微信支付订单状态
+            result = query_wechatpay_order_status(order.order_number)
+            
+            if not result.get('success'):
+                return Response(
+                    {'detail': f'查询失败: {result.get("msg")}'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            trade_state = result.get('trade_state')
+            
+            # 如果订单已支付，更新本地订单状态
+            if trade_state == 'SUCCESS':
+                transaction_id = result.get('transaction_id')
+                success_time = result.get('success_time')
+                
+                # 更新订单状态
+                order.status = PointsOrder.ORDER_STATUS_PAID
+                order.payment_transaction_id = transaction_id
+                if success_time:
+                    try:
+                        # 解析微信支付的时间格式：2024-01-01T12:00:00+08:00
+                        from dateutil import parser
+                        paid_time = parser.parse(success_time)
+                        order.paid_at = paid_time
+                    except Exception:
+                        order.paid_at = timezone.now()
+                else:
+                    order.paid_at = timezone.now()
+                order.save()
+                
+                # 如果是会员订单，更新用户会员状态
+                metadata = order.metadata or {}
+                if metadata.get('order_type') == 'membership':
+                    tier = metadata.get('tier')
+                    expires_at_str = metadata.get('expires_at')
+                    
+                    if tier and expires_at_str:
+                        try:
+                            # 解析到期时间
+                            expires_at = datetime.strptime(expires_at_str, "%Y-%m-%d").date()
+                            expires_at_datetime = timezone.make_aware(
+                                datetime.combine(expires_at, datetime.max.time())
+                            )
+                            
+                            # 更新用户会员状态
+                            profile, _ = UserProfile.objects.get_or_create(user=order.user)
+                            
+                            # 如果用户之前不是会员，或者会员已过期，记录新的开通时间
+                            was_member = profile.is_member and profile.membership_expires and profile.membership_expires > timezone.now()
+                            if not was_member:
+                                profile.membership_started_at = timezone.now()
+                                # 重置视觉分析额度周期
+                                try:
+                                    from core.models import VisualAnalysisQuota
+                                    quota = VisualAnalysisQuota.objects.filter(user=order.user).first()
+                                    if quota:
+                                        quota.current_month = ""
+                                        quota.save(update_fields=["current_month"])
+                                except Exception:
+                                    pass
+                            
+                            profile.is_member = True
+                            profile.membership_expires = expires_at_datetime
+                            profile.save(update_fields=["is_member", "membership_expires", "membership_started_at", "updated_at"])
+                            
+                            logger.info(f"订单 {order.order_number} 查询并同步成功，已更新用户 {order.user.email} 的会员状态")
+                        except Exception as e:
+                            logger.exception(f"更新会员状态失败: {e}")
+                
+                return Response({
+                    'success': True,
+                    'message': '订单状态已更新为已支付',
+                    'order_status': order.status,
+                    'transaction_id': transaction_id,
+                })
+            else:
+                return Response({
+                    'success': True,
+                    'message': f'订单在微信支付的状态是: {trade_state}，尚未支付',
+                    'order_status': order.status,
+                    'wechat_trade_state': trade_state,
+                })
+        
         else:
-            return Response({
-                'success': True,
-                'message': f'订单在支付宝的状态是: {trade_status}，尚未支付',
-                'order_status': order.status,
-                'alipay_status': trade_status,
-            })
+            return Response(
+                {'detail': f'不支持的支付方式: {order.payment_method}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
     except PointsOrder.DoesNotExist:
         return Response(

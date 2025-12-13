@@ -55,6 +55,9 @@ function LongTermGoalSetup({
   const allowStructureEdit = resolvedMode !== "edit-meta";
   const allowReset = resolvedMode === "edit-full";
 
+  // 两步骤流程：第一步介绍，第二步设置
+  const [step, setStep] = useState(resolvedMode === "create" ? 1 : 2);
+
   const initialTotalHours = clampTotalHours(initialGoal?.targetHours ?? 120);
   const initialCheckpointCount = clampCheckpointCount(initialGoal?.checkpointCount ?? 12, initialTotalHours);
 
@@ -181,6 +184,20 @@ function LongTermGoalSetup({
     setCheckpointCount((prev) => clampCheckpointCount(setDigit(prev, 2, index, next), totalHours));
   };
 
+  const handleNext = () => {
+    if (step === 1) {
+      setStep(2);
+    }
+  };
+
+  const handleBack = () => {
+    if (step > 1) {
+      setStep(step - 1);
+    } else {
+      onClose();
+    }
+  };
+
   const handleSubmit = async () => {
     setErrorMessage(null);
     setIsSaving(true);
@@ -228,148 +245,191 @@ function LongTermGoalSetup({
           <button
             type="button"
             className="long-term-setup__icon-button"
-            onClick={onClose}
-            aria-label="返回目标列表"
+            onClick={handleBack}
+            aria-label="返回"
           >
             <MaterialIcon name="arrow_back" />
           </button>
           <h1 className="long-term-setup__title">
-            {resolvedMode === "create" ? "设置长期目标" : "调整长期目标"}
+            {resolvedMode === "create" ? "一万小时定律" : "调整长期目标"}
           </h1>
           <span className="long-term-setup__header-placeholder" />
         </header>
-        {resolvedMode === "edit-meta" ? (
-          <p className="long-term-setup__subtitle">更新计划名称与简介</p>
-        ) : (
-          <div className="long-term-setup__subtitle-text">
-            <p>长期计划存在的目的，是希望你在漫长的创作旅途里，保留方向感。</p>
-            <p>不是为了追求速度，不是为了堆量，只是帮你把零散的时刻串成完整的一条线。</p>
-            <p>只要慢慢上传、慢慢记录，最终会看到一条和时间一起延伸的轨迹。</p>
-            <p>一万小时定律看起来太遥不可及，那么就选择任何你喜欢的数字，或者对你有意义的数字作为总时长。</p>
-            <p>让我们从这里开始吧。</p>
+
+        {resolvedMode === "create" && (
+          <div className="long-term-setup__step-indicator">
+            <span
+              className={
+                step >= 1
+                  ? "long-term-setup__step long-term-setup__step--active"
+                  : "long-term-setup__step"
+              }
+            />
+            <span
+              className={
+                step >= 2
+                  ? "long-term-setup__step long-term-setup__step--active"
+                  : "long-term-setup__step"
+              }
+            />
           </div>
         )}
 
         <main className="long-term-setup__main">
-          <section className="long-term-setup__section">
-            <h2 className="long-term-setup__section-title">计划名称</h2>
-            <input
-              className="long-term-setup__input"
-              type="text"
-              value={title}
-              onChange={(event) => setTitle(event.target.value.slice(0, 160))}
-              placeholder="为自己的计划新建画布"
-              maxLength={160}
-            />
-            <h2 className="long-term-setup__section-title" style={{ marginTop: "1.5rem" }}>计划简介</h2>
-            <textarea
-              className="long-term-setup__textarea"
-              value={description}
-              onChange={(event) => setDescription(event.target.value.slice(0, 600))}
-              placeholder="给接下来一段时间的自己一个指北。可以是激励自己的话，或是自己的梦想，抑或只是提醒自己永远不要放弃画画。当然，你也可以在这里留下空白。"
-              rows={3}
-              maxLength={600}
-            />
-          </section>
-
-          {allowStructureEdit ? (
+          {step === 1 && resolvedMode === "create" ? (
+            <section className="long-term-setup__section">
+              <div className="long-term-setup__intro-content">
+                <h2 className="long-term-setup__section-title">一万小时定律</h2>
+                <div className="long-term-setup__intro-text">
+                  <p>长期计划存在的目的，是希望你在漫长的创作旅途里，保留方向感。</p>
+                  <p>不是为了追求速度，不是为了堆量，只是帮你把零散的时刻串成完整的一条线。</p>
+                  <p>只要慢慢上传、慢慢记录，最终会看到一条和时间一起延伸的轨迹。</p>
+                  <p>一万小时定律看起来太遥不可及，那么就选择任何你喜欢的数字，或者对你有意义的数字作为总时长。</p>
+                  <p>让我们从这里开始吧。</p>
+                </div>
+              </div>
+            </section>
+          ) : (
             <>
-              <section className="long-term-setup__section">
-                <h2 className="long-term-setup__section-title">总时长</h2>
-                <div className="long-term-setup__digit-row">
-                  {totalDigits.map((digit, index) => (
-                    <DigitColumn
-                      key={`total-${index}`}
-                      value={digit}
-                      size="large"
-                      onChange={handleChangeTotalDigit(index)}
-                      aria-label={`总时长第 ${index + 1} 位数字`}
+              {resolvedMode === "edit-meta" ? (
+                <p className="long-term-setup__subtitle">更新计划名称与简介</p>
+              ) : null}
+
+              {step === 2 || resolvedMode !== "create" ? (
+                <>
+                  <section className="long-term-setup__section">
+                    <h2 className="long-term-setup__section-title">计划名称</h2>
+                    <input
+                      className="long-term-setup__input"
+                      type="text"
+                      value={title}
+                      onChange={(event) => setTitle(event.target.value.slice(0, 160))}
+                      placeholder="为自己的计划新建画布"
+                      maxLength={160}
                     />
-                  ))}
-                  <span className="long-term-setup__unit">小时</span>
-                </div>
-                <p className="long-term-setup__hint">数值范围：50 - 9999 小时</p>
-                {copyLoading ? (
-                  <p className="long-term-setup__hint">正在加载建议文案...</p>
-                ) : activeCopyGuide ? (
-                  <p className="long-term-setup__hint">{activeCopyGuide.message}</p>
-                ) : null}
-              </section>
+                    <h2 className="long-term-setup__section-title" style={{ marginTop: "1.5rem" }}>计划简介</h2>
+                    <textarea
+                      className="long-term-setup__textarea"
+                      value={description}
+                      onChange={(event) => setDescription(event.target.value.slice(0, 600))}
+                      placeholder="给接下来一段时间的自己一个指北。可以是激励自己的话，或是自己的梦想，抑或只是提醒自己永远不要放弃画画。当然，你也可以在这里留下空白。"
+                      rows={3}
+                      maxLength={600}
+                    />
+                  </section>
 
-              <section className="long-term-setup__card">
-                <div className="long-term-setup__card-row">
-                  <p>分为</p>
-                  <div className="long-term-setup__digit-group">
-                    {checkpointDigits.map((digit, index) => (
-                      <DigitColumn
-                        key={`checkpoint-${index}`}
-                        value={digit}
-                        size="medium"
-                        onChange={handleChangeCheckpointDigit(index)}
-                        aria-label={`检查点数量第 ${index + 1} 位数字`}
-                      />
-                    ))}
-                  </div>
-                  <p>个检查点</p>
-                </div>
-                {minCheckpoints > 1 && (
-                  <p className="long-term-setup__hint" style={{ marginTop: "-0.5rem", textAlign: "center" }}>
-                    每个检查点最多 999 小时，当前总时长最少需要 {minCheckpoints} 个检查点
-                  </p>
-                )}
+                  {allowStructureEdit ? (
+                    <>
+                      <section className="long-term-setup__section">
+                        <h2 className="long-term-setup__section-title">总时长</h2>
+                        <div className="long-term-setup__digit-row">
+                          {totalDigits.map((digit, index) => (
+                            <DigitColumn
+                              key={`total-${index}`}
+                              value={digit}
+                              size="large"
+                              onChange={handleChangeTotalDigit(index)}
+                              aria-label={`总时长第 ${index + 1} 位数字`}
+                            />
+                          ))}
+                          <span className="long-term-setup__unit">小时</span>
+                        </div>
+                        <p className="long-term-setup__hint">数值范围：50 - 9999 小时</p>
+                        {copyLoading ? (
+                          <p className="long-term-setup__hint">正在加载建议文案...</p>
+                        ) : activeCopyGuide ? (
+                          <p className="long-term-setup__hint">{activeCopyGuide.message}</p>
+                        ) : null}
+                      </section>
 
-                <div className="long-term-setup__card-row">
-                  <p>每个检查点</p>
-                  <div className="long-term-setup__digit-group">
-                    {perCheckpointDigits.map((digit, index) => (
-                      <DigitColumn
-                        key={`per-checkpoint-${index}`}
-                        value={digit}
-                        size="medium"
-                        aria-label={`每个检查点耗时第 ${index + 1} 位数字`}
-                        readOnly
+                      <section className="long-term-setup__card">
+                        <div className="long-term-setup__card-row">
+                          <p>分为</p>
+                          <div className="long-term-setup__digit-group">
+                            {checkpointDigits.map((digit, index) => (
+                              <DigitColumn
+                                key={`checkpoint-${index}`}
+                                value={digit}
+                                size="medium"
+                                onChange={handleChangeCheckpointDigit(index)}
+                                aria-label={`检查点数量第 ${index + 1} 位数字`}
+                              />
+                            ))}
+                          </div>
+                          <p>个检查点</p>
+                        </div>
+                        {minCheckpoints > 1 && (
+                          <p className="long-term-setup__hint" style={{ marginTop: "-0.5rem", textAlign: "center" }}>
+                            每个检查点最多 999 小时，当前总时长最少需要 {minCheckpoints} 个检查点
+                          </p>
+                        )}
+
+                        <div className="long-term-setup__card-row">
+                          <p>每个检查点</p>
+                          <div className="long-term-setup__digit-group">
+                            {perCheckpointDigits.map((digit, index) => (
+                              <DigitColumn
+                                key={`per-checkpoint-${index}`}
+                                value={digit}
+                                size="medium"
+                                aria-label={`每个检查点耗时第 ${index + 1} 位数字`}
+                                readOnly
+                              />
+                            ))}
+                          </div>
+                          <p>小时</p>
+                        </div>
+                      </section>
+                    </>
+                  ) : null}
+
+                  {allowReset && initialGoal ? (
+                    <label className="long-term-setup__checkbox">
+                      <input
+                        type="checkbox"
+                        checked={resetProgress}
+                        onChange={(event) => setResetProgress(event.target.checked)}
                       />
-                    ))}
-                  </div>
-                  <p>小时</p>
-                </div>
-              </section>
+                      <span>
+                        重新计算进度
+                        <small>（修改目标时建议勾选，可从当前时间重新统计时长）</small>
+                      </span>
+                    </label>
+                  ) : null}
+
+                  {errorMessage ? <p className="long-term-setup__error">{errorMessage}</p> : null}
+                </>
+              ) : null}
             </>
-          ) : null}
-
-          {allowReset && initialGoal ? (
-            <label className="long-term-setup__checkbox">
-              <input
-                type="checkbox"
-                checked={resetProgress}
-                onChange={(event) => setResetProgress(event.target.checked)}
-              />
-              <span>
-                重新计算进度
-                <small>（修改目标时建议勾选，可从当前时间重新统计时长）</small>
-              </span>
-            </label>
-          ) : null}
-
-          {errorMessage ? <p className="long-term-setup__error">{errorMessage}</p> : null}
+          )}
         </main>
 
         <footer className="long-term-setup__footer">
-          <button
-            type="button"
-            className="long-term-setup__primary"
-            onClick={handleSubmit}
-            disabled={isSaving}
-            aria-busy={isSaving ? "true" : undefined}
-          >
-            {isSaving
-              ? "保存中..."
-              : resolvedMode === "create"
-              ? "确认计划"
-              : resolvedMode === "edit-meta"
-              ? "保存信息"
-              : "保存计划"}
-          </button>
+          {step === 1 && resolvedMode === "create" ? (
+            <button
+              type="button"
+              className="long-term-setup__primary"
+              onClick={handleNext}
+            >
+              下一步
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="long-term-setup__primary"
+              onClick={handleSubmit}
+              disabled={isSaving}
+              aria-busy={isSaving ? "true" : undefined}
+            >
+              {isSaving
+                ? "保存中..."
+                : resolvedMode === "create"
+                ? "确认计划"
+                : resolvedMode === "edit-meta"
+                ? "保存信息"
+                : "保存计划"}
+            </button>
+          )}
         </footer>
       </div>
     </div>
