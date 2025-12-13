@@ -59,6 +59,8 @@
   background: rgba(239, 234, 231, 0.05);
   border-radius: 0.75rem;
   border: 1px solid rgba(239, 234, 231, 0.1);
+  position: relative;
+  z-index: 10;
 }
 
 .three-months-details__round-nav {
@@ -73,6 +75,9 @@
   color: #98dbc6;
   cursor: pointer;
   transition: all 0.2s;
+  position: relative;
+  z-index: 10;
+  pointer-events: auto;
 }
 
 .three-months-details__round-nav:hover:not(:disabled) {
@@ -83,6 +88,7 @@
 .three-months-details__round-nav:disabled {
   opacity: 0.3;
   cursor: not-allowed;
+  pointer-events: none;
 }
 
 .three-months-details__round-info {

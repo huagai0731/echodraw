@@ -85,6 +85,16 @@ function ThreeMonthsDetails({ goal, onClose, onGoalUpdated }: ThreeMonthsDetails
         actionText: currentRound.actionText ?? null,
       });
       setHasUnsavedChanges(false);
+    } else {
+      // 如果轮次不存在（未开始），重置本地状态
+      setLocalRound({
+        planImage: null,
+        planText: null,
+        doImageId: null,
+        checkText: null,
+        actionText: null,
+      });
+      setHasUnsavedChanges(false);
     }
   }, [currentRoundIndex, currentRound]);
 
@@ -157,6 +167,24 @@ function ThreeMonthsDetails({ goal, onClose, onGoalUpdated }: ThreeMonthsDetails
   // 切换轮次
   const switchRound = useCallback(
     (direction: "prev" | "next") => {
+      const targetRounds = goal.targetRounds ?? 12; // 默认12轮
+      const minRound = 1;
+      const maxRound = targetRounds;
+
+      // 计算目标轮次索引
+      let targetRoundIndex: number;
+      if (direction === "prev") {
+        targetRoundIndex = Math.max(minRound, currentRoundIndex - 1);
+      } else {
+        targetRoundIndex = Math.min(maxRound, currentRoundIndex + 1);
+      }
+
+      // 如果目标轮次和当前轮次相同，不切换
+      if (targetRoundIndex === currentRoundIndex) {
+        return;
+      }
+
+      // 如果有未保存的更改，先提示用户
       if (hasUnsavedChanges) {
         const confirmed = window.confirm("当前轮次有未保存的更改，是否保存？");
         if (confirmed) {
@@ -164,22 +192,10 @@ function ThreeMonthsDetails({ goal, onClose, onGoalUpdated }: ThreeMonthsDetails
         }
       }
 
-      const sortedRounds = [...rounds].sort((a, b) => a.roundIndex - b.roundIndex);
-      const currentIdx = sortedRounds.findIndex((r) => r.roundIndex === currentRoundIndex);
-
-      if (direction === "prev" && currentIdx > 0) {
-        const prevRound = sortedRounds[currentIdx - 1];
-        if (prevRound && typeof prevRound.roundIndex === "number") {
-          setCurrentRoundIndex(prevRound.roundIndex);
-        }
-      } else if (direction === "next" && currentIdx < sortedRounds.length - 1) {
-        const nextRound = sortedRounds[currentIdx + 1];
-        if (nextRound && typeof nextRound.roundIndex === "number") {
-          setCurrentRoundIndex(nextRound.roundIndex);
-        }
-      }
+      // 执行切换
+      setCurrentRoundIndex(targetRoundIndex);
     },
-    [currentRoundIndex, rounds, hasUnsavedChanges, saveDraft]
+    [currentRoundIndex, goal.targetRounds, hasUnsavedChanges, saveDraft]
   );
 
   // 处理PLAN图片上传
@@ -293,9 +309,13 @@ function ThreeMonthsDetails({ goal, onClose, onGoalUpdated }: ThreeMonthsDetails
   }, [localRound.doImageId]);
 
   const sortedRounds = [...rounds].sort((a, b) => a.roundIndex - b.roundIndex);
-  const currentRoundIdx = sortedRounds.findIndex((r) => r.roundIndex === currentRoundIndex);
-  const canGoPrev = currentRoundIdx > 0;
-  const canGoNext = currentRoundIdx < sortedRounds.length - 1;
+  const targetRounds = goal.targetRounds ?? 12; // 默认12轮
+  const minRound = 1;
+  const maxRound = targetRounds;
+  
+  // 允许查看所有轮次（1 到 targetRounds），而不仅限于已存在的轮次
+  const canGoPrev = currentRoundIndex > minRound;
+  const canGoNext = currentRoundIndex < maxRound;
 
   return (
     <div className="three-months-details">
@@ -338,12 +358,16 @@ function ThreeMonthsDetails({ goal, onClose, onGoalUpdated }: ThreeMonthsDetails
 
       <main className="three-months-details__content">
         {/* 轮次切换控制 */}
-        {sortedRounds.length > 1 && (
+        {targetRounds > 1 && (
           <div className="three-months-details__round-controls">
             <button
               type="button"
               className="three-months-details__round-nav"
-              onClick={() => switchRound("prev")}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                switchRound("prev");
+              }}
               disabled={!canGoPrev}
               aria-label="上一轮"
             >
@@ -353,13 +377,17 @@ function ThreeMonthsDetails({ goal, onClose, onGoalUpdated }: ThreeMonthsDetails
               <span className="three-months-details__round-label">
                 第 {typeof currentRoundIndex === "number" ? currentRoundIndex : 1} 轮
                 {currentRound?.status === "completed" && "（已完成）"}
-                {currentRound?.status === "not-started" && "（未开始）"}
+                {(currentRound?.status === "not-started" || !currentRound) && "（未开始）"}
               </span>
             </div>
             <button
               type="button"
               className="three-months-details__round-nav"
-              onClick={() => switchRound("next")}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                switchRound("next");
+              }}
               disabled={!canGoNext}
               aria-label="下一轮"
             >
@@ -369,7 +397,7 @@ function ThreeMonthsDetails({ goal, onClose, onGoalUpdated }: ThreeMonthsDetails
         )}
 
         {/* 未开始轮次提示 */}
-        {currentRound?.status === "not-started" && (
+        {(currentRound?.status === "not-started" || !currentRound) && (
           <div className="three-months-details__not-started">
             <p>第 {typeof currentRoundIndex === "number" ? currentRoundIndex : 1} 轮（未开始）</p>
             <p className="three-months-details__not-started-hint">
@@ -379,7 +407,7 @@ function ThreeMonthsDetails({ goal, onClose, onGoalUpdated }: ThreeMonthsDetails
         )}
 
         {/* 四宫格编辑界面 */}
-        {currentRound?.status !== "not-started" && (
+        {currentRound && currentRound.status !== "not-started" && (
           <div className="three-months-details__grid">
             {/* PLAN */}
             <div className="three-months-details__cell three-months-details__cell--plan">

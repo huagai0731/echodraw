@@ -888,16 +888,35 @@ function Profile({
               const state = urlParams.get("state");
               
               if (code) {
-                // 有code，说明是授权回调，获取openid
+                // 有code，说明是授权回调，获取openid和支付状态信息
                 try {
                   const oauthResponse = await api.get<{
                     openid: string;
-                    state?: string;
+                    payment_state?: {
+                      tier: string;
+                      expiresAt: string;
+                      paymentMethod: string;
+                      quantity?: number;
+                      totalAmount: number;
+                    };
                   }>(`/payments/wechat/oauth/callback/?code=${code}&state=${state || ""}`);
                   openid = oauthResponse.data.openid;
                   
                   if (!openid) {
                     throw new Error("获取openid失败：openid为空");
+                  }
+                  
+                  // 如果返回了支付状态信息，恢复这些数据
+                  if (oauthResponse.data.payment_state) {
+                    const paymentState = oauthResponse.data.payment_state;
+                    tier = paymentState.tier as MembershipTier;
+                    expiresAt = paymentState.expiresAt;
+                    paymentMethod = paymentState.paymentMethod;
+                    if (paymentState.quantity !== undefined) {
+                      quantity = paymentState.quantity;
+                    }
+                    totalAmount = paymentState.totalAmount;
+                    console.log("[Echo] 恢复支付状态信息:", paymentState);
                   }
                   
                   // 清除URL中的code和state参数，避免重复使用
@@ -913,20 +932,42 @@ function Profile({
                 }
               } else {
                 // 没有code，需要先进行微信授权
-                // 确保当前URL不包含code和state参数
-                const currentUrl = getCurrentUrl();
-                const oauthUrl = getWechatOAuthUrl(
-                  currentUrl,
-                  JSON.stringify({ tier, expiresAt, paymentMethod, quantity, totalAmount })
-                );
-                if (oauthUrl) {
-                  // 跳转到授权页面，授权后会回到当前页面（带code参数）
-                  window.location.href = oauthUrl;
-                  return; // 跳转到授权页面，不继续执行
-                } else {
-                  // 如果无法生成授权URL，提示用户
-                  console.error("[Echo] Cannot generate WeChat OAuth URL");
-                  alert("无法生成微信授权链接，请检查配置或稍后重试");
+                // 先将支付信息存储到服务端，获取一个简短的token
+                try {
+                  const storeResponse = await api.post<{
+                    token: string;
+                    expires_in: number;
+                  }>("/payments/wechat/store-payment-state/", {
+                    tier,
+                    expiresAt,
+                    paymentMethod,
+                    quantity,
+                    totalAmount,
+                  });
+                  
+                  const stateToken = storeResponse.data.token;
+                  console.log("[Echo] 存储支付状态信息，token:", stateToken);
+                  
+                  // 使用token作为state参数，而不是完整的JSON对象
+                  const currentUrl = getCurrentUrl();
+                  const oauthUrl = getWechatOAuthUrl(currentUrl, stateToken);
+                  
+                  if (oauthUrl) {
+                    // 跳转到授权页面，授权后会回到当前页面（带code和state参数）
+                    window.location.href = oauthUrl;
+                    return; // 跳转到授权页面，不继续执行
+                  } else {
+                    // 如果无法生成授权URL，提示用户
+                    console.error("[Echo] Cannot generate WeChat OAuth URL");
+                    alert("无法生成微信授权链接，请检查配置或稍后重试");
+                    setPendingTier(null);
+                    setView("membership-options");
+                    return;
+                  }
+                } catch (storeError: any) {
+                  console.error("[Echo] Failed to store payment state:", storeError);
+                  const errorMessage = extractApiError(storeError, "准备支付信息失败，请重试");
+                  alert(errorMessage);
                   setPendingTier(null);
                   setView("membership-options");
                   return;

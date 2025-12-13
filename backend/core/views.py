@@ -5050,6 +5050,54 @@ def get_order_status(request, order_id):
         )
 
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def store_wechat_payment_state(request):
+    """
+    存储微信支付状态信息，返回一个简短的token用于OAuth state参数
+    用于解决微信OAuth state参数长度限制问题
+    
+    POST /api/payments/wechat/store-payment-state/
+    请求体: {
+        "tier": "premium",
+        "expiresAt": "2026-05-15",
+        "paymentMethod": "wechat",
+        "quantity": 1,
+        "totalAmount": 5
+    }
+    """
+    import secrets
+    from django.core.cache import cache
+    
+    payment_data = request.data
+    required_fields = ['tier', 'expiresAt', 'paymentMethod', 'totalAmount']
+    
+    for field in required_fields:
+        if field not in payment_data:
+            return Response(
+                {'detail': f'缺少必要字段: {field}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    # 生成一个简短的token（16字符）
+    token = secrets.token_urlsafe(12)[:16]
+    
+    # 将支付信息存储到缓存中，有效期10分钟
+    cache_key = f'wechat_payment_state_{token}'
+    cache.set(cache_key, {
+        **payment_data,
+        'user_id': request.user.id,  # 关联用户ID，防止token被他人使用
+        'created_at': timezone.now().isoformat(),
+    }, timeout=600)  # 10分钟过期
+    
+    logger.info(f"存储微信支付状态信息，token: {token}, user: {request.user.email}")
+    
+    return Response({
+        'token': token,
+        'expires_in': 600,  # 10分钟
+    })
+
+
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def wechat_oauth_callback(request):
@@ -5058,11 +5106,13 @@ def wechat_oauth_callback(request):
     用于获取用户的openid（用于JSAPI支付）
     
     GET /api/payments/wechat/oauth/callback/?code=xxx&state=xxx
+    state参数现在是一个简短的token，用于从缓存中获取支付信息
     """
     import requests
+    from django.core.cache import cache
     
     code = request.GET.get('code')
-    state = request.GET.get('state', '')
+    state_token = request.GET.get('state', '')
     
     if not code:
         return Response(
@@ -5104,11 +5154,34 @@ def wechat_oauth_callback(request):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
         
-        # 返回openid和state（前端可以用state来恢复之前的操作）
-        return Response({
+        # 如果提供了state_token，尝试从缓存中获取支付信息
+        payment_state = None
+        if state_token:
+            cache_key = f'wechat_payment_state_{state_token}'
+            payment_state = cache.get(cache_key)
+            if payment_state:
+                logger.info(f"从缓存中恢复支付状态信息，token: {state_token}")
+                # 删除已使用的token，防止重复使用
+                cache.delete(cache_key)
+            else:
+                logger.warning(f"未找到对应的支付状态信息，token: {state_token}，可能已过期")
+        
+        # 返回openid和支付状态信息（如果有）
+        response_data = {
             'openid': openid,
-            'state': state,
-        })
+        }
+        
+        if payment_state:
+            # 移除内部字段，只返回前端需要的支付信息
+            response_data['payment_state'] = {
+                'tier': payment_state.get('tier'),
+                'expiresAt': payment_state.get('expiresAt'),
+                'paymentMethod': payment_state.get('paymentMethod'),
+                'quantity': payment_state.get('quantity'),
+                'totalAmount': payment_state.get('totalAmount'),
+            }
+        
+        return Response(response_data)
     except requests.RequestException as e:
         logger.exception(f"请求微信授权接口失败: {e}")
         return Response(
