@@ -545,8 +545,8 @@ def analyze_colormax_segmentation(rgb_image: np.ndarray, target_n: int = 8) -> D
     
     # 性能优化：降采样（允许降采样，但最终平均色必须从原图像像素计算）
     # 对于大图，先降采样进行分箱和聚类，最后用原图计算平均色
-    # 优化：增加采样率，减少计算量（从400改为600，减少约44%的计算量）
-    sample_factor = max(1, int(np.sqrt(total_pixels) / 600))  # 优化：提高采样阈值，减少计算量
+    # 优化：提高采样率，减少计算量（从600改为800，进一步减少计算量）
+    sample_factor = max(1, int(np.sqrt(total_pixels) / 800))  # 优化：提高采样阈值，减少计算量
     if sample_factor > 1:
         pixels_sampled = pixels_lab[::sample_factor]
     else:
@@ -594,66 +594,73 @@ def analyze_colormax_segmentation(rgb_image: np.ndarray, target_n: int = 8) -> D
         cluster_centers_lab = np.array([bin_means[idx]['lab_mean'] for idx in unique_bins])
         bin_to_cluster = {idx: i for i, idx in enumerate(unique_bins)}
     else:
-        # 3. 层级聚类（Agglomerative Clustering）
+        # 3. 聚类算法选择
         # 使用 scipy 的 linkage 和 fcluster
         bin_centers = np.array([bin_means[idx]['lab_mean'] for idx in unique_bins])
         
-        # 计算距离矩阵（Lab 欧氏距离）
-        # 使用 condensed distance matrix（节省内存）
-        from scipy.spatial.distance import pdist
-        distances = pdist(bin_centers, metric='euclidean')
-        
-        # 内存优化：如果bin数量很大，使用更节省内存的方法
-        # 对于大量bin，层级聚类可能消耗大量内存
-        if n_bins > 10000:
-            # 如果bin数量超过10000，使用更激进的降采样
-            logger.warning(f"K-means分析：bin数量过多({n_bins})，可能导致内存不足，尝试进一步降采样")
-            # 随机采样到最多5000个bin
-            if n_bins > 5000:
-                import random
-                sampled_indices = random.sample(range(n_bins), 5000)
-                bin_centers = bin_centers[sampled_indices]
-                unique_bins = unique_bins[sampled_indices]
-                n_bins = 5000
-                # 重新构建bin_means（只保留采样的bin）
-                bin_means = {unique_bins[i]: bin_means[unique_bins[i]] for i in range(n_bins)}
-        
-        # 层级聚类
+        # 内存和性能优化：如果bin数量很大，直接使用K-means（更快且更节省内存）
+        # 对于大量bin，层级聚类可能消耗大量内存和时间
         use_kmeans_fallback = False
-        try:
-            linkage_matrix = linkage(distances, method='ward')
-            # 聚成 target_n 个簇
-            cluster_labels = fcluster(linkage_matrix, target_n, criterion='maxclust')
-        except MemoryError as e:
-            logger.error(f"K-means分析：层级聚类内存不足，bin数量: {n_bins}, 错误: {str(e)}")
-            # 如果内存不足，回退到简单的K-means
+        if n_bins > 3000:
+            # 如果bin数量超过3000，直接使用K-means（性能更好）
+            logger.info(f"K-means分析：bin数量较多({n_bins})，使用K-means算法以提升性能")
             use_kmeans_fallback = True
+        elif n_bins > 2000:
+            # 如果bin数量超过2000，进行降采样到2000
+            logger.warning(f"K-means分析：bin数量较多({n_bins})，进行降采样以提升性能")
+            import random
+            sampled_indices = random.sample(range(n_bins), 2000)
+            bin_centers = bin_centers[sampled_indices]
+            unique_bins = unique_bins[sampled_indices]
+            n_bins = 2000
+            # 重新构建bin_means（只保留采样的bin）
+            bin_means = {unique_bins[i]: bin_means[unique_bins[i]] for i in range(n_bins)}
+        
+        if use_kmeans_fallback:
+            # 直接使用K-means（更快）
             from sklearn.cluster import KMeans
             kmeans = KMeans(n_clusters=target_n, random_state=42, n_init=10, max_iter=100)
             cluster_labels = kmeans.fit_predict(bin_centers) + 1  # +1 因为fcluster从1开始
             cluster_centers_lab = kmeans.cluster_centers_
             bin_to_cluster = {unique_bins[i]: cluster_labels[i] - 1 for i in range(len(unique_bins))}
-        
-        if not use_kmeans_fallback:
-            # 计算每个簇的中心（Lab 空间）
-            cluster_centers_lab = []
-            bin_to_cluster = {}
-            for cluster_id in range(1, target_n + 1):
-                cluster_mask = cluster_labels == cluster_id
-                cluster_bins = unique_bins[cluster_mask]
-                if len(cluster_bins) > 0:
-                    # 加权平均（按 bin 的像素数加权）
-                    weights = np.array([bin_means[idx]['count'] for idx in cluster_bins])
-                    cluster_center = np.average(
-                        [bin_means[idx]['lab_mean'] for idx in cluster_bins],
-                        axis=0,
-                        weights=weights
-                    )
-                    cluster_centers_lab.append(cluster_center)
-                    for idx in cluster_bins:
-                        bin_to_cluster[idx] = len(cluster_centers_lab) - 1
-            
-            cluster_centers_lab = np.array(cluster_centers_lab)
+        else:
+            # 层级聚类（仅用于bin数量较少的情况）
+            try:
+                # 计算距离矩阵（Lab 欧氏距离）
+                # 使用 condensed distance matrix（节省内存）
+                from scipy.spatial.distance import pdist
+                distances = pdist(bin_centers, metric='euclidean')
+                linkage_matrix = linkage(distances, method='ward')
+                # 聚成 target_n 个簇
+                cluster_labels = fcluster(linkage_matrix, target_n, criterion='maxclust')
+                
+                # 计算每个簇的中心（Lab 空间）
+                cluster_centers_lab = []
+                bin_to_cluster = {}
+                for cluster_id in range(1, target_n + 1):
+                    cluster_mask = cluster_labels == cluster_id
+                    cluster_bins = unique_bins[cluster_mask]
+                    if len(cluster_bins) > 0:
+                        # 加权平均（按 bin 的像素数加权）
+                        weights = np.array([bin_means[idx]['count'] for idx in cluster_bins])
+                        cluster_center = np.average(
+                            [bin_means[idx]['lab_mean'] for idx in cluster_bins],
+                            axis=0,
+                            weights=weights
+                        )
+                        cluster_centers_lab.append(cluster_center)
+                        for idx in cluster_bins:
+                            bin_to_cluster[idx] = len(cluster_centers_lab) - 1
+                
+                cluster_centers_lab = np.array(cluster_centers_lab)
+            except MemoryError as e:
+                logger.error(f"K-means分析：层级聚类内存不足，bin数量: {n_bins}, 错误: {str(e)}")
+                # 如果内存不足，回退到简单的K-means
+                from sklearn.cluster import KMeans
+                kmeans = KMeans(n_clusters=target_n, random_state=42, n_init=10, max_iter=100)
+                cluster_labels = kmeans.fit_predict(bin_centers) + 1  # +1 因为fcluster从1开始
+                cluster_centers_lab = kmeans.cluster_centers_
+                bin_to_cluster = {unique_bins[i]: cluster_labels[i] - 1 for i in range(len(unique_bins))}
     
     # 4. 合并小簇（<0.5%）
     # 先计算每个簇的占比
