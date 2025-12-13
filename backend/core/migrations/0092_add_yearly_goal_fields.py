@@ -48,17 +48,6 @@ class Migration(migrations.Migration):
                 "ordering": ["display_order", "id"],
             },
         ),
-        migrations.RemoveField(
-            model_name="highfiveclick",
-            name="user",
-        ),
-        migrations.DeleteModel(
-            name="HighFiveCounter",
-        ),
-        migrations.RemoveField(
-            model_name="visualanalysisresult",
-            name="kmeans_segmentation_image_12",
-        ),
         migrations.AddField(
             model_name="longtermgoal",
             name="days_per_phase",
@@ -87,8 +76,5 @@ class Migration(migrations.Migration):
                 fields=["is_active", "display_order"],
                 name="core_yearly_is_acti_b7b48f_idx",
             ),
-        ),
-        migrations.DeleteModel(
-            name="HighFiveClick",
         ),
     ]
