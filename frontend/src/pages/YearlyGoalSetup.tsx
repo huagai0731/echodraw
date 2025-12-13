@@ -384,9 +384,19 @@ function YearlyGoalSetup({
                 数值范围：{MIN_DAYS_PER_PHASE} - {MAX_DAYS_PER_PHASE} 天
               </p>
               {calculatedPhases.length > 0 && (
-                <p className="yearly-goal-setup__hint">
-                  将分为 {calculatedPhases.length} 个阶段
-                </p>
+                <>
+                  <p className="yearly-goal-setup__hint">
+                    将分为 {calculatedPhases.length} 个阶段
+                  </p>
+                  <div className="yearly-goal-setup__phase-boxes">
+                    {Array.from({ length: calculatedPhases.length }).map((_, index) => (
+                      <div
+                        key={index}
+                        className="yearly-goal-setup__phase-box"
+                      />
+                    ))}
+                  </div>
+                </>
               )}
             </section>
           )}
@@ -612,7 +622,7 @@ function YearlyGoalSetup({
   );
 }
 
-// DigitColumn组件 - 完全照搬LongTermGoalSetup的实现，但使用自定义值列表（7-21）
+// DigitColumn组件 - 使用LongTermGoalSetup的实现方式，但适配7-21的值范围
 type DigitColumnProps = {
   value: number;
   onChange?: (next: number) => void;
@@ -626,6 +636,7 @@ function DigitColumn({
   "aria-label": ariaLabel,
   readOnly = false,
 }: DigitColumnProps) {
+  const height = DIGIT_HEIGHT;
   const scrollRef = useRef<HTMLDivElement>(null);
   const isSyncingRef = useRef(false);
   const syncTimeoutRef = useRef<number | null>(null);
@@ -634,9 +645,9 @@ function DigitColumn({
 
   const style = useMemo(() => {
     return {
-      "--digit-height": `${DIGIT_HEIGHT}px`,
+      "--digit-height": `${height}px`,
     } as CSSProperties;
-  }, []);
+  }, [height]);
 
   useEffect(() => {
     return () => {
@@ -662,7 +673,8 @@ function DigitColumn({
         if (clampedIndex === -1) {
           return;
         }
-        const target = clampedIndex * DIGIT_HEIGHT;
+        // 由于digit-list有padding（等于一个height），需要减去padding
+        const target = clampedIndex * height;
         isSyncingRef.current = true;
         scrollRef.current.scrollTo({ top: target, behavior });
         if (syncTimeoutRef.current) {
@@ -673,7 +685,8 @@ function DigitColumn({
         }, behavior === "auto" ? 0 : 180);
         return;
       }
-      const target = index * DIGIT_HEIGHT;
+      // 由于digit-list有padding（等于一个height），需要减去padding
+      const target = index * height;
       isSyncingRef.current = true;
       scrollRef.current.scrollTo({ top: target, behavior });
       if (syncTimeoutRef.current) {
@@ -683,27 +696,19 @@ function DigitColumn({
         isSyncingRef.current = false;
       }, behavior === "auto" ? 0 : 180);
     },
-    [value],
+    [height, value],
   );
 
-  // 初始化时对齐
   useEffect(() => {
-    // 使用 requestAnimationFrame 确保 DOM 已渲染
-    const rafId = requestAnimationFrame(() => {
-      alignToValue("auto");
-    });
-    return () => {
-      cancelAnimationFrame(rafId);
-    };
-  }, []);
+    alignToValue("auto");
+  }, [alignToValue]);
 
-  // 当 value 变化时对齐
   useEffect(() => {
     // 只有在不是同步状态时才对齐，避免循环更新
     if (!isSyncingRef.current) {
       alignToValue();
     }
-  }, [value, alignToValue]);
+  }, [alignToValue, value]);
 
   const handleScroll = useCallback(() => {
     if (!scrollRef.current || isSyncingRef.current) {
@@ -716,7 +721,7 @@ function DigitColumn({
       return;
     }
 
-    const maxTop = DIGIT_HEIGHT * (DAYS_PER_PHASE_VALUES.length - 1);
+    const maxTop = height * (DAYS_PER_PHASE_VALUES.length - 1);
     if (scrollTop > maxTop) {
       scrollRef.current.scrollTop = maxTop;
       return;
@@ -737,7 +742,9 @@ function DigitColumn({
         return;
       }
       const currentScrollTop = scrollRef.current.scrollTop;
-      const raw = currentScrollTop / DIGIT_HEIGHT;
+      // 由于digit-list有padding（等于一个height），scrollTop已经包含了padding的偏移
+      // 所以直接除以height就能得到正确的索引
+      const raw = currentScrollTop / height;
       const index = Math.min(Math.max(Math.round(raw), 0), DAYS_PER_PHASE_VALUES.length - 1);
       const next = DAYS_PER_PHASE_VALUES[index];
       if (next !== value) {
@@ -749,7 +756,7 @@ function DigitColumn({
         }, 100);
       }
     }, 100);
-  }, [onChange, readOnly, value]);
+  }, [height, onChange, readOnly, value]);
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (!onChange || readOnly) {
