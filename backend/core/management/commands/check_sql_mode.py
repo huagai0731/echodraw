@@ -29,7 +29,8 @@ class Command(BaseCommand):
             
             # 检查当前连接的 sql_mode（实际使用的）
             cursor.execute("SHOW VARIABLES LIKE 'sql_mode'")
-            current_sql_mode = cursor.fetchone()[1] if cursor.fetchone() else None
+            show_result = cursor.fetchone()
+            current_sql_mode = show_result[1] if show_result else None
             
             self.stdout.write(self.style.SUCCESS('MySQL sql_mode 检查结果:\n'))
             self.stdout.write(f'全局 sql_mode: {global_sql_mode}')
