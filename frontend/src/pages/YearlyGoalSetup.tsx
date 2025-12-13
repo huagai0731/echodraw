@@ -30,22 +30,17 @@ type YearlyGoalSetupProps = {
   initialGoal?: LongTermGoal | null;
 };
 
-type DigitColumnProps = {
-  value: number;
-  onChange?: (next: number) => void;
-  size?: "large" | "medium";
-  "aria-label": string;
-  readOnly?: boolean;
-};
-
-const DIGIT_VALUES = Array.from({ length: 10 }, (_, index) => index);
-const DIGIT_HEIGHT = {
-  large: 96,
-  medium: 64,
-} as const;
 const MIN_DAYS_PER_PHASE = 7;
 const MAX_DAYS_PER_PHASE = 21;
 const STORAGE_KEY = "echo-yearly-goal-draft";
+
+// 生成7-21的值列表，格式化为两位数字
+const DAYS_PER_PHASE_VALUES = Array.from(
+  { length: MAX_DAYS_PER_PHASE - MIN_DAYS_PER_PHASE + 1 },
+  (_, index) => MIN_DAYS_PER_PHASE + index
+);
+
+const DIGIT_HEIGHT = 96;
 
 type DraftData = {
   step: number;
@@ -224,14 +219,8 @@ function YearlyGoalSetup({
     onClose();
   }, [saveDraft, onClose]);
 
-  const daysPerPhaseDigits = useMemo(() => toDigits(daysPerPhase, 2), [daysPerPhase]);
-
-  const handleChangeDaysPerPhaseDigit = (index: number) => (next: number) => {
-    setDaysPerPhase((prev) => {
-      const updated = clampDaysPerPhase(setDigit(prev, 2, index, next));
-      // 如果阶段天数变化，需要重新初始化阶段数据
-      return updated;
-    });
+  const handleChangeDaysPerPhase = (value: number) => {
+    setDaysPerPhase(clampDaysPerPhase(value));
   };
 
   const handleNext = () => {
@@ -353,18 +342,27 @@ function YearlyGoalSetup({
         </header>
 
         <div className="yearly-goal-setup__step-indicator">
-          <div className={`yearly-goal-setup__step ${step >= 1 ? "yearly-goal-setup__step--active" : ""}`}>
-            <span className="yearly-goal-setup__step-number">1</span>
-            <span className="yearly-goal-setup__step-label">阶段天数</span>
-          </div>
-          <div className={`yearly-goal-setup__step ${step >= 2 ? "yearly-goal-setup__step--active" : ""}`}>
-            <span className="yearly-goal-setup__step-number">2</span>
-            <span className="yearly-goal-setup__step-label">基本信息</span>
-          </div>
-          <div className={`yearly-goal-setup__step ${step >= 3 ? "yearly-goal-setup__step--active" : ""}`}>
-            <span className="yearly-goal-setup__step-number">3</span>
-            <span className="yearly-goal-setup__step-label">阶段目标</span>
-          </div>
+          <span
+            className={
+              step >= 1
+                ? "yearly-goal-setup__step yearly-goal-setup__step--active"
+                : "yearly-goal-setup__step"
+            }
+          />
+          <span
+            className={
+              step >= 2
+                ? "yearly-goal-setup__step yearly-goal-setup__step--active"
+                : "yearly-goal-setup__step"
+            }
+          />
+          <span
+            className={
+              step >= 3
+                ? "yearly-goal-setup__step yearly-goal-setup__step--active"
+                : "yearly-goal-setup__step"
+            }
+          />
         </div>
 
         <main className="yearly-goal-setup__main">
@@ -375,15 +373,11 @@ function YearlyGoalSetup({
                 全年计划将按照你设置的天数划分为多个阶段，365天会取余，余数将被忽略。
               </p>
               <div className="yearly-goal-setup__digit-row">
-                {daysPerPhaseDigits.map((digit, index) => (
-                  <DigitColumn
-                    key={`days-${index}`}
-                    value={digit}
-                    size="large"
-                    onChange={handleChangeDaysPerPhaseDigit(index)}
-                    aria-label={`阶段天数第 ${index + 1} 位数字`}
-                  />
-                ))}
+                <DigitColumn
+                  value={daysPerPhase}
+                  onChange={handleChangeDaysPerPhase}
+                  aria-label="阶段天数"
+                />
                 <span className="yearly-goal-setup__unit">天</span>
               </div>
               <p className="yearly-goal-setup__hint">
@@ -618,15 +612,20 @@ function YearlyGoalSetup({
   );
 }
 
-// DigitColumn组件（复用LongTermGoalSetup的实现）
+// DigitColumn组件 - 完全照搬LongTermGoalSetup的实现，但使用自定义值列表（7-21）
+type DigitColumnProps = {
+  value: number;
+  onChange?: (next: number) => void;
+  "aria-label": string;
+  readOnly?: boolean;
+};
+
 function DigitColumn({
   value,
   onChange,
-  size = "large",
   "aria-label": ariaLabel,
   readOnly = false,
 }: DigitColumnProps) {
-  const height = DIGIT_HEIGHT[size];
   const scrollRef = useRef<HTMLDivElement>(null);
   const isSyncingRef = useRef(false);
   const syncTimeoutRef = useRef<number | null>(null);
@@ -635,9 +634,9 @@ function DigitColumn({
 
   const style = useMemo(() => {
     return {
-      "--digit-height": `${height}px`,
+      "--digit-height": `${DIGIT_HEIGHT}px`,
     } as CSSProperties;
-  }, [height]);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -655,7 +654,26 @@ function DigitColumn({
       if (!scrollRef.current) {
         return;
       }
-      const target = value * height;
+      const index = DAYS_PER_PHASE_VALUES.indexOf(value);
+      if (index === -1) {
+        // 如果值不在列表中，使用最接近的值
+        const clamped = Math.max(MIN_DAYS_PER_PHASE, Math.min(MAX_DAYS_PER_PHASE, value));
+        const clampedIndex = DAYS_PER_PHASE_VALUES.indexOf(clamped);
+        if (clampedIndex === -1) {
+          return;
+        }
+        const target = clampedIndex * DIGIT_HEIGHT;
+        isSyncingRef.current = true;
+        scrollRef.current.scrollTo({ top: target, behavior });
+        if (syncTimeoutRef.current) {
+          window.clearTimeout(syncTimeoutRef.current);
+        }
+        syncTimeoutRef.current = window.setTimeout(() => {
+          isSyncingRef.current = false;
+        }, behavior === "auto" ? 0 : 180);
+        return;
+      }
+      const target = index * DIGIT_HEIGHT;
       isSyncingRef.current = true;
       scrollRef.current.scrollTo({ top: target, behavior });
       if (syncTimeoutRef.current) {
@@ -665,18 +683,27 @@ function DigitColumn({
         isSyncingRef.current = false;
       }, behavior === "auto" ? 0 : 180);
     },
-    [height, value],
+    [value],
   );
 
+  // 初始化时对齐
   useEffect(() => {
-    alignToValue("auto");
-  }, [alignToValue]);
+    // 使用 requestAnimationFrame 确保 DOM 已渲染
+    const rafId = requestAnimationFrame(() => {
+      alignToValue("auto");
+    });
+    return () => {
+      cancelAnimationFrame(rafId);
+    };
+  }, []);
 
+  // 当 value 变化时对齐
   useEffect(() => {
+    // 只有在不是同步状态时才对齐，避免循环更新
     if (!isSyncingRef.current) {
       alignToValue();
     }
-  }, [alignToValue, value]);
+  }, [value, alignToValue]);
 
   const handleScroll = useCallback(() => {
     if (!scrollRef.current || isSyncingRef.current) {
@@ -689,7 +716,7 @@ function DigitColumn({
       return;
     }
 
-    const maxTop = height * (DIGIT_VALUES.length - 1);
+    const maxTop = DIGIT_HEIGHT * (DAYS_PER_PHASE_VALUES.length - 1);
     if (scrollTop > maxTop) {
       scrollRef.current.scrollTop = maxTop;
       return;
@@ -699,39 +726,51 @@ function DigitColumn({
       return;
     }
 
+    // 清除之前的延迟更新
     if (scrollTimeoutRef.current) {
       window.clearTimeout(scrollTimeoutRef.current);
     }
 
+    // 延迟更新值，避免频繁触发导致循环
     scrollTimeoutRef.current = window.setTimeout(() => {
       if (!scrollRef.current || isSyncingRef.current) {
         return;
       }
       const currentScrollTop = scrollRef.current.scrollTop;
-      const raw = currentScrollTop / height;
-      const next = Math.min(Math.max(Math.round(raw), 0), 9);
+      const raw = currentScrollTop / DIGIT_HEIGHT;
+      const index = Math.min(Math.max(Math.round(raw), 0), DAYS_PER_PHASE_VALUES.length - 1);
+      const next = DAYS_PER_PHASE_VALUES[index];
       if (next !== value) {
         isSyncingRef.current = true;
         onChange(next);
+        // 短暂延迟后重置同步标志，确保对齐操作可以执行
         window.setTimeout(() => {
           isSyncingRef.current = false;
         }, 100);
       }
     }, 100);
-  }, [height, onChange, readOnly, value]);
+  }, [onChange, readOnly, value]);
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (!onChange || readOnly) {
       event.preventDefault();
       return;
     }
+    const currentIndex = DAYS_PER_PHASE_VALUES.indexOf(value);
+    if (currentIndex === -1) {
+      return;
+    }
     if (event.key === "ArrowUp") {
       event.preventDefault();
-      onChange((value + 9) % 10);
+      if (currentIndex > 0) {
+        onChange(DAYS_PER_PHASE_VALUES[currentIndex - 1]);
+      }
     }
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      onChange((value + 1) % 10);
+      if (currentIndex < DAYS_PER_PHASE_VALUES.length - 1) {
+        onChange(DAYS_PER_PHASE_VALUES[currentIndex + 1]);
+      }
     }
   };
 
@@ -748,7 +787,7 @@ function DigitColumn({
 
   return (
     <div
-      className={`yearly-goal-setup__digit-column yearly-goal-setup__digit-column--${size}${
+      className={`yearly-goal-setup__digit-column${
         readOnly ? " yearly-goal-setup__digit-column--readonly" : ""
       }${isPointerActive ? " yearly-goal-setup__digit-column--pointer" : ""}`}
     >
@@ -767,44 +806,29 @@ function DigitColumn({
         aria-label={ariaLabel}
         role="spinbutton"
         aria-valuenow={value}
-        aria-valuemin={0}
-        aria-valuemax={9}
+        aria-valuemin={MIN_DAYS_PER_PHASE}
+        aria-valuemax={MAX_DAYS_PER_PHASE}
         aria-readonly={readOnly || undefined}
         onKeyDown={handleKeyDown}
       >
         <div className="yearly-goal-setup__digit-overlay" />
         <div className="yearly-goal-setup__digit-list">
-          {DIGIT_VALUES.map((digit) => (
+          {DAYS_PER_PHASE_VALUES.map((dayValue) => (
             <span
-              key={digit}
+              key={dayValue}
               className={
-                digit === value
+                dayValue === value
                   ? "yearly-goal-setup__digit-value yearly-goal-setup__digit-value--active"
                   : "yearly-goal-setup__digit-value"
               }
             >
-              {digit}
+              {dayValue.toString().padStart(2, "0")}
             </span>
           ))}
         </div>
       </div>
     </div>
   );
-}
-
-function toDigits(value: number, length: number) {
-  return value
-    .toString()
-    .padStart(length, "0")
-    .slice(-length)
-    .split("")
-    .map((character) => Number(character));
-}
-
-function setDigit(value: number, length: number, index: number, digit: number) {
-  const digits = toDigits(value, length);
-  digits[index] = digit;
-  return Number(digits.join(""));
 }
 
 function clampDaysPerPhase(value: number) {

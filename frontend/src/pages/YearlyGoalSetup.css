@@ -98,45 +98,22 @@
 }
 
 .yearly-goal-setup__step-indicator {
-  display: flex;
-  justify-content: center;
-  gap: 1rem;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
   padding: 1rem 0;
 }
 
 .yearly-goal-setup__step {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  opacity: 0.4;
-  transition: opacity 0.3s ease;
+  height: 0.35rem;
+  border-radius: 999px;
+  background: rgba(239, 234, 231, 0.16);
+  transition: background 0.3s ease;
 }
 
 .yearly-goal-setup__step--active {
-  opacity: 1;
-}
-
-.yearly-goal-setup__step-number {
-  width: 2rem;
-  height: 2rem;
-  border-radius: 50%;
-  border: 1px solid rgba(239, 234, 231, 0.3);
-  background: rgba(74, 63, 58, 0.25);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.9rem;
-}
-
-.yearly-goal-setup__step--active .yearly-goal-setup__step-number {
-  border-color: rgba(152, 219, 198, 0.6);
-  background: rgba(152, 219, 198, 0.15);
-}
-
-.yearly-goal-setup__step-label {
-  font-size: 0.8rem;
-  color: rgba(239, 234, 231, 0.6);
+  background: #98dbc6;
+  box-shadow: 0 0 14px rgba(152, 219, 198, 0.45);
 }
 
 .yearly-goal-setup__main {
@@ -206,6 +183,92 @@
   justify-content: center;
   gap: 0.5rem;
   position: relative;
+}
+
+/* 数字滑块样式 */
+.yearly-goal-setup__digit-column {
+  position: relative;
+  width: 3.5rem;
+  height: var(--digit-height, 96px);
+  border-radius: 0.75rem;
+  border: 1px solid rgba(239, 234, 231, 0.14);
+  background: rgba(34, 27, 27, 0.6);
+  overflow: hidden;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.yearly-goal-setup__digit-column--readonly {
+  opacity: 0.6;
+}
+
+.yearly-goal-setup__digit-column--pointer {
+  border-color: rgba(152, 219, 198, 0.4);
+  box-shadow: 0 0 0 2px rgba(152, 219, 198, 0.15);
+}
+
+.yearly-goal-setup__digit-chrome {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    rgba(34, 27, 27, 0.8) 0%,
+    transparent 20%,
+    transparent 80%,
+    rgba(34, 27, 27, 0.8) 100%
+  );
+}
+
+.yearly-goal-setup__digit-scroll {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.yearly-goal-setup__digit-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.yearly-goal-setup__digit-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  border: 2px solid transparent;
+  border-top-color: rgba(152, 219, 198, 0.3);
+  border-bottom-color: rgba(152, 219, 198, 0.3);
+  border-radius: inherit;
+}
+
+.yearly-goal-setup__digit-list {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: calc(var(--digit-height, 96px) * 2) 0;
+}
+
+.yearly-goal-setup__digit-value {
+  width: 100%;
+  height: var(--digit-height, 96px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.5rem;
+  font-weight: 600;
+  color: rgba(239, 234, 231, 0.7);
+  transition: color 0.2s ease, transform 0.2s ease;
+  z-index: 1;
+  position: relative;
+}
+
+.yearly-goal-setup__digit-value--active {
+  color: rgba(152, 219, 198, 0.9);
+  transform: scale(1.1);
 }
 
 .yearly-goal-setup__unit {
@@ -471,93 +534,6 @@
   cursor: not-allowed;
 }
 
-/* 数字滑块样式 - 复用LongTermGoalSetup的样式 */
-.yearly-goal-setup__digit-column {
-  position: relative;
-  width: 3.5rem;
-  height: var(--digit-height, 96px);
-  border-radius: 0.75rem;
-  border: 1px solid rgba(239, 234, 231, 0.14);
-  background: rgba(34, 27, 27, 0.6);
-  overflow: hidden;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.yearly-goal-setup__digit-column--medium {
-  width: 2.5rem;
-}
-
-.yearly-goal-setup__digit-column--readonly {
-  opacity: 0.6;
-}
-
-.yearly-goal-setup__digit-column--pointer {
-  border-color: rgba(152, 219, 198, 0.4);
-  box-shadow: 0 0 0 2px rgba(152, 219, 198, 0.15);
-}
-
-.yearly-goal-setup__digit-chrome {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-  background: linear-gradient(
-    to bottom,
-    rgba(34, 27, 27, 0.8) 0%,
-    transparent 20%,
-    transparent 80%,
-    rgba(34, 27, 27, 0.8) 100%
-  );
-}
-
-.yearly-goal-setup__digit-scroll {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  overflow-y: auto;
-  overflow-x: hidden;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-.yearly-goal-setup__digit-scroll::-webkit-scrollbar {
-  display: none;
-}
-
-.yearly-goal-setup__digit-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  pointer-events: none;
-  border: 2px solid transparent;
-  border-top-color: rgba(152, 219, 198, 0.3);
-  border-bottom-color: rgba(152, 219, 198, 0.3);
-  border-radius: inherit;
-}
-
-.yearly-goal-setup__digit-list {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: calc(var(--digit-height, 96px) * 2) 0;
-}
-
-.yearly-goal-setup__digit-value {
-  width: 100%;
-  height: var(--digit-height, 96px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 2.5rem;
-  font-weight: 600;
-  color: rgba(239, 234, 231, 0.4);
-  transition: color 0.2s ease, transform 0.2s ease;
-}
-
-.yearly-goal-setup__digit-value--active {
-  color: rgba(152, 219, 198, 0.9);
-  transform: scale(1.1);
-}
 
 /* 退出确认弹窗 */
 .yearly-goal-setup__exit-confirm-overlay {
