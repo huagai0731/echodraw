@@ -84,8 +84,10 @@ def analyze_image_comprehensive_task(self, result_id: int, image_url: str, user_
         from core.models import VisualAnalysisResult, VisualAnalysisQuota
         from core.views import is_valid_member
         from django.db import transaction
+        from django.contrib.auth import get_user_model
         
         # 获取用户信息
+        User = get_user_model()
         user = User.objects.get(id=user_id)
         profile = getattr(user, 'profile', None)
         is_member = is_valid_member(profile)
@@ -141,7 +143,9 @@ def analyze_image_comprehensive_task(self, result_id: int, image_url: str, user_
             # 如果任务对象不存在，尝试创建或更新
             logger.warning(f"任务对象不存在，尝试创建: {task_id}")
             try:
-                # 使用模块级别的 User（已在文件顶部定义）
+                # 获取用户模型
+                from django.contrib.auth import get_user_model
+                User = get_user_model()
                 user = User.objects.get(id=user_id)
                 task_obj, created = ImageAnalysisTask.objects.get_or_create(
                     task_id=task_id,
