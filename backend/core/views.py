@@ -622,11 +622,12 @@ def register(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    # 在事务内查询并锁定验证码记录，防止竞态条件
-    # 同时限制查询时间范围（只查询最近15分钟），提升性能
+    # 使用原子更新来防止并发问题
+    # 在云服务器多worker环境下，使用update()方法可以确保只有一个请求能成功标记验证码为已使用
     with transaction.atomic():
         now = timezone.now()
-        # 先查询所有匹配的验证码（包括已使用的），用于调试
+        
+        # 先查询验证码是否存在（用于错误提示）
         all_verifications = EmailVerification.objects.filter(
             email__iexact=email,
             purpose=EmailVerification.PURPOSE_REGISTER,
@@ -634,46 +635,47 @@ def register(request):
             created_at__gte=now - timedelta(minutes=15),
         ).order_by("-created_at")
         
-        # 记录调试信息
-        logger.info(
-            f"注册验证码查询: email={email}, code={code}, "
-            f"找到 {all_verifications.count()} 条记录"
+        # 使用原子更新：尝试将验证码标记为已使用
+        # 只有满足以下条件的验证码才会被更新：
+        # 1. is_used=False（未使用）
+        # 2. expires_at > now（未过期）
+        # 3. 匹配email、purpose和code
+        # 使用select_for_update确保在更新时锁定记录
+        updated_count = (
+            EmailVerification.objects.filter(
+                email__iexact=email,
+                purpose=EmailVerification.PURPOSE_REGISTER,
+                code=code,
+                is_used=False,
+                expires_at__gt=now,
+                created_at__gte=now - timedelta(minutes=15),
+            )
+            .select_for_update()  # 锁定记录
+            .update(is_used=True)  # 原子更新，返回受影响的行数
         )
         
-        # 查询验证码时，必须过滤is_used=False，只查询未使用的验证码
-        # 同时检查是否过期，避免查询到已过期的验证码
-        # 使用select_for_update锁定记录，防止并发使用同一验证码
-        verification = (
-            all_verifications.filter(
-                is_used=False,
-                expires_at__gt=now  # 只查询未过期的验证码
-            )
-            .select_for_update()  # 锁定记录，防止并发使用同一验证码
-            .first()
-        )
-
-        if not verification:
-            # 检查是否有匹配的验证码但已被使用
+        if updated_count == 0:
+            # 没有成功更新，说明验证码不存在、已被使用或已过期
+            # 检查具体原因以便给出准确的错误信息
             used_verification = all_verifications.filter(is_used=True).first()
             if used_verification:
                 logger.warning(
                     f"验证码已被使用: email={email}, code={code}, "
-                    f"used_at={used_verification.created_at}"
+                    f"verification_id={used_verification.id}"
                 )
                 return Response(
                     {"detail": "验证码已被使用"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             
-            # 检查是否有匹配的验证码但已过期
             expired_verification = all_verifications.filter(
                 is_used=False,
-                expires_at__lt=now
+                expires_at__lte=now
             ).first()
             if expired_verification:
                 logger.info(
                     f"验证码已过期: email={email}, code={code}, "
-                    f"expires_at={expired_verification.expires_at}"
+                    f"expires_at={expired_verification.expires_at}, now={now}"
                 )
                 return Response(
                     {"detail": "验证码已过期，请重新获取"},
@@ -687,39 +689,20 @@ def register(request):
                 {"detail": "验证码不正确或已被使用，请检查后重新输入。验证码有效期为10分钟，如已过期请重新获取。"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
-        # 双重检查：防止在查询和标记之间被其他请求使用（虽然已用select_for_update锁定，但为了安全还是检查）
-        # 注意：由于查询时已经过滤了 is_used=False 和 expires_at__gt=now，理论上这里不应该再检查
-        # 但为了安全，还是保留这些检查
-        if verification.is_used:
-            logger.warning(
-                f"验证码在查询后变为已使用: email={email}, code={code}, "
-                f"verification_id={verification.id}"
-            )
-            return Response(
-                {"detail": "验证码已被使用"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # 再次检查是否过期（虽然查询时已经过滤，但作为双重保险）
-        if verification.is_expired:
-            logger.info(
-                f"验证码已过期: email={email}, code={code}, "
-                f"expires_at={verification.expires_at}, now={now}"
-            )
-            return Response(
-                {"detail": "验证码已过期，请重新获取"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        
+        # 成功更新，说明验证码有效且未被使用
+        # 获取更新后的验证码记录（用于日志，此时is_used已经是True了）
+        verification = all_verifications.filter(is_used=True).order_by("-created_at").first()
         
         logger.info(
-            f"验证码验证通过: email={email}, code={code}, "
-            f"verification_id={verification.id}, created_at={verification.created_at}, "
-            f"expires_at={verification.expires_at}"
+            f"验证码验证通过（原子更新）: email={email}, code={code}, "
+            f"verification_id={verification.id if verification else 'unknown'}, "
+            f"updated_count={updated_count}"
         )
 
         # 先创建用户，只有在用户创建成功后才标记验证码为已使用
-        # 这样可以确保如果用户创建失败，验证码不会被误标记为已使用
+        # 注意：验证码已经在上面通过原子更新标记为已使用了
+        # 如果用户创建失败，事务会回滚，验证码的is_used也会回滚
         user = user_model.objects.create_user(
             username=email,
             email=email,
@@ -737,9 +720,7 @@ def register(request):
             used_free_quota=0,
         )
         
-        # 只有在用户创建成功后才标记验证码为已使用，防止验证码被误标记
-        verification.is_used = True
-        verification.save(update_fields=["is_used"])
+        # 验证码已经在上面通过原子更新标记为已使用了，这里不需要再次更新
 
     token_key = AuthToken.issue_for_user(user)
 
@@ -802,51 +783,90 @@ def reset_password(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    # 在事务内查询并锁定验证码记录，防止竞态条件
-    # 同时限制查询时间范围（只查询最近15分钟），提升性能
+    # 使用原子更新来防止并发问题
+    # 在云服务器多worker环境下，使用update()方法可以确保只有一个请求能成功标记验证码为已使用
     with transaction.atomic():
         now = timezone.now()
-        verification = (
+        
+        # 先查询验证码是否存在（用于错误提示）
+        all_verifications = EmailVerification.objects.filter(
+            email__iexact=email,
+            purpose=EmailVerification.PURPOSE_RESET_PASSWORD,
+            code=code,
+            created_at__gte=now - timedelta(minutes=15),
+        ).order_by("-created_at")
+        
+        # 使用原子更新：尝试将验证码标记为已使用
+        # 只有满足以下条件的验证码才会被更新：
+        # 1. is_used=False（未使用）
+        # 2. expires_at > now（未过期）
+        # 3. 匹配email、purpose和code
+        # 使用select_for_update确保在更新时锁定记录
+        updated_count = (
             EmailVerification.objects.filter(
                 email__iexact=email,
                 purpose=EmailVerification.PURPOSE_RESET_PASSWORD,
                 code=code,
                 is_used=False,
-                created_at__gte=now - timedelta(minutes=15),  # 性能优化：只查询最近15分钟
+                expires_at__gt=now,
+                created_at__gte=now - timedelta(minutes=15),
             )
-            .select_for_update()  # 锁定记录，防止并发使用同一验证码
-            .order_by("-created_at")
-            .first()
+            .select_for_update()  # 锁定记录
+            .update(is_used=True)  # 原子更新，返回受影响的行数
         )
-
-        if not verification:
+        
+        if updated_count == 0:
+            # 没有成功更新，说明验证码不存在、已被使用或已过期
+            # 检查具体原因以便给出准确的错误信息
+            used_verification = all_verifications.filter(is_used=True).first()
+            if used_verification:
+                logger.warning(
+                    f"重置密码验证码已被使用: email={email}, code={code}, "
+                    f"verification_id={used_verification.id}"
+                )
+                return Response(
+                    {"detail": "验证码已被使用"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            
+            expired_verification = all_verifications.filter(
+                is_used=False,
+                expires_at__lte=now
+            ).first()
+            if expired_verification:
+                logger.info(
+                    f"重置密码验证码已过期: email={email}, code={code}, "
+                    f"expires_at={expired_verification.expires_at}, now={now}"
+                )
+                return Response(
+                    {"detail": "验证码已过期，请重新获取"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            
+            logger.warning(
+                f"重置密码验证码不存在: email={email}, code={code}"
+            )
             return Response(
                 {"detail": "验证码不正确，请检查后重新输入。验证码有效期为10分钟，如已过期请重新获取。"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
-        if verification.is_expired:
-            return Response(
-                {"detail": "验证码已过期，请重新获取"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # 双重检查：防止在查询和标记之间被其他请求使用
-        if verification.is_used:
-            return Response(
-                {"detail": "验证码已被使用"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        
+        # 成功更新，说明验证码有效且未被使用
+        verification = all_verifications.filter(is_used=True).order_by("-created_at").first()
+        logger.info(
+            f"重置密码验证码验证通过（原子更新）: email={email}, code={code}, "
+            f"verification_id={verification.id if verification else 'unknown'}, "
+            f"updated_count={updated_count}"
+        )
 
         # 先重置密码，只有在密码重置成功后才标记验证码为已使用
-        # 这样可以确保如果密码重置失败，验证码不会被误标记为已使用
+        # 注意：验证码已经在上面通过原子更新标记为已使用了
+        # 如果密码重置失败，事务会回滚，验证码的is_used也会回滚
         for user in users:
             user.set_password(password)
             user.save(update_fields=["password"])
         
-        # 只有在密码重置成功后才标记验证码为已使用，防止验证码被误标记
-        verification.is_used = True
-        verification.save(update_fields=["is_used"])
+        # 验证码已经在上面通过原子更新标记为已使用了，这里不需要再次更新
 
     primary_user = users[0]
     token_key = AuthToken.issue_for_user(primary_user)
