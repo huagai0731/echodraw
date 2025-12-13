@@ -660,10 +660,8 @@ def register(request):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # 立即标记为已使用，防止重复使用
-        verification.is_used = True
-        verification.save(update_fields=["is_used"])
-
+        # 先创建用户，只有在用户创建成功后才标记验证码为已使用
+        # 这样可以确保如果用户创建失败，验证码不会被误标记为已使用
         user = user_model.objects.create_user(
             username=email,
             email=email,
@@ -680,6 +678,10 @@ def register(request):
             free_quota=5,  # 新用户赠送5次
             used_free_quota=0,
         )
+        
+        # 只有在用户创建成功后才标记验证码为已使用，防止验证码被误标记
+        verification.is_used = True
+        verification.save(update_fields=["is_used"])
 
     token_key = AuthToken.issue_for_user(user)
 
@@ -778,13 +780,15 @@ def reset_password(request):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # 立即标记为已使用，防止重复使用
-        verification.is_used = True
-        verification.save(update_fields=["is_used"])
-
+        # 先重置密码，只有在密码重置成功后才标记验证码为已使用
+        # 这样可以确保如果密码重置失败，验证码不会被误标记为已使用
         for user in users:
             user.set_password(password)
             user.save(update_fields=["password"])
+        
+        # 只有在密码重置成功后才标记验证码为已使用，防止验证码被误标记
+        verification.is_used = True
+        verification.save(update_fields=["is_used"])
 
     primary_user = users[0]
     token_key = AuthToken.issue_for_user(primary_user)

@@ -602,9 +602,21 @@ def analyze_colormax_segmentation(rgb_image: np.ndarray, target_n: int = 8) -> D
         # 对于大量bin，层级聚类可能消耗大量内存和时间
         use_kmeans_fallback = False
         if n_bins > 3000:
-            # 如果bin数量超过3000，直接使用K-means（性能更好）
-            logger.info(f"K-means分析：bin数量较多({n_bins})，使用K-means算法以提升性能")
-            use_kmeans_fallback = True
+            # 如果bin数量超过3000，先尝试降采样到5000，如果还是太大则使用K-means
+            if n_bins > 5000:
+                # 如果bin数量超过5000，直接使用K-means（性能更好）
+                logger.info(f"K-means分析：bin数量过多({n_bins})，使用K-means算法以提升性能")
+                use_kmeans_fallback = True
+            else:
+                # 如果bin数量在3000-5000之间，降采样到3000
+                logger.warning(f"K-means分析：bin数量较多({n_bins})，进行降采样以提升性能")
+                import random
+                sampled_indices = random.sample(range(n_bins), 3000)
+                bin_centers = bin_centers[sampled_indices]
+                unique_bins = unique_bins[sampled_indices]
+                n_bins = 3000
+                # 重新构建bin_means（只保留采样的bin）
+                bin_means = {unique_bins[i]: bin_means[unique_bins[i]] for i in range(n_bins)}
         elif n_bins > 2000:
             # 如果bin数量超过2000，进行降采样到2000
             logger.warning(f"K-means分析：bin数量较多({n_bins})，进行降采样以提升性能")
@@ -634,11 +646,20 @@ def analyze_colormax_segmentation(rgb_image: np.ndarray, target_n: int = 8) -> D
                 # 聚成 target_n 个簇
                 cluster_labels = fcluster(linkage_matrix, target_n, criterion='maxclust')
                 
+                # 确保 cluster_labels 的大小与 unique_bins 一致
+                if len(cluster_labels) != len(unique_bins):
+                    logger.error(f"K-means分析：cluster_labels大小({len(cluster_labels)})与unique_bins大小({len(unique_bins)})不匹配，使用K-means回退")
+                    raise MemoryError("cluster_labels和unique_bins大小不匹配，回退到K-means")
+                
                 # 计算每个簇的中心（Lab 空间）
                 cluster_centers_lab = []
                 bin_to_cluster = {}
                 for cluster_id in range(1, target_n + 1):
                     cluster_mask = cluster_labels == cluster_id
+                    # 再次检查大小匹配
+                    if len(cluster_mask) != len(unique_bins):
+                        logger.error(f"K-means分析：cluster_mask大小({len(cluster_mask)})与unique_bins大小({len(unique_bins)})不匹配，使用K-means回退")
+                        raise MemoryError("cluster_mask和unique_bins大小不匹配，回退到K-means")
                     cluster_bins = unique_bins[cluster_mask]
                     if len(cluster_bins) > 0:
                         # 加权平均（按 bin 的像素数加权）
@@ -653,10 +674,17 @@ def analyze_colormax_segmentation(rgb_image: np.ndarray, target_n: int = 8) -> D
                             bin_to_cluster[idx] = len(cluster_centers_lab) - 1
                 
                 cluster_centers_lab = np.array(cluster_centers_lab)
-            except MemoryError as e:
-                logger.error(f"K-means分析：层级聚类内存不足，bin数量: {n_bins}, 错误: {str(e)}")
-                # 如果内存不足，回退到简单的K-means
+            except (MemoryError, ValueError, IndexError) as e:
+                logger.error(f"K-means分析：层级聚类失败，bin数量: {n_bins}, 错误: {str(e)}")
+                # 如果层级聚类失败（内存不足或索引错误），回退到简单的K-means
                 from sklearn.cluster import KMeans
+                # 确保 bin_centers 和 unique_bins 大小一致
+                if len(bin_centers) != len(unique_bins):
+                    logger.warning(f"K-means分析：bin_centers大小({len(bin_centers)})与unique_bins大小({len(unique_bins)})不匹配，重新构建")
+                    # 重新构建 bin_centers 和 unique_bins，确保它们一致
+                    unique_bins_list = list(unique_bins)
+                    bin_centers = np.array([bin_means[idx]['lab_mean'] for idx in unique_bins_list])
+                    unique_bins = np.array(unique_bins_list)
                 kmeans = KMeans(n_clusters=target_n, random_state=42, n_init=10, max_iter=100)
                 cluster_labels = kmeans.fit_predict(bin_centers) + 1  # +1 因为fcluster从1开始
                 cluster_centers_lab = kmeans.cluster_centers_
