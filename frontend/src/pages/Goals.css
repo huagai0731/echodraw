@@ -390,6 +390,22 @@
   margin-top: 0.5rem;
 }
 
+/* 3个月学习法确认弹窗的确认按钮样式 - 薄荷绿色 */
+.artwork-delete-confirm-button--three-months {
+  background: rgba(152, 219, 198, 0.2) !important;
+  color: #98dbc6 !important;
+  border: 1px solid rgba(152, 219, 198, 0.35) !important;
+}
+
+.artwork-delete-confirm-button--three-months:hover {
+  background: rgba(152, 219, 198, 0.3) !important;
+  border-color: rgba(152, 219, 198, 0.5) !important;
+}
+
+.artwork-delete-confirm-button--three-months:active {
+  transform: scale(0.98);
+}
+
 .goals-long-term__header {
   display: flex;
   align-items: flex-start;

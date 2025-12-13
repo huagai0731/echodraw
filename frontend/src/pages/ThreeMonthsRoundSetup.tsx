@@ -14,6 +14,7 @@ import "./ThreeMonthsRoundSetup.css";
 type ThreeMonthsRoundSetupProps = {
   onClose: () => void;
   onConfirm: (rounds: number) => void;
+  initialRounds?: number;
 };
 
 type DigitColumnProps = {
@@ -32,9 +33,16 @@ const DIGIT_HEIGHT = {
 const MIN_ROUNDS = 2;
 const MAX_ROUNDS = 60;
 
-function ThreeMonthsRoundSetup({ onClose, onConfirm }: ThreeMonthsRoundSetupProps) {
-  const [rounds, setRounds] = useState(12);
+function ThreeMonthsRoundSetup({ onClose, onConfirm, initialRounds }: ThreeMonthsRoundSetupProps) {
+  const [rounds, setRounds] = useState(initialRounds ?? 12);
   const [isConfirming, setIsConfirming] = useState(false);
+
+  // 当initialRounds变化时，更新rounds
+  useEffect(() => {
+    if (initialRounds !== undefined) {
+      setRounds(initialRounds);
+    }
+  }, [initialRounds]);
 
   const roundsDigits = useMemo(() => toDigits(rounds, 2), [rounds]);
 

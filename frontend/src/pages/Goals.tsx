@@ -1241,8 +1241,7 @@ function Goals() {
         title: "3个月学习法",
         description: "使用戴明环理论进行系统性练习",
         targetRounds: pendingRounds,
-        targetHours: 0, // 3个月学习法不使用小时数
-        checkpointCount: 0, // 3个月学习法不使用检查点
+        // 3个月学习法不使用小时数和检查点，不传递这些参数
       });
       setShowThreeMonthsConfirm(false);
       setPendingRounds(null);
@@ -1668,8 +1667,10 @@ function Goals() {
         onClose={() => {
           setShowThreeMonthsRoundSetup(false);
           setSelectedGoalType(null);
+          setPendingRounds(null);
         }}
         onConfirm={handleThreeMonthsRoundConfirm}
+        initialRounds={pendingRounds ?? undefined}
       />
     );
   }
@@ -1681,11 +1682,11 @@ function Goals() {
         className="artwork-delete-confirm-overlay"
         onClick={() => {
           setShowThreeMonthsConfirm(false);
-          setPendingRounds(null);
+          // 不重置pendingRounds，保留用户的选择，回到轮次设置页面
         }}
       >
         <div
-          className="artwork-delete-confirm-modal"
+          className="artwork-delete-confirm-modal artwork-delete-confirm-modal--three-months"
           onClick={(e) => e.stopPropagation()}
         >
           <h2 className="artwork-delete-confirm-title">启动3个月学习法</h2>
@@ -1706,14 +1707,14 @@ function Goals() {
               className="artwork-delete-confirm-button artwork-delete-confirm-button--cancel"
               onClick={() => {
                 setShowThreeMonthsConfirm(false);
-                setPendingRounds(null);
+                // 不重置pendingRounds，保留用户的选择，回到轮次设置页面
               }}
             >
               取消
             </button>
             <button
               type="button"
-              className="artwork-delete-confirm-button artwork-delete-confirm-button--confirm"
+              className="artwork-delete-confirm-button artwork-delete-confirm-button--confirm artwork-delete-confirm-button--three-months"
               onClick={handleThreeMonthsConfirmStart}
             >
               确认
