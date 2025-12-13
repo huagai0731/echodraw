@@ -163,8 +163,9 @@ if _db_engine and _db_name and _db_user:
                 "PORT": _db_port or "3306",
                 "OPTIONS": {
                     "charset": "utf8mb4",
-                    "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
-                    "sql_mode": "STRICT_TRANS_TABLES",
+                    # 只使用 init_command 设置 sql_mode，移除 sql_mode 键（Django MySQL 后端不支持）
+                    # 使用兼容 AUTO_INCREMENT 的 sql_mode 设置
+                    "init_command": "SET sql_mode='STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'",
                 },
                 "CONN_MAX_AGE": 600,  # 连接复用10分钟，减少连接创建开销，提高并发性能
             }
