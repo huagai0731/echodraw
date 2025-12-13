@@ -1650,6 +1650,18 @@ function Goals() {
     );
   }
 
+  if (showThreeMonthsIntro) {
+    return (
+      <ThreeMonthsIntro
+        onNext={handleThreeMonthsIntroNext}
+        onClose={() => {
+          setShowThreeMonthsIntro(false);
+          setSelectedGoalType(null);
+        }}
+      />
+    );
+  }
+
   if (showThreeMonthsRoundSetup) {
     return (
       <ThreeMonthsRoundSetup
