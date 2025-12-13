@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import MaterialIcon from "@/components/MaterialIcon";
 import TopNav from "@/components/TopNav";
 import type { LongTermGoal, ThreeMonthsRound } from "@/services/api";
@@ -35,24 +35,42 @@ function ThreeMonthsDetails({ goal, onClose, onGoalUpdated }: ThreeMonthsDetails
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const saveTimeoutRef = useRef<number | null>(null);
 
-  // 找到当前轮次
-  const currentRound = rounds.find((r) => r.roundIndex === currentRoundIndex) ?? null;
-
-  // 确保 currentRoundIndex 始终有效
-  useEffect(() => {
-    if (rounds.length > 0) {
-      const sortedRounds = [...rounds].sort((a, b) => a.roundIndex - b.roundIndex);
-      const exists = sortedRounds.some((r) => r.roundIndex === currentRoundIndex);
-      if (!exists) {
-        // 如果当前轮次不存在，切换到第一个进行中的轮次，否则切换到第一个轮次
-        const inProgressRound = sortedRounds.find((r) => r.status === "in-progress");
-        const targetRoundIndex = inProgressRound?.roundIndex ?? sortedRounds[0]?.roundIndex;
-        if (targetRoundIndex && typeof targetRoundIndex === "number") {
-          setCurrentRoundIndex(targetRoundIndex);
-        }
-      }
+  // 找到当前轮次（使用 useMemo 确保查找逻辑正确）
+  const currentRound = useMemo(() => {
+    if (!rounds || rounds.length === 0) {
+      return null;
     }
+    if (typeof currentRoundIndex !== "number" || currentRoundIndex < 1) {
+      return null;
+    }
+    return rounds.find((r) => r.roundIndex === currentRoundIndex) ?? null;
   }, [rounds, currentRoundIndex]);
+
+  // 当 goal.id 变化或 rounds 从空变为有值时，重新初始化 currentRoundIndex
+  const prevGoalIdRef = useRef(goal.id);
+  const prevRoundsLengthRef = useRef(rounds.length);
+  const isInitializedRef = useRef(false);
+  
+  useEffect(() => {
+    const goalIdChanged = prevGoalIdRef.current !== goal.id;
+    const roundsJustLoaded = prevRoundsLengthRef.current === 0 && rounds.length > 0;
+    
+    // 如果 goal.id 变化或 rounds 刚加载，重新初始化
+    if (goalIdChanged) {
+      isInitializedRef.current = false;
+    }
+    
+    if ((goalIdChanged || roundsJustLoaded) && !isInitializedRef.current && rounds.length > 0) {
+      const sortedRounds = [...rounds].sort((a, b) => a.roundIndex - b.roundIndex);
+      const inProgressRound = sortedRounds.find((r) => r.status === "in-progress");
+      const targetRoundIndex = inProgressRound?.roundIndex ?? sortedRounds[0]?.roundIndex ?? 1;
+      setCurrentRoundIndex(targetRoundIndex);
+      isInitializedRef.current = true;
+    }
+    
+    prevGoalIdRef.current = goal.id;
+    prevRoundsLengthRef.current = rounds.length;
+  }, [goal.id, rounds]); // 只监听 goal.id 和 rounds 的变化
 
   // 本地状态管理
   const [localRound, setLocalRound] = useState<Partial<ThreeMonthsRound>>(() => {
@@ -120,7 +138,20 @@ function ThreeMonthsDetails({ goal, onClose, onGoalUpdated }: ThreeMonthsDetails
           completeRound: false,
         });
         if (onGoalUpdated) {
-          onGoalUpdated(updatedGoal);
+          // 合并 rounds 数组，确保不丢失已有数据
+          const mergedRounds = [...(goal.rounds ?? [])];
+          updatedGoal.rounds?.forEach((updatedRound) => {
+            const existingIndex = mergedRounds.findIndex(r => r.roundIndex === updatedRound.roundIndex);
+            if (existingIndex >= 0) {
+              mergedRounds[existingIndex] = updatedRound;
+            } else {
+              mergedRounds.push(updatedRound);
+            }
+          });
+          onGoalUpdated({
+            ...updatedGoal,
+            rounds: mergedRounds.sort((a, b) => a.roundIndex - b.roundIndex),
+          });
         }
         setHasUnsavedChanges(false);
       } catch (error) {
@@ -129,7 +160,7 @@ function ThreeMonthsDetails({ goal, onClose, onGoalUpdated }: ThreeMonthsDetails
         setIsSaving(false);
       }
     }, 1000); // 1秒防抖
-  }, [goal.id, currentRoundIndex, localRound, hasUnsavedChanges, currentRound, onGoalUpdated]);
+  }, [goal.id, goal.rounds, currentRoundIndex, localRound, hasUnsavedChanges, currentRound, onGoalUpdated]);
 
   // 当有未保存的更改时，自动保存
   useEffect(() => {
@@ -167,20 +198,31 @@ function ThreeMonthsDetails({ goal, onClose, onGoalUpdated }: ThreeMonthsDetails
   // 切换轮次
   const switchRound = useCallback(
     (direction: "prev" | "next") => {
-      const targetRounds = goal.targetRounds ?? 12; // 默认12轮
       const minRound = 1;
+      
+      // 计算目标轮数：优先使用 goal.targetRounds，否则从 rounds 数组推断，最后使用默认值 12
+      const sortedRounds = [...rounds].sort((a, b) => a.roundIndex - b.roundIndex);
+      const inferredMaxRound = sortedRounds.length > 0 
+        ? Math.max(...sortedRounds.map(r => r.roundIndex), 12)
+        : 12;
+      const targetRounds = Math.max(1, goal.targetRounds ?? inferredMaxRound);
       const maxRound = targetRounds;
+      
+      // 确保 currentRoundIndex 是有效的数字
+      const validRoundIndex = typeof currentRoundIndex === "number" && currentRoundIndex >= minRound 
+        ? currentRoundIndex 
+        : minRound;
 
       // 计算目标轮次索引
       let targetRoundIndex: number;
       if (direction === "prev") {
-        targetRoundIndex = Math.max(minRound, currentRoundIndex - 1);
+        targetRoundIndex = Math.max(minRound, validRoundIndex - 1);
       } else {
-        targetRoundIndex = Math.min(maxRound, currentRoundIndex + 1);
+        targetRoundIndex = Math.min(maxRound, validRoundIndex + 1);
       }
 
       // 如果目标轮次和当前轮次相同，不切换
-      if (targetRoundIndex === currentRoundIndex) {
+      if (targetRoundIndex === validRoundIndex) {
         return;
       }
 
@@ -195,7 +237,7 @@ function ThreeMonthsDetails({ goal, onClose, onGoalUpdated }: ThreeMonthsDetails
       // 执行切换
       setCurrentRoundIndex(targetRoundIndex);
     },
-    [currentRoundIndex, goal.targetRounds, hasUnsavedChanges, saveDraft]
+    [currentRoundIndex, goal.targetRounds, rounds, hasUnsavedChanges, saveDraft]
   );
 
   // 处理PLAN图片上传
@@ -266,7 +308,20 @@ function ThreeMonthsDetails({ goal, onClose, onGoalUpdated }: ThreeMonthsDetails
       });
 
       if (onGoalUpdated) {
-        onGoalUpdated(updatedGoal);
+        // 合并 rounds 数组，确保不丢失已有数据
+        const mergedRounds = [...(goal.rounds ?? [])];
+        updatedGoal.rounds?.forEach((updatedRound) => {
+          const existingIndex = mergedRounds.findIndex(r => r.roundIndex === updatedRound.roundIndex);
+          if (existingIndex >= 0) {
+            mergedRounds[existingIndex] = updatedRound;
+          } else {
+            mergedRounds.push(updatedRound);
+          }
+        });
+        onGoalUpdated({
+          ...updatedGoal,
+          rounds: mergedRounds.sort((a, b) => a.roundIndex - b.roundIndex),
+        });
       }
 
       // 切换到下一轮
@@ -309,13 +364,23 @@ function ThreeMonthsDetails({ goal, onClose, onGoalUpdated }: ThreeMonthsDetails
   }, [localRound.doImageId]);
 
   const sortedRounds = [...rounds].sort((a, b) => a.roundIndex - b.roundIndex);
-  const targetRounds = goal.targetRounds ?? 12; // 默认12轮
   const minRound = 1;
+  
+  // 计算目标轮数：优先使用 goal.targetRounds，否则从 rounds 数组推断，最后使用默认值 12
+  const inferredMaxRound = sortedRounds.length > 0 
+    ? Math.max(...sortedRounds.map(r => r.roundIndex), 12)
+    : 12;
+  const targetRounds = Math.max(1, goal.targetRounds ?? inferredMaxRound);
   const maxRound = targetRounds;
   
+  // 确保 currentRoundIndex 是有效的数字
+  const validRoundIndex = typeof currentRoundIndex === "number" && currentRoundIndex >= minRound 
+    ? currentRoundIndex 
+    : minRound;
+  
   // 允许查看所有轮次（1 到 targetRounds），而不仅限于已存在的轮次
-  const canGoPrev = currentRoundIndex > minRound;
-  const canGoNext = currentRoundIndex < maxRound;
+  const canGoPrev = validRoundIndex > minRound;
+  const canGoNext = validRoundIndex < maxRound;
 
   return (
     <div className="three-months-details">

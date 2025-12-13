@@ -911,7 +911,7 @@ function Profile({
                     const paymentState = oauthResponse.data.payment_state;
                     tier = paymentState.tier as MembershipTier;
                     expiresAt = paymentState.expiresAt;
-                    paymentMethod = paymentState.paymentMethod;
+                    paymentMethod = paymentState.paymentMethod as "wechat" | "alipay";
                     if (paymentState.quantity !== undefined) {
                       quantity = paymentState.quantity;
                     }
